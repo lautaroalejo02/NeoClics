@@ -13,6 +13,8 @@ import { Store } from "./state/store";
 import { App } from "./ui/App";
 import { EditorStore } from "./editor/store";
 import { EditorProvider } from "./editor/react";
+import { PadsStore } from "./pads/store";
+import { PadsProvider } from "./pads/react";
 import { drawTimes } from "./editor/perf";
 
 // Access token (phone on the same Wi-Fi): taken from ?token= on first load,
@@ -35,6 +37,7 @@ const engine = new AudioEngine({
 });
 store = new Store({ client, engine });
 const editor = new EditorStore(store, engine);
+const pads = new PadsStore(store, editor, engine);
 store.onEvent = (e) => {
   switch (e.type) {
     case "song.changed":
@@ -73,7 +76,7 @@ engine.subscribe(() => {
 arm(true);
 
 // Diagnostics hook (used by the e2e test to read scheduling data).
-(window as unknown as { __muestra: unknown }).__muestra = { store, engine, client, editor, perf: { drawTimes } };
+(window as unknown as { __muestra: unknown }).__muestra = { store, engine, client, editor, pads, perf: { drawTimes } };
 
 document.documentElement.dataset.theme = store.state.theme;
 void store.init();
@@ -82,7 +85,9 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <StoreProvider store={store}>
       <EditorProvider editor={editor}>
-        <App />
+        <PadsProvider pads={pads}>
+          <App />
+        </PadsProvider>
       </EditorProvider>
     </StoreProvider>
   </StrictMode>,

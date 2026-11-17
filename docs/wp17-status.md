@@ -10,7 +10,7 @@ Branch `wp17-pads` (from `muestra/e1`).
 - `muestra.pads`: schema `schemas/pads.py` (banks, takes), storage under `pads/`, quantise/clean-up, commit ops, slicing (beat/half/transients), tools `pads.get/save_banks/take_save/take_get/take_delete/commit/slice/from_track`; song.pieces `voices`/`note_voices`; tests `tests/pads`.
 
 ## In progress
-- UI: pads model (keymap, quantise, latency, choke), pads view, recording.
+- UI: done: song.ts mirror (slice lanes, choke/gate cut0, voices), engine pads output + editorClock + playEditorAt, pads/{keymap,model,player,store,react}. In progress: PadsView component + css.
 
 ## Next
 - pads tools, song.pieces voices, tests; UI pads view, recording, latency; docs.

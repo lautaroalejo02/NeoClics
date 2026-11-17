@@ -290,6 +290,9 @@ export class AudioEngine {
   private editorLevel: GainNode | null = null;
   private editorArr: Arrangement | null = null;
   private editorLevelDb = 0;
+  /** delay (s) the editor's stem bus adds (limiter look-ahead): what is HEARD of the base lags the schedule */
+  private editorBusLatency = 0;
+  private padsBus: GainNode | null = null;
 
   private previewSrc: AudioBufferSourceNode | null = null;
   private previewGain: GainNode | null = null;
@@ -1154,6 +1157,7 @@ export class AudioEngine {
     // Same stem bus as stem mode: a look-ahead limiter at -1 dBFS so a
     // pre-master sum never clips at the speaker; then the level match.
     const bus = createStemBus(ctx, this.busKind);
+    this.editorBusLatency = bus.latencyS;
     this.editorOut = ctx.createGain();
     this.editorOut.gain.value = 0;
     this.editorLevel = ctx.createGain();
@@ -1222,7 +1226,7 @@ export class AudioEngine {
     return ed.position(t);
   }
 
-  private playEditor(): void {
+  private playEditor(at?: number): void {
     const ctx = this.ctx;
     if (!ctx || this.playing) return;
     const ed = this.ensureEditor();
@@ -1240,7 +1244,7 @@ export class AudioEngine {
         smoothTo(d.out.gain, 0, now);
       }
     });
-    const T = now + LOOKAHEAD_S;
+    const T = Math.max(now + LOOKAHEAD_S, at ?? 0);
     ed.start(T, this.pausedPos, this.editorLoop());
     holdAt(this.editorOut!.gain, now);
     this.editorOut!.gain.setValueAtTime(0, T);
@@ -1275,6 +1279,60 @@ export class AudioEngine {
       this.editorOut.gain.setValueAtTime(1, this.ctx.currentTime);
     }
     return ed.oneShot(buffer, opts);
+  }
+
+  // ------------------------------------------------------------ WP17 pads
+
+  /** The AudioContext (created on demand; pads schedule on its clock). */
+  audioContext(): AudioContext | null {
+    return this.ensureCtx(this.firstSampleRate() ?? 48000);
+  }
+
+  /**
+   * The pads' own output: straight to the master volume, NOT through the stem
+   * bus (its limiter look-ahead would add 5-6 ms to every press). A static
+   * soft clipper (no latency) keeps a pile of loud pads from hard-clipping.
+   */
+  padsOutput(): AudioNode | null {
+    const ctx = this.audioContext();
+    if (!ctx || !this.master) return null;
+    if (!this.padsBus) {
+      // input ±2 (pre-gain 0.5 maps it onto the shaper's ±1 range): unity up
+      // to 0.8, then a smooth knee that never exceeds 0.99
+      const pre = ctx.createGain();
+      pre.gain.value = 0.5;
+      const shaper = ctx.createWaveShaper();
+      const n = 4097;
+      const curve = new Float32Array(n);
+      for (let i = 0; i < n; i++) {
+        const x = (i / (n - 1)) * 4 - 2;
+        const m = Math.abs(x);
+        curve[i] = Math.sign(x) * (m <= 0.8 ? m : 0.8 + 0.19 * Math.tanh((m - 0.8) / 0.19));
+      }
+      shaper.curve = curve;
+      shaper.oversample = "none";
+      pre.connect(shaper);
+      shaper.connect(this.master);
+      this.padsBus = pre;
+    }
+    return this.padsBus;
+  }
+
+  /** Start the editor transport at ctx time `at` from song second `fromS` (count-in). */
+  playEditorAt(at: number, fromS: number): void {
+    this.unlock();
+    if (this.source !== "editor") this.setSource("editor", fromS);
+    if (this.playing) this.pause();
+    this.pausedPos = fromS;
+    this.playEditor(at);
+  }
+
+  /** Editor transport, loop-unwrapped: song seconds since the loop start at ctx time t
+   *  (passes counted), or null when stopped. The base is HEARD `editorBusLatency` later. */
+  editorClock(): { when: number; offset: number; loopStart: number; loopEnd: number; busLatency: number } | null {
+    const r = this.editor?.runInfo;
+    if (!r || !this.playing || this.source !== "editor") return null;
+    return { ...r, busLatency: this.editorBusLatency };
   }
 
   /** Output + base latency in seconds (WP17 pads align recordings with this). */

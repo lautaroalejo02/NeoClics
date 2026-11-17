@@ -4,6 +4,10 @@
 import type { ArrEvent, Arrangement, ArrTrack } from "../audio/arrangement";
 import {
   BEATS_PER_BAR,
+  CUT_FADE_MS,
+  hitSound,
+  plainSound,
+  voiceKey,
   automationValue,
   chopById,
   clipPasses,
@@ -38,6 +42,8 @@ export interface PieceSet {
   sampleRate: number;
   materials: MaterialPiece[];
   oneshots: Map<string, AudioBuffer>;
+  /** WP17: rendered lane/pad sounds (slices, tuned, reversed) by voiceKey */
+  voices: Map<string, AudioBuffer>;
   /** per track: wet stem + the wet fingerprint it was rendered for */
   wet: Map<string, { fp: string; buffer: AudioBuffer }>;
   /** per instrument track: dry stem + fingerprint */
@@ -45,7 +51,7 @@ export interface PieceSet {
 }
 
 export function emptyPieces(sampleRate = 48000): PieceSet {
-  return { sampleRate, materials: [], oneshots: new Map(), wet: new Map(), inst: new Map() };
+  return { sampleRate, materials: [], oneshots: new Map(), voices: new Map(), wet: new Map(), inst: new Map() };
 }
 
 export type TrackAudioState = "exact" | "preview" | "waiting" | "silent";
@@ -79,6 +85,14 @@ export function findMaterial(pieces: PieceSet, song: SongJson, track: TrackJson,
     if (near(m.start, p.materialStart) && near(m.length, p.length) && near(m.stretch, p.stretch) && near(m.pitch, p.pitch)) return { m, offsetBeats: 0 };
   }
   return null;
+}
+
+/** The buffer one hit of a lane plays: the file's one-shot, or its rendered voice (WP17). */
+export function soundBuffer(pieces: PieceSet, lane: import("./song").LaneJson | undefined, hitSample: string | null): AudioBuffer | undefined {
+  if (!lane) return undefined;
+  const snd = hitSound(lane, hitSample);
+  if (plainSound(snd)) return pieces.oneshots.get(snd.sample!);
+  return pieces.voices.get(voiceKey(snd));
 }
 
 function fadeSec(ms: number | null, fallbackS: number): number {
@@ -120,13 +134,16 @@ export function buildArrangement(song: SongJson, pieces: PieceSet, opts: BuildOp
       const hits = patternHits(song, t);
       const seen = new Map<string, number>();
       for (const h of hits) {
-        const buf = pieces.oneshots.get(h.sample);
+        const buf = soundBuffer(pieces, t.pattern!.lanes[h.lane], h.sample);
         if (!buf) {
           missing++;
           continue;
         }
         const time = h.beat0 * spb;
-        const base = `${t.id}|h|${h.lane}|${h.beat0.toFixed(6)}|${h.velocity.toFixed(4)}|${h.sample}`;
+        const fade = CUT_FADE_MS / 1000;
+        const cutDur = h.cut0 != null ? (h.cut0 - h.beat0) * spb + fade : Infinity;
+        const sndKey = h.sample && plainSound(hitSound(t.pattern!.lanes[h.lane], h.sample)) ? h.sample : voiceKey(hitSound(t.pattern!.lanes[h.lane], h.sample));
+        const base = `${t.id}|h|${h.lane}|${h.beat0.toFixed(6)}|${h.velocity.toFixed(4)}|${sndKey}|${h.cut0 == null ? "" : h.cut0.toFixed(6)}`;
         const n = seen.get(base) ?? 0;
         seen.set(base, n + 1);
         events.push({
@@ -136,11 +153,16 @@ export function buildArrangement(song: SongJson, pieces: PieceSet, opts: BuildOp
           time,
           buffer: buf,
           offset: 0,
-          duration: Math.max(0.001, Math.min(buf.duration, endS - time)),
+          duration: Math.max(0.001, Math.min(buf.duration, endS - time, cutDur)),
           tail: 0,
           gain: h.velocity,
           fadeIn: null,
-          fadeOut: buf.duration > endS - time ? { len: Math.min(0.005, endS - time), shape: "cos", inTail: false } : null,
+          fadeOut:
+            cutDur < buf.duration && cutDur <= endS - time
+              ? { len: fade, shape: "cos", inTail: false }
+              : buf.duration > endS - time
+                ? { len: Math.min(0.005, endS - time), shape: "cos", inTail: false }
+                : null,
         });
       }
       if (!t.mute) {

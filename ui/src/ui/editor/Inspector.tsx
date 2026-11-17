@@ -4,7 +4,7 @@ import { changeNotes, setClip, setFxParam, setHitVelocity, setPass, setTrackFiel
 import { round6, type Op } from "../../editor/ops";
 import { useEditor, useEditorStore } from "../../editor/react";
 import { beatLabel, laneName, selectionLabel, type Selection } from "../../editor/selection";
-import { BEATS_PER_BAR, chopById, noteName, patternHits, trackById, trackNotes, type FxJson, type SongJson } from "../../editor/song";
+import { BEATS_PER_BAR, chopById, hitSound, noteName, patternHits, trackById, trackNotes, type FxJson, type LaneJson, type SongJson, type SoundJson } from "../../editor/song";
 import * as I from "../icons";
 
 /** Numeric field with units; commits on Enter/blur (one undo step). */
@@ -74,7 +74,7 @@ function Section({ title, children, extra }: { title: string; children: ReactNod
   );
 }
 
-export function Inspector({ askRef, onAudition, narrow, onClose }: { askRef: RefObject<HTMLTextAreaElement | null>; onAudition: (sample: string, gain?: number) => void; narrow: boolean; onClose: () => void }) {
+export function Inspector({ askRef, onAudition, narrow, onClose }: { askRef: RefObject<HTMLTextAreaElement | null>; onAudition: (sound: string | SoundJson, gain?: number) => void; narrow: boolean; onClose: () => void }) {
   const editor = useEditorStore();
   const song = useEditor((s) => s.song)!;
   const sel = useEditor((s) => s.selection);
@@ -316,7 +316,7 @@ function ClipPanel({ song, sel, apply }: { song: SongJson; sel: Extract<Selectio
 
 // ------------------------------------------------------------------ hits
 
-function HitsPanel({ song, sel, apply, onAudition }: { song: SongJson; sel: Extract<Selection, { kind: "hits" }>; apply: (e: Edit | null) => void; onAudition: (s: string, g?: number) => void }) {
+function HitsPanel({ song, sel, apply, onAudition }: { song: SongJson; sel: Extract<Selection, { kind: "hits" }>; apply: (e: Edit | null) => void; onAudition: (s: string | SoundJson, g?: number) => void }) {
   const t = trackById(song, sel.track);
   const [browse, setBrowse] = useState(false);
   const hits = useMemo(() => (t ? patternHits(song, t) : []), [song, t]);
@@ -342,19 +342,20 @@ function HitsPanel({ song, sel, apply, onAudition }: { song: SongJson; sel: Extr
       </Section>
       {lane && (
         <Section title={`Carril ${laneName(lanes[0])} (todo el patrón)`}>
-          <p className="mono small-text ellip" title={lane.sample}>
-            {lane.sample.split("/").pop()}
+          <p className="mono small-text ellip" title={lane.sample ?? ""}>
+            {laneSoundLabel(lane)}
           </p>
           <div className="insp-row">
-            <button type="button" className="btn small" onClick={() => onAudition(lane.sample)}>
+            <button type="button" className="btn small" onClick={() => onAudition(hitSound(lane, lane.sample ?? null))}>
               <I.Play size={14} /> Escuchar
             </button>
             <button type="button" className="btn small" onClick={() => setBrowse(!browse)} data-testid="insp-change-sound" aria-expanded={browse}>
               Cambiar sonido
             </button>
           </div>
-          {browse && <SoundBrowser lane={lanes[0]} current={lane.sample} onAudition={onAudition} onPick={(ref) => {
-            apply({ ops: [{ op: "set", path: `tracks.${sel.track}.pattern.lanes.${lanes[0]}.sample`, value: ref, expect: lane.sample }], label: `cambiar el sonido de ${laneName(lanes[0])}`, track: sel.track });
+          {browse && <SoundBrowser lane={lanes[0]} current={lane.sample ?? ""} onAudition={onAudition} onPick={(ref) => {
+            const path = `tracks.${sel.track}.pattern.lanes.${lanes[0]}`;
+            apply({ ops: [{ op: "set", path: `${path}.sample`, value: ref, expect: lane.sample ?? null }, ...(lane.slice ? [{ op: "unset" as const, path: `${path}.slice` }] : [])], label: `cambiar el sonido de ${laneName(lanes[0])}`, track: sel.track });
             setBrowse(false);
           }} />}
           <Num label="Volumen del carril" unit="dB" value={lane.gain_db ?? 0} min={-60} max={24} step={0.5} onCommit={(v) => apply({ ops: [{ op: "set", path: `tracks.${sel.track}.pattern.lanes.${lanes[0]}.gain_db`, value: v ?? 0, expect: lane.gain_db ?? null }], label: `volumen de ${laneName(lanes[0])}`, track: sel.track })} />
@@ -375,7 +376,7 @@ interface LibHit {
 
 const LANE_TYPE: Record<string, string> = { kick: "kick", bd: "kick", snare: "snare", sd: "snare", clap: "clap", chat: "chat", ch: "chat", hat: "hat", hh: "chat", ohat: "ohat", oh: "ohat", ride: "cym", crash: "cym", tom: "tom", rim: "rim", perc: "perc" };
 
-function SoundBrowser({ lane, current, onAudition, onPick }: { lane: string; current: string; onAudition: (s: string) => void; onPick: (ref: string) => void }) {
+export function SoundBrowser({ lane, current, onAudition, onPick }: { lane: string; current: string; onAudition: (s: string) => void; onPick: (ref: string) => void }) {
   const store = useStore();
   const [q, setQ] = useState("");
   const [results, setResults] = useState<LibHit[] | null>(null);
@@ -527,3 +528,13 @@ function AskBox({ askRef }: { askRef: RefObject<HTMLTextAreaElement | null> }) {
   );
 }
 
+
+/** "kick-01" or "pedazo del chop c1 (tiempo 3, 1 t)" (WP17 slice lanes). */
+export function laneSoundLabel(lane: LaneJson): string {
+  const tune = (lane.pitch_semitones ? ` · ${lane.pitch_semitones > 0 ? "+" : ""}${lane.pitch_semitones} st` : "") + (lane.reverse ? " · al revés" : "") + (lane.choke ? ` · corte ${lane.choke}` : "");
+  const sl = lane.slice;
+  if (!sl) return String(lane.sample ?? "").split("/").pop() + tune;
+  const start = (sl.start_beats ?? 0) + (sl.chop ? 1 : 0);
+  const where = sl.chop ? `del chop ${sl.chop} (tiempo ${+start.toFixed(3)}` : `de ${sl.source} (compás ${sl.start_downbeat}${sl.start_beats ? ` + ${+sl.start_beats.toFixed(3)}` : ""}`;
+  return `pedazo ${where}, ${+sl.length_beats.toFixed(3)} t)${sl.speed === "source" ? " · velocidad del disco" : ""}${tune}`;
+}

@@ -20,7 +20,7 @@ import {
 import { RULER_H } from "../../editor/draw";
 import { useEditor, useEditorStore } from "../../editor/react";
 import { selCount, selectionLabel } from "../../editor/selection";
-import { BEATS_PER_BAR, clipBaseLength, clipStart0, passBeats, patternHits, trackById, trackKind } from "../../editor/song";
+import { BEATS_PER_BAR, clipBaseLength, clipStart0, passBeats, patternHits, trackById, trackKind, type SoundJson } from "../../editor/song";
 import { SNAP_BEATS, SNAP_LABEL, fmtBarBeat, layoutRows, zoomAt, type Snap } from "../../editor/timeline";
 import * as I from "../icons";
 import { Inspector } from "./Inspector";
@@ -46,8 +46,8 @@ export function EditorView({ onListen }: { onListen: () => void }) {
   }, [editor]);
 
   const audition = useCallback(
-    (sample: string, gain = 1) => {
-      void editor.sampleBuffer(sample).then((b) => b && editor.engine.playOneShot(b, { gain }));
+    (sound: string | SoundJson, gain = 1) => {
+      void editor.soundBuffer(typeof sound === "string" ? { sample: sound } : sound).then((b) => b && editor.engine.playOneShot(b, { gain }));
     },
     [editor],
   );
