@@ -87,6 +87,8 @@ export interface AppState {
   feedback: FeedbackEvent[];
   sendStatus: Record<string, SendStatus>;
   chopSets: ChopCandidateSet[];
+  /** chops declared in song.yaml (suggests the chop id on a manual choose) */
+  songChops: { id: string; source: string }[];
   analyses: Record<string, Analysis>;
   jobs: Record<string, Job>;
   ws: "connecting" | "open" | "closed";
@@ -186,6 +188,7 @@ export class Store {
       feedback: [],
       sendStatus: {},
       chopSets: [],
+      songChops: [],
       analyses: {},
       jobs: {},
       ws: "connecting",
@@ -272,6 +275,12 @@ export class Store {
         this.client.getSong().catch(() => null),
       ]);
       title = song?.song?.meta?.title ?? project?.project_path?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+      const chops = (song?.song as { chops?: { id?: unknown; source?: unknown }[] } | undefined)?.chops;
+      if (Array.isArray(chops)) {
+        this.set({
+          songChops: chops.filter((c) => typeof c.id === "string").map((c) => ({ id: String(c.id), source: String(c.source ?? "") })),
+        });
+      }
       if (list instanceof Error || list == null) {
         // versions.list unavailable (e.g. still a stub): fall back to the
         // render dirs project.open reports.

@@ -197,7 +197,7 @@ export function readableDiff(d: DiffEntry): ReadableDiff {
   const parts = d.path.split(".");
   const last = parts[parts.length - 1] ?? d.path;
   const lastName = last.replace(/\[\d+\]$/, "");
-  let where = "";
+  let where: string;
   if (parts[0] === "tracks" && parts.length >= 2) {
     where = `pista ${parts[1].replace(/\[\d+\]$/, "")}`;
     const fxIdx = parts.indexOf("fx");
