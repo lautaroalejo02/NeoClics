@@ -53,7 +53,7 @@ export function resizeClipRight(song: SongJson, track: string, ci: number, dBeat
     const stretch = Math.min(4, Math.max(0.25, (clip.stretch ?? 1) * ratio));
     if (Math.abs(stretch - (clip.stretch ?? 1)) < 1e-6) return null;
     const ops: Op[] = [
-      { op: "set", path: `${p}.stretch`, value: round6(stretch), expect: clip.stretch ?? 1 },
+      { op: "set", path: `${p}.stretch`, value: round6(stretch), expect: clip.stretch ?? null },
       { op: "set", path: `${p}.length_beats`, value: round6(len * (stretch / (clip.stretch ?? 1))), expect: clip.length_beats ?? null },
     ];
     return { ops, label: `estirar el clip ×${round6(stretch)}`, track };
@@ -61,7 +61,7 @@ export function resizeClipRight(song: SongJson, track: string, ci: number, dBeat
   if (repeat > 1) {
     const n = Math.max(1, Math.round((len * repeat + dBeats) / len));
     if (n === repeat) return null;
-    return { ops: [{ op: "set", path: `${p}.repeat`, value: n, expect: repeat }], label: `repetir el clip ${n} veces`, track };
+    return { ops: [{ op: "set", path: `${p}.repeat`, value: n, expect: clip.repeat ?? null }], label: `repetir el clip ${n} veces`, track };
   }
   const newLen = Math.max(snapStep || 0.25, len + dBeats);
   if (Math.abs(newLen - len) < 1e-9) return null;
@@ -82,7 +82,7 @@ export function resizeClipLeft(song: SongJson, track: string, ci: number, dBeats
     const n = Math.max(1, Math.min(repeat + Math.max(0, -k), repeat - k));
     if (n === repeat) return null;
     const moved = start + (repeat - n) * len;
-    return { ops: [...placeOps(p, clip, Math.max(0, moved)), { op: "set", path: `${p}.repeat`, value: n, expect: repeat }], label: `repetir el clip ${n} veces`, track };
+    return { ops: [...placeOps(p, clip, Math.max(0, moved)), { op: "set", path: `${p}.repeat`, value: n, expect: clip.repeat ?? null }], label: `repetir el clip ${n} veces`, track };
   }
   const d = Math.min(len - (snapStep || 0.25), dBeats);
   if (Math.abs(d) < 1e-9 || start + d < 0) return null;

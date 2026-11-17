@@ -5,6 +5,7 @@ import { addHit, addNote, addPoint, changeNotes, deleteHits, hitSel, moveClip, m
 import { RULER_H, draw, noteKey, readTheme, yToValue, type DragPreview, type Theme } from "../../editor/draw";
 import { hitTest, pitchAt, rowAt, type Target } from "../../editor/hit";
 import { useEditor, useEditorStore } from "../../editor/react";
+import { drawTimes } from "../../editor/perf";
 import type { HitSel, Selection } from "../../editor/selection";
 import { BEATS_PER_BAR, clipBaseLength, clipStart0, passBeats, patternHits, trackById } from "../../editor/song";
 import { SNAP_BEATS, beatToX, clamp, layoutRows, snapBeat, xToBeat, zoomAt } from "../../editor/timeline";
@@ -158,7 +159,7 @@ export function Timeline({ onAudition }: { onAudition: (sample: string, gain?: n
     const { x, y } = local(e);
     const target = hitTest(song, view, rows, x, y, scrollY);
     const touch = e.pointerType === "touch";
-    let mode: DragState["mode"] = "marquee";
+    let mode: DragState["mode"];
     switch (target.type) {
       case "ruler":
         mode = "loop";
@@ -504,8 +505,6 @@ export function Timeline({ onAudition }: { onAudition: (sample: string, gain?: n
   );
 }
 
-/** Draw times (ms) of the last frames, for the performance report. */
-export const drawTimes: number[] = [];
 
 function floorTo(b: number, step: number): number {
   return Math.floor(b / step + 1e-9) * step;

@@ -27,7 +27,7 @@ export default tseslint.config(
   },
   {
     // context provider + its hooks live together on purpose
-    files: ["src/state/react.tsx"],
+    files: ["src/state/react.tsx", "src/editor/react.tsx"],
     rules: { "react-refresh/only-export-components": "off" },
   },
 );

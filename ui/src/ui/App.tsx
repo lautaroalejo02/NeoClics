@@ -10,7 +10,7 @@ import { MixerPanel } from "./Mixer";
 import { Player } from "./Player";
 import { VersionsPanel } from "./Versions";
 import { EditorView } from "./editor/EditorView";
-import { useEditor, useEditorStore } from "../editor/react";
+import { useEditor, useEditorMaybe } from "../editor/react";
 
 type TabId = "mixer" | "ears" | "chops" | "feedback" | "versions";
 
@@ -25,7 +25,7 @@ export function App() {
   const [help, setHelp] = useState(false);
   const [settings, setSettings] = useState(false);
   const [tab, setTab] = useState<TabId>("mixer");
-  const editor = useEditorStore();
+  const editor = useEditorMaybe();
   const edStatus = useEditor((s) => s.status);
   // The arrangement editor is the main view when the backend has it (WP16).
   const [view, setView] = useState<"arreglo" | "escuchar">(() => {
@@ -36,7 +36,7 @@ export function App() {
     }
   });
   useEffect(() => {
-    if (boot === "ready" || boot === "empty") void editor.init();
+    if (editor && (boot === "ready" || boot === "empty")) void editor.init();
   }, [boot, editor]);
   const editorOn = view === "arreglo" && edStatus !== "unsupported" && edStatus !== "off" && (boot === "ready" || boot === "empty");
   const go = (v: "arreglo" | "escuchar") => {
@@ -47,10 +47,10 @@ export function App() {
       /* private mode */
     }
     // the transport follows the view: the editor plays the working song
-    editor.engine.setSource(v === "arreglo" && editor.state.listen === "editor" ? "editor" : "decks");
+    editor?.engine.setSource(v === "arreglo" && editor.state.listen === "editor" ? "editor" : "decks");
   };
   useEffect(() => {
-    editor.engine.setSource(editorOn && editor.state.listen === "editor" ? "editor" : "decks");
+    editor?.engine.setSource(editorOn && editor.state.listen === "editor" ? "editor" : "decks");
   }, [editorOn, editor]);
 
   useEffect(() => {

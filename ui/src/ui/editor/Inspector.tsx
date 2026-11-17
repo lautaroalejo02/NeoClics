@@ -4,13 +4,19 @@ import { changeNotes, setClip, setFxParam, setHitVelocity, setPass, setTrackFiel
 import { round6, type Op } from "../../editor/ops";
 import { useEditor, useEditorStore } from "../../editor/react";
 import { beatLabel, laneName, selectionLabel, type Selection } from "../../editor/selection";
-import { BEATS_PER_BAR, chopById, noteName, patternHits, trackById, trackKind, trackNotes, type FxJson, type SongJson } from "../../editor/song";
+import { BEATS_PER_BAR, chopById, noteName, patternHits, trackById, trackNotes, type FxJson, type SongJson } from "../../editor/song";
 import * as I from "../icons";
 
 /** Numeric field with units; commits on Enter/blur (one undo step). */
 function Num({ label, value, unit, min, max, step = 0.1, onCommit, testid, disabled }: { label: string; value: number | null | undefined; unit?: string; min?: number; max?: number; step?: number; onCommit: (v: number | null) => void; testid?: string; disabled?: boolean }) {
-  const [text, setText] = useState(value == null ? "" : String(round6(value)));
-  useEffect(() => setText(value == null ? "" : String(round6(value))), [value]);
+  const shown = value == null ? "" : String(round6(value));
+  const [text, setText] = useState(shown);
+  const [prev, setPrev] = useState(shown);
+  if (prev !== shown) {
+    // the song changed underneath (undo, agent): show the new value
+    setPrev(shown);
+    setText(shown);
+  }
   const commit = () => {
     if (text.trim() === "") return onCommit(null);
     const v = Number(text.replace(",", "."));
@@ -460,7 +466,7 @@ function PointsPanel({ song, sel }: { song: SongJson; sel: Extract<Selection, { 
       <Num label="Valor" unit={unit} value={p[1]} step={unit === "Hz" ? 50 : 0.1} onCommit={(v) => v != null && set(p[0], v)} />
       <label className="insp-field">
         <span>Curva</span>
-        <select value={a.curve ?? "lin"} onChange={(e) => editor.apply({ ops: [{ op: "set", path: `automation.${sel.target}.curve`, value: e.target.value, expect: a.curve ?? "lin" }], label: "cambiar la curva" })}>
+        <select value={a.curve ?? "lin"} onChange={(e) => editor.apply({ ops: [{ op: "set", path: `automation.${sel.target}.curve`, value: e.target.value, expect: a.curve ?? null }], label: "cambiar la curva" })}>
           <option value="lin">Lineal</option>
           <option value="exp">Exponencial</option>
           <option value="step">Escalones</option>
@@ -521,4 +527,3 @@ function AskBox({ askRef }: { askRef: RefObject<HTMLTextAreaElement | null> }) {
   );
 }
 
-export { trackKind };
