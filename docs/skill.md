@@ -90,7 +90,7 @@ instalado en esta máquina: nada de esto se verificó con Codex.**
   ```` ```diff tiger-rag ```` de la receta y valida cada resultado; rechaza bloques `yaml`
   sin etiqueta; comprueba los enlaces relativos y el frontmatter; y que el validador
   rechace errores típicos.
-- `tests/skill/test_skill_render.py` (opt-in, `MUESTRA_RUN_SLOW=1`, ~3 min): importa Tiger
+- `tests/skill/test_skill_render.py` (opt-in, `MUESTRA_RUN_SLOW=1`; 5 passed en 94 s en esta máquina, mismos LUFS que en el proyecto de prueba): importa Tiger
   Rag de la librería de prueba, separa, analiza, valida con `check_files=True` y renderiza
   cada ejemplo con la librería y los instrumentos reales.
 - A mano, en `C:\Users\lauti\Documents\MuestraProjects\skill-check` (fuera del repo):
