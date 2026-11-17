@@ -13,6 +13,7 @@ import type {
   Job,
   Metrics,
   RenderMeta,
+  SongGetResult,
   VersionId,
   VersionInfo,
 } from "../api/types";
@@ -269,6 +270,13 @@ export class Store {
     const summary = await this.client.getSummary();
     let versions: VersionInfo[] = summary?.versions ?? [];
     let title = summary?.title ?? null;
+    if (summary) {
+      // song.yaml chops (to suggest the chop id when choosing manually)
+      void this.client
+        .getSong()
+        .then((s) => this.noteSong(s))
+        .catch(() => undefined);
+    }
     if (!summary?.versions) {
       const [list, project, song] = await Promise.all([
         this.client.listVersions().catch((e: unknown) => e),
@@ -276,12 +284,7 @@ export class Store {
         this.client.getSong().catch(() => null),
       ]);
       title = song?.song?.meta?.title ?? project?.project_path?.split(/[\\/]/).filter(Boolean).pop() ?? null;
-      const chops = (song?.song as { chops?: { id?: unknown; source?: unknown }[] } | undefined)?.chops;
-      if (Array.isArray(chops)) {
-        this.set({
-          songChops: chops.filter((c) => typeof c.id === "string").map((c) => ({ id: String(c.id), source: String(c.source ?? "") })),
-        });
-      }
+      this.noteSong(song);
       if (list instanceof Error || list == null) {
         // versions.list unavailable (e.g. still a stub): fall back to the
         // render dirs project.open reports.
@@ -327,6 +330,13 @@ export class Store {
       void this.engine.prepare(latest, { stems: true }).catch(() => undefined);
     }
     void this.fetchRemotePeaks();
+  }
+
+  private noteSong(song: SongGetResult | null): void {
+    const chops = song?.song?.chops as { id?: unknown; source?: unknown }[] | undefined;
+    if (Array.isArray(chops)) {
+      this.set({ songChops: chops.filter((c) => typeof c.id === "string").map((c) => ({ id: String(c.id), source: String(c.source ?? "") })) });
+    }
   }
 
   private async fetchRemotePeaks(): Promise<void> {

@@ -200,20 +200,21 @@ function LoudnessScale({ series, onTip, onLeave }: { series: Series; onTip: TipF
   const W = 260;
   const x = (v: number) => 10 + ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (W - 20);
   return (
-    <svg className="chart" viewBox={`0 0 ${W} 44`} role="img" aria-label={series.map((s) => `${s.letter} ${s.v}: ${s.m.loudness.integrated_lufs} LUFS`).join(", ")}>
-      <line className="axis" x1={10} x2={W - 10} y1={22} y2={22} strokeWidth={2} />
+    <svg className="chart" viewBox={`0 0 ${W} 56`} role="img" aria-label={series.map((s) => `${s.letter} ${s.v}: ${s.m.loudness.integrated_lufs} LUFS`).join(", ")}>
+      <line className="axis" x1={10} x2={W - 10} y1={26} y2={26} strokeWidth={2} />
       {[-24, -18, -14, -10, -6].map((v) => (
         <g key={v}>
-          <line className="axis" x1={x(v)} x2={x(v)} y1={18} y2={26} />
-          <text x={x(v)} y={40} textAnchor="middle">
+          <line className="axis" x1={x(v)} x2={x(v)} y1={22} y2={30} />
+          <text x={x(v)} y={54} textAnchor="middle">
             {v}
           </text>
         </g>
       ))}
       {series.map((s, i) => (
         <g key={s.v} tabIndex={0} onMouseEnter={(e) => onTip(e, `${s.v}: ${s.m.loudness.integrated_lufs.toFixed(1)} LUFS`)} onFocus={(e) => onTip(e, `${s.v}: ${s.m.loudness.integrated_lufs.toFixed(1)} LUFS`)} onMouseLeave={onLeave} onBlur={onLeave}>
-          <circle cx={x(s.m.loudness.integrated_lufs)} cy={22} r={7} fill={s.color} stroke="var(--bg-2)" strokeWidth={2} />
-          <text x={x(s.m.loudness.integrated_lufs)} y={i === 0 ? 10 : 10} textAnchor="middle" style={{ fontWeight: 600 }}>
+          <circle cx={x(s.m.loudness.integrated_lufs)} cy={26} r={7} fill={s.color} stroke="var(--bg-2)" strokeWidth={2} />
+          {/* A above the line, B below: never collide when close */}
+          <text x={x(s.m.loudness.integrated_lufs)} y={i === 0 ? 12 : 46} textAnchor="middle" style={{ fontWeight: 600 }}>
             {s.letter}
           </text>
         </g>
@@ -239,7 +240,7 @@ function SpectralChart({ series, onTip, onLeave }: { series: Series; onTip: TipF
   const barW = Math.min(26, (groupW - 16) / series.length - 2);
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Nivel por banda: ${series.map((s) => `${s.v} graves ${s.m.spectral.mix.low_db} dB, medios ${s.m.spectral.mix.mid_db} dB, agudos ${s.m.spectral.mix.high_db} dB`).join("; ")}`}>
-      {[top, (top + floor) / 2, floor].map((g) => (
+      {[top, Math.round((top + floor) / 2 / 6) * 6, floor].map((g) => (
         <g key={g}>
           <line className="gridl" x1={30} x2={W} y1={y(g)} y2={y(g)} />
           <text x={26} y={y(g) + 4} textAnchor="end">
@@ -289,7 +290,7 @@ function MaskingChart({ m, color, onTip, onLeave }: { m: Metrics; color: string;
   const floor = Math.min(-48, Math.floor(Math.min(...entries.map(([, v]) => Math.max(v, -90))) / 6) * 6);
   const top = Math.max(...entries.map(([, v]) => v)) + 2;
   const labelW = 64;
-  const x = (v: number) => labelW + ((Math.max(floor, v) - floor) / (top - floor)) * (W - labelW - 50);
+  const x = (v: number) => labelW + ((Math.max(floor, v) - floor) / (top - floor)) * (W - labelW - 96);
   return (
     <svg className="chart" viewBox={`0 0 ${W} ${entries.length * rowH + 4}`} role="img" aria-label={`Energía en graves: ${entries.map(([k, v]) => `${k} ${v} dB`).join(", ")}`}>
       {entries.map(([k, v], i) => {

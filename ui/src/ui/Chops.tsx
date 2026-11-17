@@ -105,7 +105,9 @@ function CandidateSet({ set }: { set: ChopCandidateSet }) {
       </div>
       {set.pick && (
         <div className="justif" style={{ marginTop: 10 }}>
-          <span aria-hidden="true">🤖</span>
+          <span aria-hidden="true" style={{ color: "var(--info)" }}>
+            <I.Info />
+          </span>
           <span>
             <strong>El agente eligió {localId(set, set.pick.candidate_id)}</strong>: {set.pick.justification}
           </span>
@@ -168,19 +170,19 @@ function SourceStrip({ set, analysis, sel, onSelect }: { set: ChopCandidateSet; 
   const pct = (s: number) => `${(Math.max(0, Math.min(dur, s)) / dur) * 100}%`;
   return (
     <div>
-      <div className="srcstrip" aria-label={`Dónde está cada candidato en ${set.source_id}`} role="img">
+      <div className="srcstrip" style={{ height: 24 + set.candidates.length * 21 }} aria-label={`Dónde está cada candidato en ${set.source_id}`} role="group">
         {analysis?.sections.map((s, i) => (
           <span key={i} className="sec" style={{ left: pct(s.start_s), width: `calc(${pct(s.end_s - s.start_s)})` }}>
             {s.label}
           </span>
         ))}
         {analysis?.downbeats_s.map((d, i) => <span key={i} className="db-tick" style={{ left: pct(d) }} />)}
-        {set.candidates.map((c) => (
+        {set.candidates.map((c, i) => (
           <button
             key={c.id}
             type="button"
             className={`cand${c.id === sel ? " sel" : ""}`}
-            style={{ left: pct(c.start_s), width: pct(c.end_s - c.start_s), border: undefined }}
+            style={{ left: pct(c.start_s), width: pct(c.end_s - c.start_s), top: 20 + i * 21 }}
             onClick={() => onSelect(c.id)}
             aria-label={`${c.id}: ${formatClock(c.start_s)} a ${formatClock(c.end_s)}`}
           >
