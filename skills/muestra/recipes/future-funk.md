@@ -69,9 +69,31 @@ una grilla mal leída: la grilla del proyecto es siempre la musical (16 pasos = 
 | Bajo | `finger-bass`, una frase de 1-2 compases en loop (`phrases`), contratiempos: tónica, tónica, octava, tónica; entra en el 5 | `synth-bass` si falta peso; `slap-bass` para funk |
 | Master | compresor -18 dB 3:1, limitador -1 dB, `target_lufs: -12` | -10 solo si ears muestra PLR < 9 dB |
 
-Niveles: los discos viejos vienen bajos (Tiger Rag: -27 LUFS) y los TR-8 calientes. Empezá
-con sample `gain_db` +6..+10, bombo -4, bajo +6..+13 (el alias `finger-bass` trae 6 dB de
-headroom) y ajustá con lo que diga ears (`technical.tracks.<id>.rms_dbfs`).
+### Niveles de partida
+
+El master normaliza hacia `target_lufs`: lo único que cuenta son los niveles **relativos**.
+Subir todo no hace nada. Punto de partida (`gain_db`):
+
+- **Sample**: +6..+9. Los discos viejos vienen bajos (Tiger Rag: -27 LUFS) y el sample es el
+  tema: tiene que quedar al nivel de la batería o apenas arriba.
+- **Bombo**: 0 (one-shots del kit de librería ya vienen nivelados) o -2/-3 si el disco es
+  muy punchy y le saca lugar.
+- **Clap / hats**: 0 o -2/-4 si el sample lleva hats propios fuertes.
+- **Bajo**: +4..+8 con `finger-bass` (trae ~6 dB de headroom); cerca de 0 con los aliases
+  ya nivelados (`slap-bass`). Si ears marca `sub_deficit`, es preset antes que ganancia.
+- **Otros instrumentos** (rhodes, pads): -6..-10, capas, nunca encima del sample.
+
+**Regla de oro**: si te piden que el sample se escuche más, subí `tracks.sample.gain_db`
+**de a 2 o 3 dB por versión** y mirá la línea `balance:` del resumen. Nunca dejes la
+batería a más de ~10 dB debajo del sample (aviso) y mucho menos a 16 (ahí solo se oye el
+disco — pasó en session-devin con +11). Si la línea `balance:` muestra el sample arriba y
+la batería hundida, la respuesta es bajar el sample, **nunca** subir bombo+bajo+master.
+
+Cómo leer la línea: `balance: bombo 0, bajo -2, sample -5, resto de batería -8 dB` = cada
+rol en dB contra el más fuerte, medido mientras suena (un bombo que toca 4 veces por
+compás no se penaliza por el silencio entre golpes). Sano: todo el núcleo (bombo, resto de
+batería, bajo, sample) dentro de ±10 dB. Las alarmas `balance_*` de ears
+([ears.md](../ears.md#balance-de-mezcla-wp18)) avisan cuando se sale.
 
 ## Tempo y tono
 

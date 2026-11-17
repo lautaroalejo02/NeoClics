@@ -36,6 +36,7 @@ from ..schemas.metrics import (
 )
 from . import style
 from .alarms import sort_alarms
+from .balance import measure_balance
 from .clicks import measure_clicks
 from .context import RenderContext, load_context, render_dir
 from .loudness import measure_loudness
@@ -92,6 +93,8 @@ def analyze(project: Project, version: str) -> Metrics:
     alarms += a
     technical, a = _guard(ctx, "technical", measure_technical, None)
     alarms += a
+    balance, a = _guard(ctx, "balance", measure_balance, None)
+    alarms += a
     similarity, why = style.score(project.root, ctx.mix, ctx.sr)
     if why:
         ctx.skipped.append(why)
@@ -106,6 +109,7 @@ def analyze(project: Project, version: str) -> Metrics:
         style_similarity=similarity,
         alarms=sort_alarms(alarms),
         technical=technical,
+        balance=balance,
         skipped=ctx.skipped,
         ears_version=EARS_VERSION,
     )

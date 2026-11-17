@@ -107,6 +107,15 @@ class Thresholds:
     silent_peak_db: float = -70.0
     inaudible_margin_db: float = 20.0  # track this far below the rest in every band
     inaudible_max_share: float = 0.05  # ...in all but this share of its active frames
+    # mix balance (WP18) — starting points calibrated on the real projects
+    # (docs/ears.md); nobody has validated them by ear.
+    balance_active_gate_db: float = 20.0  # blocks this far under a track's loudest = "not playing"
+    balance_back_db: float = 10.0  # rhythm role this far under the melodic body: warn
+    balance_sample_back_db: float = 12.0  # sample this far under the kick: warn
+    balance_buried_db: float = 16.0  # core role this far under the loudest role: error
+    balance_dominant_db: float = 14.0  # loudest role this far over the runner-up: warn
+    balance_front_db: float = 10.0  # bass this far over the kick: warn
+    balance_drums_front_db: float = 14.0  # rest-of-drums this far over the sample: warn
 
 
 def slope_profile(

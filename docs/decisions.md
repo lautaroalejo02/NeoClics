@@ -879,3 +879,38 @@ regenerated with matching PCM. The renderer also passes the version snapshot's
 seed to SFZ hosting (optional Python keyword), rather than reading the live
 song's seed during re-render. Candidate fingerprints ignore reporting/history
 changes, so no-op regrids leave retained candidates choosable.
+
+### WP18 — mix balance measured while each role sounds
+
+Ears never checked relative levels, so an agent could push the sample
++11 dB until only the record was audible (`session-devin` v009: sample
+~30 dB over the kit) with every metric green. Whole-file stem RMS was
+rejected as the yardstick: it charges sparse tracks for their silence
+and would call a 1-hit/bar kick ~6 dB quieter than an identical 4-on-floor
+kick. Each role is now measured **while it sounds** — K-weighted power
+inside `[hit, hit+W]` windows (`W ≤ 0.3 s`, event-locked to the song's
+own hit times) for drum lanes, rescaled to the post-fx track bus;
+self-gated 400 ms active blocks for sustained tracks — on the pre-master
+stems, pooled per role and reported relative to the loudest.
+
+Roles come from the song (kick-named lanes / lowest 40-150 Hz lane,
+instrument tracks in the bass register, clip tracks), not from names
+alone. Alarms compare the rhythm section against the loudest melodic
+role (the sample or other sustained content) rather than against the
+loudest role of any kind — a bass under the *drums* is a different,
+already-checked problem. `balance_buried` (error, ≥16 dB under
+anything) marks a role effectively inaudible; `balance_*_back`/`_front`
+(warn, 10-14 dB) mark genre outliers; `balance_dominant` (warn, ≥14 dB
+margin) tells the agent that raising the dominant track only drives the
+limiter — fixes always move relative `gain_db`, never the master.
+
+The `balance` info readout appears in every summary even when quiet.
+Thresholds are starting points calibrated by measurement on four real
+projects (table in docs/ears.md) — explicitly not validated by ear, all
+overridable in `ears.toml`. The check fires on `session-devin` v001-5
+(warn: bass ~12 dB under the sample), v006-9 (error), and stays quiet
+on v010 and all of `session-codex`; a handful of honest extremes in the
+"acceptable" projects (a bass 18-25 dB under the bus) still fire and are
+documented. Additive contract: `Metrics.balance` (`BalanceReport`),
+`MetricsDelta.balance_delta_db`; older `metrics.json` keep validating.
+Cost: ~0.13 s on a 16-bar 48 kHz render.

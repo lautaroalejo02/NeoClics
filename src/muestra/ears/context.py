@@ -314,6 +314,7 @@ class RenderContext:
     skipped: list[str] = field(default_factory=list)
     _mono: dict[str, np.ndarray] = field(default_factory=dict)
     _spec: dict[str, dsp.Spectrogram] = field(default_factory=dict)
+    _wpower: dict[str, np.ndarray] = field(default_factory=dict)
 
     @property
     def duration_s(self) -> float:
@@ -332,6 +333,16 @@ class RenderContext:
             tid, lane = key.split(".", 1)
             return self.lanes[tid][lane]
         return self.stems[key]
+
+    def wpower(self, key: str) -> np.ndarray:
+        """Cached per-sample K-weighted power of 'mix'/'<track>'/'<track>.<lane>'.
+
+        float32 on purpose: the balance check filters every stem and the
+        dB rounding swallows the precision loss.
+        """
+        if key not in self._wpower:
+            self._wpower[key] = dsp.weighted_power(self.audio(key), self.sr)
+        return self._wpower[key]
 
     def spec(self, key: str, *, fine: bool = False) -> dsp.Spectrogram:
         """Cached power spectrogram of 'mix'/'<track>'/'<track>.<lane>'.

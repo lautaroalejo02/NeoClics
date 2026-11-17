@@ -22,8 +22,9 @@ de la medición (heurística). Una cuarta/quinta posiblemente intencional tampoc
 una transposición destructiva como fix.
 
 Comparar dos versiones: `ears.compare(version_a, version_b)` → `lufs_delta`, `brightness`
-(brighter/darker), `low_end` (heavier/lighter), `track_level_delta_db`, `alarms_fixed`,
-`alarms_introduced`, `alarms_kept`, `notes`. Usalo después de cada iteración: un cambio
+(brighter/darker), `low_end` (heavier/lighter), `track_level_delta_db`, `balance_delta_db`,
+`alarms_fixed`, `alarms_introduced`, `alarms_kept`, `notes` (incluye notas de balance:
+"el sample bajó X dB respecto de la batería"). Usalo después de cada iteración: un cambio
 puede arreglar una cosa y romper otra (pasó en la receta: bajar el bombo hizo que el bajo
 lo tapara).
 
@@ -58,6 +59,34 @@ sample +6 / bajo +3 → -12.05, target -13 → -14.39):
 - subir el cuerpo: sample y bajo (`gain_db`) para que el bombo pese menos en los picos.
 
 Lo segundo y lo tercero cambian el sonido: hacelo de a uno y contalo.
+
+## Balance de mezcla (WP18)
+
+Cada resumen trae una línea `balance:` aunque no haya alarmas — los roles medidos mientras
+suenan, en dB contra el más fuerte:
+
+```
+balance: sample 0, bombo -17.7, resto de batería -20.8, bajo -31.9 dB   ← solo se oye el disco
+balance: bombo 0, bajo -2, sample -5, resto de batería -8 dB            ← sano
+```
+
+Leéla siempre: si el sample manda por ≥ 15 dB, la batería y el bajo no existen aunque los
+otros checks estén verdes. Ojo: es medición de stems, no percepción — un balance parejo no
+garantiza que suene parejo (masking, pan, arreglo).
+
+| code | qué significa | qué cambiar |
+|---|---|---|
+| `balance_buried` (error) | bombo / batería / bajo / sample ≥ 16 dB por debajo del más fuerte: no se escucha | **nunca** subas todo: el master nivela. Bajá `tracks.<dominante>.gain_db` o subí el del rol enterrado (el `fix` da números) |
+| `balance_kick_back` / `balance_drums_back` / `balance_bass_back` | ese rol ≥ 10 dB abajo del sample (o de los otros instrumentos): el groove pierde peso | subí el rol ~la mitad del hueco o bajá el sample |
+| `balance_sample_back` | el sample ≥ 12 dB abajo del bombo: se pierde el tema | subí `tracks.sample.gain_db` o bajá el bombo |
+| `balance_bass_front` | el bajo ≥ 10 dB por encima del bombo | bajá el bajo o subí el bombo |
+| `balance_drums_front` | la batería ≥ 14 dB por encima del sample: tapa el tema | bajá `tracks.<drums>.gain_db` o los `gain_db` de los lanes |
+| `balance_dominant` | un rol manda ≥ 14 dB sobre el segundo | subirle `gain_db` ya no lo hace sonar más (el limitador trabaja por él): bajalo o subí el resto |
+
+Umbrales en `ears.toml` (`balance_back_db` 10, `balance_sample_back_db` 12,
+`balance_buried_db` 16, `balance_dominant_db` 14, `balance_front_db` 10,
+`balance_drums_front_db` 14, `balance_active_gate_db` 20): puntos de partida medidos en
+proyectos reales, nadie los validó de oído.
 
 ## Balance espectral (`spectral_<banda>_excess|deficit`)
 

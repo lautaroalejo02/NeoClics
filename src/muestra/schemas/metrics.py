@@ -46,6 +46,8 @@ __all__ = [
     "ClickReport",
     "TrackLevel",
     "TechnicalReport",
+    "RoleBalance",
+    "BalanceReport",
     "StyleScore",
     "StyleSimilarity",
     "Alarm",
@@ -456,6 +458,55 @@ class ClickReport(ContractModel):
 
 
 # ---------------------------------------------------------------------------
+# mix balance (WP18)
+# ---------------------------------------------------------------------------
+
+
+class RoleBalance(ContractModel):
+    """Active loudness of one mix role, dB (K-weighted, while it sounds)."""
+
+    level_db: float = Field(
+        description="Loudness of the role over the portions where it is actually "
+        "playing (drum lanes: the hit windows from the song; sustained tracks: "
+        "self-gated 400 ms blocks), dB relative to full scale."
+    )
+    tracks: list[IdStr] = Field(
+        default_factory=list, description="Track ids pooled into this role."
+    )
+
+
+class BalanceReport(ContractModel):
+    """Relative loudness of the mix roles (kick / drums / bass / sample / other).
+
+    Roles come from the song (pattern lanes named like a kick, instrument
+    tracks in the bass register, clip tracks holding the sample), measured
+    per-role while sounding so a sparse kick and a continuous sample are
+    comparable. ``levels_db`` normalises every present role to the loudest.
+    """
+
+    method: str = Field(
+        default="active",
+        description="Measurement basis: 'active' = K-weighted power over the "
+        "role's sounding portions (hit windows for drum lanes, self-gated "
+        "blocks for sustained tracks).",
+    )
+    roles: dict[str, RoleBalance] = Field(
+        default_factory=dict,
+        description="Role -> measured level. Roles: kick, drums (rest of the "
+        "kit), bass, sample, other — only the ones present.",
+    )
+    lanes: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per drum lane level ('<track>.<lane>' -> dB), post-fx scale.",
+    )
+    loudest: str | None = Field(default=None, description="The loudest role.")
+    levels_db: dict[str, float] = Field(
+        default_factory=dict,
+        description="Role -> level relative to the loudest role (0 = loudest), dB.",
+    )
+
+
+# ---------------------------------------------------------------------------
 # technical extras (WP6)
 # ---------------------------------------------------------------------------
 
@@ -561,6 +612,12 @@ class Metrics(ContractModel):
     alarms: list[Alarm] = Field(default_factory=list)
     # --- WP6 additions ---
     technical: TechnicalReport | None = None
+    # --- WP18 addition ---
+    balance: BalanceReport | None = Field(
+        default=None,
+        description="Relative loudness of the mix roles (kick / "
+        "drums / bass / sample / other) while they sound.",
+    )
     summary: str = Field(
         default="",
         description="Compact Spanish summary (a handful of lines) for inline "
@@ -605,6 +662,12 @@ class MetricsDelta(ContractModel):
     low_end: Literal["heavier", "lighter", "same"] | None = None
     track_level_delta_db: dict[IdStr, float] = Field(
         default_factory=dict, description="Per track stem RMS change, dB."
+    )
+    # --- WP18 addition ---
+    balance_delta_db: dict[str, float] = Field(
+        default_factory=dict,
+        description="Per mix role (kick/drums/bass/sample/other): change of the "
+        "role's level relative to the loudest role, dB (b relative to a).",
     )
     alarms_fixed: list[AlarmRef] = Field(default_factory=list)
     alarms_introduced: list[AlarmRef] = Field(default_factory=list)

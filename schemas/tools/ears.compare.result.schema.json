@@ -68,6 +68,14 @@
           "title": "Alarms Kept",
           "type": "array"
         },
+        "balance_delta_db": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Per mix role (kick/drums/bass/sample/other): change of the role's level relative to the loudest role, dB (b relative to a).",
+          "title": "Balance Delta Db",
+          "type": "object"
+        },
         "brightness": {
           "anyOf": [
             {

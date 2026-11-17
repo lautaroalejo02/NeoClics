@@ -328,6 +328,57 @@
       "title": "AlignmentReport",
       "type": "object"
     },
+    "BalanceReport": {
+      "additionalProperties": false,
+      "description": "Relative loudness of the mix roles (kick / drums / bass / sample / other).\n\nRoles come from the song (pattern lanes named like a kick, instrument\ntracks in the bass register, clip tracks holding the sample), measured\nper-role while sounding so a sparse kick and a continuous sample are\ncomparable. ``levels_db`` normalises every present role to the loudest.",
+      "properties": {
+        "lanes": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Per drum lane level ('<track>.<lane>' -> dB), post-fx scale.",
+          "title": "Lanes",
+          "type": "object"
+        },
+        "levels_db": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Role -> level relative to the loudest role (0 = loudest), dB.",
+          "title": "Levels Db",
+          "type": "object"
+        },
+        "loudest": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The loudest role.",
+          "title": "Loudest"
+        },
+        "method": {
+          "default": "active",
+          "description": "Measurement basis: 'active' = K-weighted power over the role's sounding portions (hit windows for drum lanes, self-gated blocks for sustained tracks).",
+          "title": "Method",
+          "type": "string"
+        },
+        "roles": {
+          "additionalProperties": {
+            "$ref": "#/$defs/RoleBalance"
+          },
+          "description": "Role -> measured level. Roles: kick, drums (rest of the kit), bass, sample, other \u2014 only the ones present.",
+          "title": "Roles",
+          "type": "object"
+        }
+      },
+      "title": "BalanceReport",
+      "type": "object"
+    },
     "BassVsSample": {
       "additionalProperties": false,
       "description": "Bass notes (from the song) against the sample's measured pitch content.",
@@ -1089,6 +1140,18 @@
           "default": null,
           "title": "Analysis Time S"
         },
+        "balance": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BalanceReport"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Relative loudness of the mix roles (kick / drums / bass / sample / other) while they sound."
+        },
         "clicks": {
           "$ref": "#/$defs/ClickReport"
         },
@@ -1425,6 +1488,32 @@
         "stem"
       ],
       "title": "RenderTrackMeta",
+      "type": "object"
+    },
+    "RoleBalance": {
+      "additionalProperties": false,
+      "description": "Active loudness of one mix role, dB (K-weighted, while it sounds).",
+      "properties": {
+        "level_db": {
+          "description": "Loudness of the role over the portions where it is actually playing (drum lanes: the hit windows from the song; sustained tracks: self-gated 400 ms blocks), dB relative to full scale.",
+          "title": "Level Db",
+          "type": "number"
+        },
+        "tracks": {
+          "description": "Track ids pooled into this role.",
+          "items": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "title": "Tracks",
+          "type": "array"
+        }
+      },
+      "required": [
+        "level_db"
+      ],
+      "title": "RoleBalance",
       "type": "object"
     },
     "SidechainCheck": {

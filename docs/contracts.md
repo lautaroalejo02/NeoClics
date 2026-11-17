@@ -517,7 +517,8 @@ reorders `tracks` / `tracks.<id>.fx` (full grammar: `docs/versions.md`),
 | `style_similarity?` | `model`, `references[{reference,score}]`, `mean_score` | optional CLAP/MERT (hook only in v1) |
 | `alarms` | `[{code,severity∈info|warn|error,message,track?,at_s?}]` + (WP6) `bar, beat, lane, clip, chop, value, threshold, unit, count, where[], fix` | computed heads-ups |
 | `technical?` (WP6) | `dc_offset_db, stereo_correlation, low_band_correlation, low_band_mono_loss_db, tracks{peak/rms/dc/audible_share/muted}, silent_tracks, inaudible_tracks` | extras |
-| `summary` (WP6) | compact Spanish text: 1 headline + ≤5 alarm lines | inline in tool results |
+| `balance?` (WP18) | `method`, `roles{role: {level_db, tracks[]}}`, `lanes{"<track>.<lane>": dB}`, `loudest`, `levels_db` (each role vs loudest, dB) | relative loudness of kick/drums/bass/sample/other while sounding |
+| `summary` (WP6) | compact Spanish text: 1 headline + ≤5 alarm lines (+ the always-on `balance` info line, WP18) | inline in tool results |
 | `skipped`, `analysis_time_s`, `ears_version` (WP6) | checks that could not run (and why), timing, analyzer version | honesty/debug |
 
 WP6 additions are all optional/defaulted (see decisions 2026-11-17 WP6).
@@ -530,6 +531,7 @@ config: `ears.toml` (`[spectral]` reference profile, `[thresholds]`).
 `plr_delta_db`, `loudness∈louder|quieter|same`, `low_delta_db`,
 `high_delta_db`, `brightness∈brighter|darker|same`,
 `low_end∈heavier|lighter|same`, `track_level_delta_db{}`,
+(WP18) `balance_delta_db{role: dB}`,
 `alarms_fixed|alarms_introduced|alarms_kept[{code,severity,track,message}]`,
 `notes[]` — b relative to a; alarms match on `(code, track)`, info
 excluded.

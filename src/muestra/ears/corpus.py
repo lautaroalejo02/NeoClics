@@ -71,6 +71,11 @@ class Defects:
     inaudible_pad: bool = False  # pad 45 dB down
     over_compress: bool = False  # master squashed: +14 dB into a soft clipper
     applied_depth: float | None = None  # sidechain depth actually applied (0.6 declared)
+    # mix balance (WP18): level mistakes, applied like a gain_db edit
+    sample_gain_db: float = 0.0  # extra dB on the sample stem (the WP18 bug)
+    bass_gain_db: float = 0.0  # extra dB on the bass stem
+    drums_gain_db: float = 0.0  # extra dB on every drum lane
+    sparse_kick: bool = False  # kick only on beat 1 of each bar (fairness check)
 
 
 @dataclass
@@ -230,11 +235,16 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
     step = spb / 4
     swing_delay = spec.drum_swing * step / 3.0
     lanes_def = {
-        "kick": ("x...x...x...x...", 0.0, _kick(sr, d.kick_late_ms / 1000.0)),
+        "kick": (
+            "x..............." if d.sparse_kick else "x...x...x...x...",
+            0.0,
+            _kick(sr, d.kick_late_ms / 1000.0),
+        ),
         "clap": ("....x.......x...", 0.0, _clap(rng, sr)),
         "ohat": ("..x...x...x...x.", 0.0, _hat(rng, sr, 0.2, 0.06)),
     }
     lane_audio: dict[str, np.ndarray] = {}
+    kick_times: list[float] = []
     for name, (steps, gain_db, one) in lanes_def.items():
         buf = np.zeros(n)
         for bar in range(spec.bars):
@@ -243,8 +253,11 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
                     continue
                 t = (bar * 16 + s) * step + (swing_delay if s % 2 else 0.0)
                 _place(buf, one, t, sr, 10 ** (gain_db / 20))
+                if name == "kick":
+                    kick_times.append(t)
         lane_audio[name] = _stereo(buf * 0.5)
-    kick_times = [b * 4 * spb + q * spb for b in range(spec.bars) for q in range(4)]
+    for name in lane_audio:
+        lane_audio[name] = lane_audio[name] * 10 ** (d.drums_gain_db / 20)
     drums = sum(lane_audio.values())
 
     # --- the source record and the sample track ------------------------------
@@ -342,6 +355,7 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
     if sc_depth_applied > 0:
         sample *= _duck(n, sr, kick_times, sc_depth_applied, 1.0, 120.0)
     sample_st = _stereo(sample * 2.5 * 10 ** (-2 / 20))  # the sample leads the mix
+    sample_st = sample_st * 10 ** (d.sample_gain_db / 20)
 
     # --- bass (off-beat octaves; collision: on the beat, long, loud) ----------
     notes = []
@@ -372,6 +386,7 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
     bass_st = _stereo(bass)
     if d.low_phase:
         bass_st[:, 1] *= -1
+    bass_st = bass_st * 10 ** (d.bass_gain_db / 20)
 
     # --- pad -------------------------------------------------------------------
     pad_notes = []
@@ -477,9 +492,17 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
             }
         ],
         "tracks": [
-            {"id": "sample", "clips": clips, "fx": sample_fx, "gain_db": -2},
+            {
+                "id": "sample",
+                "clips": clips,
+                "fx": sample_fx,
+                # the stem carries the full defect; the declared gain clamps to
+                # the schema range (a stem can be hot for other reasons too)
+                "gain_db": round(max(-24.0, min(24.0, -2 + d.sample_gain_db)), 3),
+            },
             {
                 "id": "drums",
+                "gain_db": round(max(-24.0, min(24.0, d.drums_gain_db)), 3),
                 "pattern": {
                     "steps_per_bar": 16,
                     "lanes": {
@@ -493,7 +516,12 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
                     "swing": spec.drum_swing,
                 },
             },
-            {"id": "bass", "instrument": {"plugin": "corpus-bass"}, "notes": notes},
+            {
+                "id": "bass",
+                "instrument": {"plugin": "corpus-bass"},
+                "notes": notes,
+                "gain_db": round(max(-24.0, min(24.0, d.bass_gain_db)), 3),
+            },
         ],
         "master": {
             "fx": [{"type": "limiter", "ceiling_db": -1.0}],
