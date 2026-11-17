@@ -361,7 +361,7 @@ index is unchanged):
    the top-level folder); licence = that kit's `LICENSE.txt`.
 8. **Incremental rule.** An entry is reused when size and mtime are
    unchanged, or when only the mtime changed and the cheap content hash
-   (size + first/last 64 KiB) matches. `analyzer_version` (currently 1) is
+   (size + first/last 64 KiB) matches. `analyzer_version` (currently 2) is
    bumped whenever measuring/classifying changes, which forces a full
    re-measure. Unreadable files go into `problems` and are retried on the
    next run.

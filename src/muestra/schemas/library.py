@@ -46,7 +46,7 @@ STARTER_KITS_FILE = "starter-kits.json"
 #: bumped whenever the measuring/classifying algorithms change in a way
 #: that makes older index entries stale; ``library.index`` re-probes
 #: everything when the stored version differs.
-ANALYZER_VERSION = 1
+ANALYZER_VERSION = 2
 
 
 class AudioFeatures(ContractModel):

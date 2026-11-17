@@ -14,6 +14,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
+from pydantic import TypeAdapter, ValidationError
+
+from ..schemas._base import LIBRARY_SCHEME, LibraryURI
 from ..schemas.library import AudioFeatures
 from .audio import AudioProbe
 
@@ -652,6 +655,18 @@ class Classification:
     key_confidence: float | None = None
 
 
+_URI = TypeAdapter(LibraryURI)
+
+
+def _uri_ok(rel_path: str) -> bool:
+    """Can ``library://<rel_path>`` appear in a song.yaml?"""
+    try:
+        _URI.validate_python(f"{LIBRARY_SCHEME}{rel_path}")
+    except ValidationError:
+        return False
+    return True
+
+
 def probe_needs(info: NameInfo) -> tuple[bool, bool]:
     """(want_bpm, want_key) for a name — decides what the probe computes."""
     want_bpm = info.kind != "one-shot"
@@ -697,6 +712,9 @@ def classify(
                 c.type = "other"
     if c.type is None:
         c.type = "other"
+
+    if not _uri_ok(rel_path):
+        c.flags.append("unusable-uri")  # song.yaml could not reference this file
 
     # ---- kind from audio when the name is silent -----------------------------
     if (

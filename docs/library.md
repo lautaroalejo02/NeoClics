@@ -171,7 +171,9 @@ listened** — treat tags as descriptions of measurements, not taste.
 
 `clipping` · `low-level` (peak ≤ −12 dBFS) · `type-mismatch:name=…,audio=…` ·
 `type-inferred:…` · `bpm-disagreement:…` · `bpm-from-audio-only` ·
-`low-confidence-key` · `very-short` (< 20 ms). Search penalises flagged files;
+`low-confidence-key` · `very-short` (< 20 ms) · `unusable-uri` (the file name has
+characters `library://` cannot express — only `A-Za-z0-9._~-` and `/` are allowed —
+so a song could not reference it: rename the file). Search penalises flagged files;
 `clean_only=true` drops them.
 
 ## Search

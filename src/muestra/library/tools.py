@@ -9,6 +9,7 @@ then ``~/Documents/MuestraLibrary``).
 
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
@@ -160,8 +161,8 @@ def library_index(
                 hint="Pass the folder that holds the samples (it may contain subfolders).",
             )
         roots = [target.resolve()]
-        known = {str(r.resolve()).lower() for r in project.library_dirs()}
-        if p.add_root and str(target.resolve()).lower() not in known:
+        known = {os.path.normcase(str(r.resolve())) for r in project.library_dirs()}
+        if p.add_root and os.path.normcase(str(target.resolve())) not in known:
             # muestra.toml wants '/' separators; keep relative paths relative
             entry = (
                 target.as_posix()

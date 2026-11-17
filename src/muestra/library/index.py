@@ -157,41 +157,41 @@ def analyze_file(job: _Job) -> _Result:
     """Probe + classify one file -> (rel, entry | None, problem message | None)."""
     root, rel, size, mtime_ns, sig = job
     path = Path(root) / rel
-    info = parse_name(rel)
-    want_bpm, want_key = probe_needs(info)
     try:
+        info = parse_name(rel)
+        want_bpm, want_key = probe_needs(info)
         pr = probe(path, want_bpm=want_bpm, want_key=want_key)
         c = classify(rel, pr, info)
+        lufs = pr.loudness_lufs
+        entry = LibraryIndexEntry(
+            path=rel,
+            type=c.type,
+            subtype=c.subtype,
+            kind=c.kind,  # type: ignore[arg-type]
+            kit=c.kit,
+            bpm=c.bpm,
+            bpm_source=c.bpm_source,  # type: ignore[arg-type]
+            bpm_confidence=round(c.bpm_confidence, 3) if c.bpm_confidence is not None else None,
+            key=c.key,
+            key_confidence=c.key_confidence,
+            duration_s=round(pr.duration_s, 4),
+            sample_rate=pr.sample_rate,
+            bit_depth=pr.bit_depth,
+            channels=pr.channels,
+            peak_dbfs=round(pr.peak_dbfs, 2),
+            rms_dbfs=round(pr.rms_dbfs, 2),
+            loudness_lufs=round(lufs, 1) if lufs is not None else None,
+            clipping=pr.clipping,
+            features=pr.features,
+            tags=c.tags,
+            flags=c.flags,
+            size=size,
+            mtime_ns=mtime_ns,
+            sig=sig,
+        )
     except Exception as e:  # noqa: BLE001 - a corrupt file is a reported problem, never fatal
         msg = str(e).strip().splitlines()[0] if str(e).strip() else ""
         return rel, None, f"{type(e).__name__}: {msg}" if msg else type(e).__name__
-    lufs = pr.loudness_lufs
-    entry = LibraryIndexEntry(
-        path=rel,
-        type=c.type,
-        subtype=c.subtype,
-        kind=c.kind,  # type: ignore[arg-type]
-        kit=c.kit,
-        bpm=c.bpm,
-        bpm_source=c.bpm_source,  # type: ignore[arg-type]
-        bpm_confidence=round(c.bpm_confidence, 3) if c.bpm_confidence is not None else None,
-        key=c.key,
-        key_confidence=c.key_confidence,
-        duration_s=round(pr.duration_s, 4),
-        sample_rate=pr.sample_rate,
-        bit_depth=pr.bit_depth,
-        channels=pr.channels,
-        peak_dbfs=round(pr.peak_dbfs, 2),
-        rms_dbfs=round(pr.rms_dbfs, 2),
-        loudness_lufs=round(lufs, 1) if lufs is not None else None,
-        clipping=pr.clipping,
-        features=pr.features,
-        tags=c.tags,
-        flags=c.flags,
-        size=size,
-        mtime_ns=mtime_ns,
-        sig=sig,
-    )
     return rel, entry, None
 
 

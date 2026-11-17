@@ -10,7 +10,7 @@ import pytest
 from muestra.library.core import load_index
 from muestra.library.index import index_root, scan_audio_files
 from muestra.library.licence import parse_license
-from muestra.schemas.library import LibraryIndex
+from muestra.schemas.library import ANALYZER_VERSION, LibraryIndex
 
 from .conftest import hat, kick, write
 
@@ -113,7 +113,8 @@ def test_stale_analyzer_version_triggers_full_reindex(lib):
     rep = index_root(lib, workers=1)
     text = rep.index_path.read_text(encoding="utf-8")
     rep.index_path.write_text(
-        text.replace('"analyzer_version": 1', '"analyzer_version": 0'), encoding="utf-8"
+        text.replace(f'"analyzer_version": {ANALYZER_VERSION}', '"analyzer_version": 0'),
+        encoding="utf-8",
     )
     assert index_root(lib, workers=1).reused == 0
 
@@ -213,3 +214,35 @@ def test_real_world_licence_texts(tmp_path):
     )
     assert "no-resale" in parse_license(lw, "lw").restrictions
     assert parse_license(tmp_path, "none") is None
+
+
+def test_unreferenceable_file_names_are_flagged(lib):
+    """library:// URIs only allow A-Za-z0-9._~/-: a name with spaces can't be used in a song."""
+    write(lib / "kits" / "machine-a" / "kick copy (3).wav", kick(61.0))
+    rep = index_root(lib, workers=1)
+    e = _by_path(rep)["kits/machine-a/kick copy (3).wav"]
+    assert "unusable-uri" in e.flags and e.type == "kick"
+    ok = _by_path(rep)["kits/machine-a/kick-m-kick-01.wav"]
+    assert "unusable-uri" not in ok.flags
+
+
+def test_a_file_that_cannot_become_an_entry_is_a_problem_not_a_crash(lib):
+    from muestra.library.index import analyze_file
+
+    rel, entry, problem = analyze_file((str(lib), "kits/../kick.wav", 1, 1, "x"))
+    assert entry is None and problem
+
+
+def test_no_process_pool_falls_back_to_inline_measuring(tmp_path, monkeypatch):
+    import muestra.library.index as index_mod
+
+    class Broken:
+        def __init__(self, *a, **k):
+            raise OSError("no processes here")
+
+    monkeypatch.setattr(index_mod, "ProcessPoolExecutor", Broken)
+    root = tmp_path / "lib" / "kits" / "pack"
+    for i in range(30):
+        write(root / f"kick-p-kick-{i:02d}.wav", kick(50.0 + i, 0.05, dur=0.2))
+    rep = index_root(tmp_path / "lib", workers=4)
+    assert rep.workers == 1 and rep.analyzed == 30 and not rep.problems

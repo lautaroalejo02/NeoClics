@@ -350,6 +350,9 @@ def quality(e: LibraryIndexEntry) -> tuple[float, list[str]]:
             notes.append("bpm: name and audio disagree")
         elif f.startswith("type-inferred"):
             q -= 0.1
+        elif f == "unusable-uri":
+            q -= 0.4
+            notes.append("name has characters library:// cannot express: rename the file")
         elif f == "very-short":
             q -= 0.2
         elif f == "low-confidence-key":

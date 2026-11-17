@@ -103,6 +103,17 @@ class KitReport:
         return all(lane.present for lane in self.lanes)
 
 
+def _read_manifest(path: Path) -> StarterKits:
+    try:
+        return StarterKits.model_validate(json.loads(path.read_text(encoding="utf-8")))
+    except (OSError, json.JSONDecodeError, ValidationError) as e:
+        raise MuestraError.one(
+            "parse_error",
+            f"Cannot read starter kits from {path}: {e}",
+            hint="Fix or delete the manifest; the bundled template is used when it is absent.",
+        ) from e
+
+
 def load_manifest(root: Path) -> tuple[StarterKits, str] | None:
     """The kits for a library root: its own manifest, else the bundled template.
 
@@ -110,17 +121,10 @@ def load_manifest(root: Path) -> tuple[StarterKits, str] | None:
     ``'bundled template'``; None when neither exists.
     """
     own = root / STARTER_KITS_FILE
-    for path, source in ((own, str(own)), (BUNDLED_KITS_FILE, "bundled template")):
-        if not path.is_file():
-            continue
-        try:
-            return StarterKits.model_validate(json.loads(path.read_text(encoding="utf-8"))), source
-        except (OSError, json.JSONDecodeError, ValidationError) as e:
-            raise MuestraError.one(
-                "parse_error",
-                f"Cannot read starter kits from {path}: {e}",
-                hint="Fix or delete the manifest; the bundled template is used when it is absent.",
-            ) from e
+    if own.is_file():
+        return _read_manifest(own), str(own)
+    if BUNDLED_KITS_FILE.is_file():
+        return _read_manifest(BUNDLED_KITS_FILE), "bundled template"
     return None
 
 
@@ -135,58 +139,76 @@ def kit_pattern(kit: StarterKit, *, steps_per_bar: int = 16) -> dict:
     return {"steps_per_bar": steps_per_bar, "lanes": lanes}
 
 
+def _resolve_kit(
+    project: Project, name: str, kit: StarterKit, source: str, root: Path
+) -> KitReport:
+    """One kit resolved against one library root and its index."""
+    loaded = loaded_index(root)
+    label = root_label(project, root)
+    lanes: list[KitLaneInfo] = []
+    warnings: list[str] = []
+    restrictions: set[str] = set()
+    for lane, path in kit.lanes.items():
+        present = (root / path).is_file()
+        entry = loaded.by_path.get(path) if loaded is not None else None
+        summary = describe(entry) if entry is not None else None
+        if not present:
+            warnings.append(f"lane {lane}: {path} is missing from {label}")
+        elif loaded is None:
+            warnings.append(f"{label} is not indexed: run library.index")
+        elif entry is None:
+            warnings.append(f"lane {lane}: {path} is not in the index; run library.index")
+        if entry is not None:
+            allowed = _LANE_TYPES.get(lane)
+            if allowed and entry.type not in allowed:
+                warnings.append(f"lane {lane}: sample is typed {entry.type!r}")
+            for f in entry.flags:
+                if f.startswith(("type-mismatch", "clipping")):
+                    warnings.append(f"lane {lane}: {f}")
+            lic = loaded.index.kits.get(entry.kit or "") if loaded is not None else None
+            if lic is not None:
+                restrictions.update(lic.restrictions)
+        lanes.append(
+            KitLaneInfo(
+                lane,
+                f"{LIBRARY_SCHEME}{path}",
+                present,
+                summary,
+                entry.type if entry is not None else None,
+            )
+        )
+    return KitReport(name, kit, source, label, lanes, warnings, sorted(restrictions))
+
+
 def kit_reports(project: Project, name: str | None = None) -> list[KitReport]:
-    """Every starter kit of every library root, resolved against the index."""
+    """Every starter kit, resolved against the library roots and their indexes.
+
+    A root's own ``starter-kits.json`` wins (earlier roots first). Kits from
+    the bundled template are resolved against the first root that has all
+    their files (else the root that has most of them), so an empty project
+    ``library/`` in front of the real library does not hide the kits.
+    """
+    roots = project.library_dirs()
     reports: list[KitReport] = []
     seen: set[str] = set()
-    for root in project.library_dirs():
-        found = load_manifest(root)
-        if found is None:
+    for root in roots:
+        own = root / STARTER_KITS_FILE
+        if not own.is_file():
             continue
-        manifest, source = found
-        loaded = loaded_index(root)
-        label = root_label(project, root)
-        for kit_name, kit in manifest.kits.items():
-            if name is not None and kit_name != name:
-                continue
-            if kit_name in seen:
+        for kit_name, kit in _read_manifest(own).kits.items():
+            if (name is None or kit_name == name) and kit_name not in seen:
+                seen.add(kit_name)
+                reports.append(_resolve_kit(project, kit_name, kit, str(own), root))
+    if BUNDLED_KITS_FILE.is_file() and roots:
+        for kit_name, kit in _read_manifest(BUNDLED_KITS_FILE).kits.items():
+            if (name is not None and kit_name != name) or kit_name in seen:
                 continue
             seen.add(kit_name)
-            lanes: list[KitLaneInfo] = []
-            warnings: list[str] = []
-            restrictions: set[str] = set()
-            for lane, path in kit.lanes.items():
-                present = (root / path).is_file()
-                entry = loaded.by_path.get(path) if loaded is not None else None
-                summary = describe(entry) if entry is not None else None
-                if not present:
-                    warnings.append(f"lane {lane}: {path} is missing from {label}")
-                elif loaded is None:
-                    warnings.append(f"{label} is not indexed: run library.index")
-                elif entry is None:
-                    warnings.append(f"lane {lane}: {path} is not in the index; run library.index")
-                if entry is not None:
-                    allowed = _LANE_TYPES.get(lane)
-                    if allowed and entry.type not in allowed:
-                        warnings.append(f"lane {lane}: sample is typed {entry.type!r}")
-                    for f in entry.flags:
-                        if f.startswith(("type-mismatch", "clipping")):
-                            warnings.append(f"lane {lane}: {f}")
-                    lic = loaded.index.kits.get(entry.kit or "") if loaded is not None else None
-                    if lic is not None:
-                        restrictions.update(lic.restrictions)
-                lanes.append(
-                    KitLaneInfo(
-                        lane,
-                        f"{LIBRARY_SCHEME}{path}",
-                        present,
-                        summary,
-                        entry.type if entry is not None else None,
-                    )
-                )
-            reports.append(
-                KitReport(kit_name, kit, source, label, lanes, warnings, sorted(restrictions))
-            )
+            candidates = [
+                _resolve_kit(project, kit_name, kit, "bundled template", root) for root in roots
+            ]
+            best = max(candidates, key=lambda r: (r.available, sum(ln.present for ln in r.lanes)))
+            reports.append(best)
     if name is not None and not reports:
         raise MuestraError.one(
             "ref_not_found",

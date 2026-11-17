@@ -185,3 +185,34 @@ def test_bundled_kits_match_the_owners_real_library():
             assert not e.clipping and not any(f.startswith("type-mismatch") for f in e.flags)
             if lane in expect:
                 assert e.type in expect[lane], (name, lane, e.type)
+
+
+def test_an_empty_first_root_does_not_hide_the_real_library_kits(tmp_path):
+    """Regression: the project's own empty library/ sits before the real library."""
+    from muestra.library.index import index_root
+    from muestra.project import create_project
+    from muestra.schemas import LibraryConfig, ProjectConfig
+
+    from .conftest import kick, write
+
+    real = tmp_path / "real"
+    for path in bundled().kits["disco-01"].lanes.values():
+        write(real / path, kick(60.0, 0.05, dur=0.2))
+    index_root(real, workers=1)
+    (tmp_path / "empty").mkdir()
+    project = create_project(
+        tmp_path / "p",
+        ProjectConfig(
+            library=LibraryConfig(roots=[(tmp_path / "empty").as_posix(), real.as_posix()])
+        ),
+    )
+    r = run_tool("library.kits", {"project": str(project.root), "name": "disco-01"})
+    assert r.ok, r.errors
+    kit = r.data["kits"][0]
+    assert kit["available"] and kit["source"] == "bundled template"
+    assert all(lane["present"] for lane in kit["lanes"])
+    assert kit["pattern"]["lanes"]["kick"]["sample"].startswith("library://kits/")
+    # the other bundled kits are still listed, as unavailable
+    listing = run_tool("library.kits", {"project": str(project.root)})
+    avail = {k["name"]: k["available"] for k in listing.data["kits"]}
+    assert avail["disco-01"] and not avail["disco-808"]
