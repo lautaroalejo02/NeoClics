@@ -28,6 +28,9 @@ def test_draft_is_playable_and_analyzable_without_history(project):
     assert (git("rev-parse", "HEAD"), git("tag")) == before
     assert result.metrics_path is None
     assert not list(project.renders_dir.glob("v002"))
+    opened = run_tool("project.open", {"path": str(project.root)})
+    assert opened.ok and result.draft_id not in opened.data["versions"]
+    assert ".staging" not in opened.data["versions"]
     assert list(result.model_dump())[0] == "metrics_summary"
     events = watcher.scan()
     assert any(kind == "draft.created" and data["id"] == result.draft_id for kind, data in events)

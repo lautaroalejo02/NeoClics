@@ -86,7 +86,11 @@ def project_open(p: ProjectOpenParams) -> ProjectOpenResult:
     """Open an existing project: loads muestra.toml and lists state."""
     project = open_project(p.path)
     versions = (
-        sorted(x.name for x in project.renders_dir.iterdir() if x.is_dir())
+        sorted(
+            x.name
+            for x in project.renders_dir.iterdir()
+            if x.is_dir() and x.name.startswith("v") and len(x.name) >= 4 and x.name[1:].isdigit()
+        )
         if project.renders_dir.is_dir()
         else []
     )
