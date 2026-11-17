@@ -346,3 +346,16 @@
     width: 48px;
   }
 }
+
+/* with the pads open the arrangement keeps a usable height and the page scrolls */
+.editor.with-pads {
+  height: auto;
+  grid-template-rows: auto minmax(260px, 40vh) auto;
+}
+.editor.with-pads .pads-panel {
+  margin-top: 0;
+}
+.editor.narrow.with-pads {
+  height: auto;
+  grid-template-rows: auto minmax(200px, 32vh) auto;
+}

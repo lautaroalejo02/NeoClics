@@ -72,7 +72,7 @@ export function EditorView({ onListen }: { onListen: () => void }) {
     );
 
   return (
-    <section className={`editor ${layout}`} aria-label="Arreglo">
+    <section className={`editor ${layout}${padsPanel ? " with-pads" : ""}`} aria-label="Arreglo">
       <Toolbar onHelp={() => setHelp(true)} onAsk={() => askRef.current?.focus()} />
       <div className={`ed-body ${inspector ? "with-insp" : ""}`}>
         <div className="ed-main card">

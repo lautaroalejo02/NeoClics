@@ -485,7 +485,7 @@ function Takes() {
               <b>{t.name}</b>
               <span className="muted small-text">
                 {" "}
-                {t.n_events} golpes · {t.loop_beats ? `loop ${t.loop_beats / 4} compases` : `${Math.ceil(t.length_beats / 4)} compases`}
+                {plural(t.n_events, "golpe", "golpes")} · {t.loop_beats ? `loop de ${plural(t.loop_beats / 4, "compás", "compases")}` : plural(Math.ceil(t.length_beats / 4), "compás", "compases")}
                 {t.quantize.grid !== "off" ? ` · ${GRID_LABEL[t.quantize.grid]}` : ""}
                 {t.status === "recording" ? " · grabando" : ""}
                 {t.commits ? ` · usada ${t.commits}×` : ""}
@@ -615,4 +615,8 @@ function Calibration({ onClose }: { onClose: () => void }) {
       </div>
     </div>
   );
+}
+
+function plural(n: number, one: string, many: string): string {
+  return `${+n.toFixed(2)} ${n === 1 ? one : many}`;
 }
