@@ -26,6 +26,7 @@ EXPECTED = {
     "bad-sidechain.yaml": ("tracks[0].fx[0].key_track", "ref_not_found"),
     "non-numeric-automation.yaml": ("automation[0].target", "automation_target"),
     "exp-curve-sign.yaml": ("automation[0].points", "automation_target"),
+    "duplicate-key.yaml": ("song.yaml", "duplicate_key"),
 }
 
 
@@ -52,3 +53,16 @@ def test_invalid_fixture(tmp_path, name):
     issue = matches[0]
     assert issue.hint, f"{name}: issue has no fix hint"
     assert issue.message, f"{name}: issue has no message"
+
+
+@pytest.mark.parametrize("name", sorted(EXPECTED))
+def test_issue_messages_have_no_literal_placeholders(tmp_path, name):
+    """No issue message may leak a raw '{...}' or '!r' placeholder."""
+    dst = tmp_path / "proj"
+    create_project(dst)
+    shutil.copy(INVALID_DIR / name, dst / "song.yaml")
+    issues = validate_song(open_project(dst), check_files=False)
+    assert issues, f"{name}: produced no issues"
+    for i in issues:
+        assert "{" not in i.message, f"{name}: literal placeholder in {i.message!r}"
+        assert "!r" not in i.message, f"{name}: literal '!r' in {i.message!r}"
