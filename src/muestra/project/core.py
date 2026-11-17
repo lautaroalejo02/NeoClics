@@ -70,6 +70,8 @@ _GITIGNORE = """\
 # muestra project
 renders/
 cache/
+# imported audio: big binaries Muestra never commits (contracts.md)
+sources/
 .venv/
 __pycache__/
 """
@@ -119,6 +121,7 @@ def save_config(project: Project, config: ProjectConfig | None = None) -> Path:
     path.write_text(
         tomli_w.dumps(cfg.model_dump(mode="json", exclude_none=True)),
         encoding="utf-8",
+        newline="\n",
     )
     return path
 
@@ -288,10 +291,11 @@ def create_project(path: Path, config: ProjectConfig | None = None) -> Project:
     (path / SONG_FILE).write_text(
         yaml.safe_dump(song.model_dump(mode="json"), sort_keys=False),
         encoding="utf-8",
+        newline="\n",
     )
-    (path / FEEDBACK_FILE).write_text("", encoding="utf-8")
-    (path / "docs" / "decisions.md").write_text(_DECISIONS_MD, encoding="utf-8")
-    (path / ".gitignore").write_text(_GITIGNORE, encoding="utf-8")
+    (path / FEEDBACK_FILE).write_text("", encoding="utf-8", newline="\n")
+    (path / "docs" / "decisions.md").write_text(_DECISIONS_MD, encoding="utf-8", newline="\n")
+    (path / ".gitignore").write_text(_GITIGNORE, encoding="utf-8", newline="\n")
     init_repo(path)
     return project
 

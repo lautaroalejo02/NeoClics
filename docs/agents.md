@@ -10,14 +10,14 @@ the music project.
 1. Install Python tooling [uv](https://docs.astral.sh/uv/), git and ffmpeg. On Windows,
    `winget install astral-sh.uv`, `winget install Git.Git`, and
    `winget install Gyan.FFmpeg` are options. On macOS use `brew install uv git ffmpeg`.
-2. In the Muestra checkout run `uv sync --extra server`.
+2. In the Muestra checkout run `uv sync`.
 3. Create a project: `uv run muestra project create --name my-song --dir /path/to/music`.
    To use an existing project, point the next commands at its folder containing `muestra.toml`.
 4. Run `uv run muestra doctor --project /path/to/music/my-song`. It reports missing tools,
    library roots/indexes, configured plugin files, cached separation models and port conflicts,
    with concrete fixes. It does not load native plugins, validate model weights, or download
-   anything. Native audio packages/models implemented by other work packages need their
-   respective extras/setup; the server extra alone does not install separation models.
+   anything. A plain `uv sync` installs everything except stem separation
+   (`uv sync --extra separation`); doctor names the exact command for anything missing.
 5. Run `uv run muestra serve --project /path/to/music/my-song --open` in a second terminal.
    Keep it running so the human can listen. If the UI is not built, the page explains how.
 
@@ -45,7 +45,7 @@ The generated Claude entry is equivalent to:
     "muestra": {
       "type": "stdio",
       "command": "uv",
-      "args": ["run", "--directory", "/absolute/path/to/Muestra", "--extra", "server",
+      "args": ["run", "--directory", "/absolute/path/to/Muestra",
                "muestra", "mcp", "--project", "/absolute/path/to/my-song"]
     }
   }
@@ -56,7 +56,7 @@ The generator resolves the absolute uv executable when available, which avoids G
 having a different PATH. It also prints the corresponding command:
 
 ```sh
-claude mcp add --transport stdio --scope project muestra -- uv run --directory /absolute/path/to/Muestra --extra server muestra mcp --project /absolute/path/to/my-song
+claude mcp add --transport stdio --scope project muestra -- uv run --directory /absolute/path/to/Muestra muestra mcp --project /absolute/path/to/my-song
 ```
 
 Start Claude Code in that agent workspace, approve the project MCP server, and open `/mcp`.
@@ -78,7 +78,7 @@ the trusted agent workspace's `.codex/config.toml` produced by `--write`:
 ```toml
 [mcp_servers.muestra]
 command = "uv"
-args = ["run", "--directory", "/absolute/path/to/Muestra", "--extra", "server", "muestra", "mcp", "--project", "/absolute/path/to/my-song"]
+args = ["run", "--directory", "/absolute/path/to/Muestra", "muestra", "mcp", "--project", "/absolute/path/to/my-song"]
 startup_timeout_sec = 60
 tool_timeout_sec = 1800
 ```
@@ -102,7 +102,7 @@ Configure a stdio server executable and arguments exactly as in the generated en
 
 ```text
 command: uv
-args: run --directory <Muestra-repo> --extra server muestra mcp --project <music-project>
+args: run --directory <Muestra-repo> muestra mcp --project <music-project>
 ```
 
 Arguments are an array in your client's configuration; keep paths containing spaces as one
@@ -139,11 +139,11 @@ local setup; both transports expose the same generated tools.
 ## Agents without MCP: CLI only
 
 ```sh
-uv run --directory /absolute/path/to/Muestra --extra server muestra tools --json
-uv run --directory /absolute/path/to/Muestra --extra server muestra song get --project /absolute/path/to/my-song
-uv run --directory /absolute/path/to/Muestra --extra server muestra song validate --project /absolute/path/to/my-song
-uv run --directory /absolute/path/to/Muestra --extra server muestra feedback read --project /absolute/path/to/my-song --cursor 0
-uv run --directory /absolute/path/to/Muestra --extra server muestra render --project /absolute/path/to/my-song --range-bars '[1,5]' --summary 'Filtered intro, stronger bass'
+uv run --directory /absolute/path/to/Muestra muestra tools --json
+uv run --directory /absolute/path/to/Muestra muestra song get --project /absolute/path/to/my-song
+uv run --directory /absolute/path/to/Muestra muestra song validate --project /absolute/path/to/my-song
+uv run --directory /absolute/path/to/Muestra muestra feedback read --project /absolute/path/to/my-song --cursor 0
+uv run --directory /absolute/path/to/Muestra muestra render --project /absolute/path/to/my-song --range-bars '[1,5]' --summary 'Filtered intro, stronger bass'
 ```
 
 The CLI generates `muestra <group> <action>` from the registry, with top-level `render` and
@@ -161,10 +161,30 @@ that `uv run --directory <repo>` changes cwd, so include `--project` for externa
 Piped stdout is JSON automatically; `--json` forces JSON on a terminal. TTY output is
 readable. Tool failures print structured issues and exit nonzero. CLI long work blocks.
 
+## Long-running tools and client timeouts (WP11)
+
+`source.separate` takes minutes on CPU (measured: 4-5 min for a 3:14 record with
+htdemucs on the Windows laptop; 46 s for a 30 s excerpt). Over MCP the call blocks
+and the server sends progress notifications (`progress` 0..1 + a message such as
+"Separating htdemucs") when the client asks for them; this was verified with the
+official MCP Python client, whose calls have no timeout by default. What a client
+needs:
+
+- **Codex**: `tool_timeout_sec` defaults to 60 s, too short; `agent-setup` writes
+  `tool_timeout_sec = 1800` and `startup_timeout_sec = 60`.
+- **Claude Code**: per its documentation the MCP tool timeout is set with the
+  `MCP_TOOL_TIMEOUT` environment variable (milliseconds) and the server startup
+  timeout with `MCP_TIMEOUT`; set `MCP_TOOL_TIMEOUT=1800000` if long separations
+  are cut off. (Not exercised against Claude Code here: the transport tests use
+  the official SDK client.)
+- **Any client**: allow ~30 min for `source.separate` on a long record; every
+  other tool returns in seconds (render of 16 bars ~6.5 s, analysis ~30 s).
+- The separation result is cached: a second call returns at once.
+
 ## Troubleshooting
 
 - **No tools / cannot start:** run the generated command directly. An idle stdio server
-  waiting for MCP input is expected. Check `uv sync --extra server`, absolute paths, and
+  waiting for MCP input is expected. Check `uv sync`, absolute paths, and
   whether the agent sees the uv executable. Run `muestra doctor`.
 - **Wrong song:** check `_meta.project` and the printed path, then call `project_open` with
   an absolute path. HTTP project selection stays fixed until its process is restarted.

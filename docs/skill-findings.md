@@ -5,6 +5,11 @@ en 2ee9f61, Windows 11, 2026-11-17). No se tocó código del producto. `P` =
 `C:\Users\lauti\Documents\MuestraProjects\skill-check` (proyecto de prueba con los primeros
 30 s de Tiger Rag, 1928, CC0, ya separado y analizado). Comandos con `uv run` desde el repo.
 
+**Estado (WP11, 2026-11-17):** 1, 2 y 3 corregidos en ears con tests de regresión
+(`tests/ears/test_skill_findings.py`, detalle en `docs/ears.md`). `render` ya devuelve solo
+`metrics_summary` (sección "Entorno"). `muestra doctor` distingue "ffmpeg instalado pero no
+en el PATH de esta terminal". El resto (4, 5, 6, 7, 8, 10) queda para un pase siguiente.
+
 ## Bugs
 
 ### 1. ears sugiere `master.gain_db` para `loudness_off_target`, pero con `target_lufs` no tiene efecto

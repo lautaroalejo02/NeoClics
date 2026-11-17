@@ -241,7 +241,7 @@ def separate(
                 raise MuestraError.one(
                     "missing_dependency",
                     f"Separation dependency unavailable: {exc}",
-                    hint="Run uv sync --extra ingest. Current Demucs requires Windows or Apple "
+                    hint="Run uv sync --extra separation. Current Demucs requires Windows or Apple "
                     "Silicon macOS with the shared NumPy 2 stack.",
                 ) from exc
             except MuestraError:

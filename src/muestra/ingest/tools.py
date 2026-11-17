@@ -13,6 +13,7 @@ wholesale rewrite, so comments, ordering and omitted defaults survive.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
@@ -47,6 +48,9 @@ __all__ = [
 ]
 
 _WP = "WP1"
+
+#: transport progress convention (docs/server.md): progress(fraction 0..1, message)
+Progress = Callable[[float, str | None], None]
 
 
 class SourceImportParams(ProjectScoped):
@@ -91,12 +95,16 @@ class SourceSeparateResult(ToolOutput):
     cached: bool = Field(description="True when the cache was reused.")
 
 
-def source_separate(p: SourceSeparateParams) -> SourceSeparateResult:
+def source_separate(
+    p: SourceSeparateParams, progress: Progress | None = None
+) -> SourceSeparateResult:
     """Separate a source into stems under cache/stems/<source_id>/ (cached)."""
     from ..project import open_project
     from .separation import separate
 
-    stems, model, cached = separate(open_project(Path(p.project)), p.source_id, p.model)
+    stems, model, cached = separate(
+        open_project(Path(p.project)), p.source_id, p.model, progress=progress
+    )
     return SourceSeparateResult(
         source_id=p.source_id, stems=stems, model=model, cached=cached, files=list(stems.values())
     )
@@ -112,13 +120,13 @@ class SourceAnalyzeResult(ToolOutput):
     analysis: Analysis
 
 
-def source_analyze(p: SourceAnalyzeParams) -> SourceAnalyzeResult:
+def source_analyze(p: SourceAnalyzeParams, progress: Progress | None = None) -> SourceAnalyzeResult:
     """Generate cache/analysis/<source_id>.json (BPM, key, beats, downbeats,
     sections, loudness)."""
     from ..project import open_project
     from .analysis import analyze
 
-    analysis = analyze(open_project(Path(p.project)), p.source_id)
+    analysis = analyze(open_project(Path(p.project)), p.source_id, progress=progress)
     rel = f"cache/analysis/{p.source_id}.json"
     return SourceAnalyzeResult(
         source_id=p.source_id, analysis_path=rel, analysis=analysis, files=[rel]

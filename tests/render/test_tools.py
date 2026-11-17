@@ -13,7 +13,6 @@ from muestra.render import tools
 from muestra.schemas.metrics import Metrics
 from muestra.schemas.song import Song
 from muestra.versions import core as versions
-from muestra.versions.tools import VersionInfo, VersionsDiffResult, VersionsListResult
 from tests.conftest import EXAMPLE_PROJECT
 
 
@@ -33,18 +32,27 @@ def small_song():
     )
 
 
+_COMMITS = {
+    "a" * 40: versions.CommitInfo(
+        "a" * 40,
+        "2026-11-17T10:00:00+00:00",
+        "v100: sample",
+        {"Muestra-Version": "v100", "Muestra-Parent": "v001"},
+    ),
+    "b" * 40: versions.CommitInfo(
+        "b" * 40, "2026-11-17T09:00:00+00:00", "v001: previous", {"Muestra-Version": "v001"}
+    ),
+}
+
+
 @pytest.fixture
 def version_fakes(monkeypatch):
+    """Fake git history: v001 (b...) exists; a new render records v100 (a...)
+    whose parent the versions package derived as v001."""
     monkeypatch.setattr(versions, "next_version_id", lambda project: "v100")
     monkeypatch.setattr(versions, "record_version", lambda *args: "a" * 40)
-    monkeypatch.setattr(
-        tools,
-        "versions_list",
-        lambda p: VersionsListResult(
-            versions=[VersionInfo(version="v001", git_commit="b" * 40, summary="previous")]
-        ),
-    )
-    monkeypatch.setattr(tools, "versions_diff", lambda p: VersionsDiffResult(a=p.a, b=p.b, diff=[]))
+    monkeypatch.setattr(versions, "version_tags", lambda root: {"v001": "b" * 40})
+    monkeypatch.setattr(versions, "commit_info", lambda root, ref: _COMMITS.get(ref))
 
 
 def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monkeypatch):
@@ -70,7 +78,7 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
             "more pump",
             "sample",
             "agent",
-            "v001",
+            None,  # the versions package derives the parent (honours restore)
         )
         return "a" * 40
 
@@ -100,7 +108,7 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
     assert order == ["validate", "allocate", "record", "audio", "ears"]
     assert result.meta.git_commit == "a" * 40
     assert result.meta.parent == "v001"
-    assert result.metrics is not None and result.metrics_path
+    assert result.metrics_summary is not None and result.metrics_path
     assert result.meta.range_bars == (1, 3)
     assert result.meta.duration_s == 4
     assert result.stem_paths == {"sample": "renders/v100/stems/sample.wav"}
@@ -119,7 +127,7 @@ def test_ears_stub_returns_success_hint_and_removes_stale_metrics(
     save_song(project, small_song())
     result = run_tool("render", {"project": str(project.root)})
     assert result.ok
-    assert result.data["metrics"] is None
+    assert result.data["metrics_summary"] is None
     assert result.data["hint"]
     assert result.data["metrics_path"] is None
     project.path("renders/v100/metrics.json").write_text("stale", encoding="utf-8")
@@ -183,3 +191,26 @@ def test_validation_failure_does_not_record_version(project, monkeypatch):
     result = run_tool("render", {"project": str(project.root)})
     assert not result.ok
     assert any(issue.path.startswith("meta") for issue in result.errors)
+
+
+def test_render_names_tracks_whose_reproducibility_is_unverified():
+    """WP11: an arbitrary Surge patch (noise LFOs) re-rendered differently in
+    another process; curated aliases and SFZ are bit-exact."""
+    song = Song.model_validate(
+        {
+            "meta": {"title": "t", "bpm": 120, "key": "Am", "length_bars": 1},
+            "tracks": [
+                {"id": "a", "instrument": {"plugin": "slap-bass"}, "notes": []},
+                {"id": "b", "instrument": {"plugin": "synth-bass"}, "notes": []},
+                {"id": "c", "instrument": {"plugin": "rhodes"}, "notes": []},
+                {
+                    "id": "d",
+                    "instrument": {"plugin": "slap-bass", "preset": "Basses/Dynamo Square"},
+                    "notes": [],
+                },
+                {"id": "e", "instrument": {"plugin": "surge-xt"}, "notes": []},
+                {"id": "f", "instrument": {"plugin": "sfz", "preset": "x.sfz"}, "notes": []},
+            ],
+        }
+    )
+    assert tools.unverified_reproducibility(song) == ["d", "e"]

@@ -272,3 +272,40 @@ def test_free_port_fallback():
         port = first.getsockname()[1]
         with bind_socket("127.0.0.1", port) as second:
             assert second.getsockname()[1] != port
+
+
+def test_websocket_replays_running_jobs_on_connect(client):
+    """WP11: a page opened mid-separation must see the running job at once."""
+    spec = REGISTRY["fake.slow"]
+    entered, release = threading.Event(), threading.Event()
+
+    def work(params, *, progress):
+        from .fakes import FakeResult
+
+        progress(0.25, "Separating")
+        entered.set()
+        assert release.wait(5)
+        return FakeResult(value=params.value)
+
+    object.__setattr__(spec, "func", work)
+    identity = client.post("/tools/test_slow", json={"value": 1}).json()["job_id"]
+    assert entered.wait(2)
+    time.sleep(0.05)
+    try:
+        with client.websocket_connect("/events") as ws:
+            event = WsEvent.model_validate(ws.receive_json())
+            assert event.type == "job.updated"
+            assert event.data["id"] == identity and event.data["status"] == "running"
+    finally:
+        release.set()
+    assert wait_job(client, identity)["status"] == "done"
+
+
+def test_summary_includes_analyses_and_files_revalidate(client, tmp_project):
+    """WP11: the UI reads source analyses from /project; /files stays audio-only."""
+    summary = client.get("/project").json()
+    assert summary["analyses"]["src1"]["source_id"] == "src1"
+    assert summary["analyses"]["src1"]["downbeats_s"]
+    assert client.get("/files/cache/analysis/src1.json").status_code == 403
+    audio = client.get("/files/renders/v001/mix.wav")
+    assert audio.headers["cache-control"] == "no-cache" and audio.headers["etag"]

@@ -169,7 +169,7 @@ def dump_song(song: Song) -> str:
 
 
 def save_song(project: Project, song: Song) -> Path:
-    project.song_path.write_text(dump_song(song), encoding="utf-8")
+    project.song_path.write_text(dump_song(song), encoding="utf-8", newline="\n")
     return project.song_path
 
 
@@ -210,6 +210,7 @@ def save_analysis(project: Project, analysis: Analysis) -> Path:
     path.write_text(
         json.dumps(analysis.model_dump(mode="json"), indent=2) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     return path
 

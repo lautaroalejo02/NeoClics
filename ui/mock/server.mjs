@@ -9,8 +9,8 @@
 // plus the two OPTIONAL accelerators the UI can use when the API offers them
 // (NOT contract; see ui/API-NEEDS.md), on by default, MOCK_ACCEL=0 disables:
 //
-//   GET  /summary            project title, versions, metas, metrics, analyses
-//   GET  /peaks/<wav path>?buckets=N   waveform min/max
+//   GET  /project            muestra-api summary (song, versions+meta+metrics, analyses)
+//   GET  /waveform?path=&points=N   muestra-api waveform min/max
 //
 // It serves a COPY of fixtures/example-project (ui/mock/.project), seeded
 // with derived versions (see versions.mjs). /debug/* routes exist for tests
@@ -19,7 +19,7 @@
 //   node mock/server.mjs                 # port 8777
 //   PORT=9000 node mock/server.mjs
 //   MOCK_DEMO=0      no demo jobs (auto-render after 25 s, stem separation)
-//   MOCK_ACCEL=0     contract-only (no /summary, no /peaks)
+//   MOCK_ACCEL=0     tools only (no /project, no /waveform)
 //   MOCK_BARS=8      render length used for the derived versions
 
 import http from "node:http";
@@ -132,7 +132,7 @@ function startRender(ms = RENDER_MS) {
   const job = newJob("render", "renderizando el loop…");
   return runJob(job, ms, () => {
     const meta = renderNext(PROJECT);
-    broadcast("version.created", { version: meta.version, meta });
+    broadcast("version.created", { version: meta.version, meta, metrics: readMetrics(meta.version) });
     return { version: meta.version, files: [meta.mix] };
   });
 }
@@ -250,12 +250,13 @@ function runTool(name, params) {
       const meta = readMeta(params.version);
       if (!meta) throw toolError(`no existe la versión ${params.version}`, "file_not_found", "version");
       const songPath = path.join(PROJECT, "renders", params.version, "song.yaml");
-      return { files: [], version: params.version, meta, song_yaml: fs.existsSync(songPath) ? fs.readFileSync(songPath, "utf8") : "" };
+      return { files: [], version: params.version, meta, metrics: readMetrics(params.version), song_yaml: fs.existsSync(songPath) ? fs.readFileSync(songPath, "utf8") : "" };
     }
     case "versions_diff": {
       const b = readMeta(params.b);
       if (!b || !readMeta(params.a)) throw toolError("versión inexistente", "file_not_found", "a");
-      return { files: [], a: params.a, b: params.b, diff: b.parent === params.a ? b.diff : [], musical_summary: b.parent === params.a ? b.summary : null };
+      const same = b.parent === params.a;
+      return { files: [], a: params.a, b: params.b, diff: same ? b.diff : [], musical_summary: same ? b.summary : null, changes: same && b.summary ? [b.summary] : [], metrics_delta: [], identical: !same };
     }
     case "feedback_read": {
       const { events, skipped, lines } = readFeedbackFile();
@@ -318,42 +319,54 @@ function toolError(message, code, p) {
 }
 
 // ---------------------------------------------------------------- accelerators
-function summary() {
-  const versions = listVersions().versions;
-  const metas = {};
-  const metrics = {};
-  for (const v of versions) {
-    metas[v.version] = readMeta(v.version);
-    metrics[v.version] = readMetrics(v.version);
+function projectView() {
+  // muestra-api GET /project (src/muestra/api/summary.py): versions newest
+  // first, only those with a readable meta.json.
+  const versions = [];
+  for (const v of listVersions().versions) {
+    const meta = readMeta(v.version);
+    if (meta) versions.push({ version: v.version, meta, metrics: readMetrics(v.version), feedback: null });
   }
+  versions.sort((x, y) => Number(y.version.slice(1)) - Number(x.version.slice(1)));
   const analyses = {};
   const adir = path.join(PROJECT, "cache", "analysis");
-  if (fs.existsSync(adir)) for (const f of fs.readdirSync(adir)) if (f.endsWith(".json")) analyses[f.slice(0, -5)] = JSON.parse(fs.readFileSync(path.join(adir, f), "utf8"));
-  return { project_path: PROJECT, title: songTitle(), has_song: true, versions, metas, metrics, analyses };
+  if (fs.existsSync(adir))
+    for (const f of fs.readdirSync(adir))
+      if (f.endsWith(".json") && !f.endsWith(".meta.json")) analyses[f.slice(0, -5)] = JSON.parse(fs.readFileSync(path.join(adir, f), "utf8"));
+  let song = null;
+  try {
+    song = YAML.parse(fs.readFileSync(path.join(PROJECT, "song.yaml"), "utf8"));
+  } catch {
+    /* no song */
+  }
+  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [] };
 }
 
 const peaksCache = new Map();
-function peaksFor(rel, buckets) {
-  const key = `${rel}|${buckets}`;
+function waveformFor(rel, points) {
+  // muestra-api GET /waveform (src/muestra/api/files.py)
+  const key = `${rel}|${points}`;
   if (peaksCache.has(key)) return peaksCache.get(key);
   const w = decodeWav(fs.readFileSync(path.join(PROJECT, rel)));
-  const per = w.frames / buckets;
-  const peaks = w.data.map((ch) => {
-    const out = [];
-    for (let b = 0; b < buckets; b++) {
-      let mn = 0;
-      let mx = 0;
-      const s = Math.floor(b * per);
-      const e = Math.max(s + 1, Math.floor((b + 1) * per));
-      for (let i = s; i < e && i < ch.length; i++) {
+  const count = Math.min(points, w.frames);
+  const channels = w.data.map((ch) => {
+    const min = [];
+    const max = [];
+    for (let b = 0; b < count; b++) {
+      const s0 = Math.floor((b * w.frames) / count);
+      const e0 = Math.max(s0 + 1, Math.floor(((b + 1) * w.frames) / count));
+      let mn = Infinity;
+      let mx = -Infinity;
+      for (let i = s0; i < e0 && i < ch.length; i++) {
         if (ch[i] < mn) mn = ch[i];
         if (ch[i] > mx) mx = ch[i];
       }
-      out.push([Math.round(mn * 1e4) / 1e4, Math.round(mx * 1e4) / 1e4]);
+      min.push(mn);
+      max.push(mx);
     }
-    return out;
+    return { min, max };
   });
-  const res = { peaks, duration_s: w.frames / w.sampleRate };
+  const res = { path: rel, sample_rate: w.sampleRate, frames: w.frames, duration_s: w.frames / w.sampleRate, points: count, channels };
   peaksCache.set(key, res);
   return res;
 }
@@ -481,8 +494,9 @@ const server = http.createServer(async (req, res) => {
   // ---- contract: files ----
   if (pathname.startsWith("/files/")) {
     const rel = pathname.slice("/files/".length);
-    if (!/^(renders|cache\/previews)\//.test(rel) || rel.split("/").includes("..")) {
-      return send(res, 403, { detail: "solo renders/ y cache/previews/" });
+    // like muestra-api: audio only, under renders/ and cache/previews/
+    if (!/^(renders|cache\/previews)\/.+\.(wav|flac|mp3|m4a|ogg|aif|aiff)$/i.test(rel) || rel.split("/").includes("..")) {
+      return send(res, 403, { detail: "Use an audio path inside renders/ or cache/previews/." });
     }
     const abs = path.join(PROJECT, rel);
     if (!fs.existsSync(abs) || !fs.statSync(abs).isFile()) return send(res, 404, { detail: "no encontrado" });
@@ -496,13 +510,13 @@ const server = http.createServer(async (req, res) => {
   }
 
   // ---- optional accelerators ----
-  if (ACCEL && pathname === "/summary") return send(res, 200, summary());
-  if (ACCEL && pathname.startsWith("/peaks/")) {
-    const rel = pathname.slice("/peaks/".length);
+  if (ACCEL && (pathname === "/project" || pathname === "/project/summary")) return send(res, 200, projectView());
+  if (ACCEL && (pathname === "/waveform" || pathname === "/waveform/peaks")) {
+    const rel = url.searchParams.get("path") ?? "";
     if (!/^(renders|cache\/previews)\/.+\.wav$/.test(rel) || rel.split("/").includes("..")) return send(res, 403, { detail: "path inválido" });
     if (!fs.existsSync(path.join(PROJECT, rel))) return send(res, 404, { detail: "no encontrado" });
-    const buckets = Math.min(8000, Math.max(16, Number(url.searchParams.get("buckets") ?? 1000)));
-    return send(res, 200, peaksFor(rel, buckets));
+    const points = Math.min(8192, Math.max(1, Number(url.searchParams.get("points") ?? 1024)));
+    return send(res, 200, waveformFor(rel, points));
   }
 
   serveStatic(req, res, pathname);

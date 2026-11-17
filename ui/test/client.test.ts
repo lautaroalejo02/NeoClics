@@ -67,30 +67,63 @@ describe("MuestraClient", () => {
     expect(JSON.parse(String(calls[1].init?.body)).adjust).toEqual({ start_beats: -1, length_beats: 2 });
   });
 
-  it("reads meta/metrics through /files and treats 404 as missing", async () => {
-    const { f, calls } = fakeFetch({ "/files/renders/v001/meta.json": () => json({ version: "v001" }) });
+  it("reads one version's meta + metrics with ONE versions_get call (/files is audio-only)", async () => {
+    const { f, calls } = fakeFetch({
+      "/tools/versions_get": () => env("versions.get", { files: [], version: "v001", meta: { version: "v001" }, metrics: null, song_yaml: "" }),
+    });
     const c = new MuestraClient({ fetchImpl: f });
-    expect((await c.getMeta("v001"))?.version).toBe("v001");
-    expect(await c.getMetrics("v001")).toBeNull();
-    expect(calls.map((x) => x.url)).toEqual(["/files/renders/v001/meta.json", "/files/renders/v001/metrics.json"]);
+    const [meta, metrics] = await Promise.all([c.getMeta("v001"), c.getMetrics("v001")]);
+    expect(meta?.version).toBe("v001");
+    expect(metrics).toBeNull();
+    expect(calls.map((x) => x.url)).toEqual(["/tools/versions_get"]);
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ version: "v001" });
   });
 
-  it("optional accelerators: null on 404 and not retried", async () => {
+  it("boots from the real GET /project shape and maps it to the summary", async () => {
+    const meta = { version: "v002", parent: "v001", created_at: "2026-11-17T09:00:00Z", summary: "más filtro" };
+    const { f } = fakeFetch({
+      "/project": () =>
+        json({
+          project_path: "C:\\songs\\demo",
+          song: { meta: { title: "demo" } },
+          versions: [{ version: "v002", meta, metrics: { version: "v002" }, feedback: {} }],
+          candidate_sets: [],
+          analyses: { src1: { source_id: "src1" } },
+        }),
+    });
+    const c = new MuestraClient({ fetchImpl: f });
+    const s = await c.getSummary();
+    expect(s?.title).toBe("demo");
+    expect(s?.versions).toEqual([{ version: "v002", parent: "v001", created_at: meta.created_at, summary: "más filtro" }]);
+    expect(s?.metas?.v002.parent).toBe("v001");
+    expect(s?.metrics?.v002).toEqual({ version: "v002" });
+    expect((await c.getAnalysis("src1"))?.source_id).toBe("src1");
+  });
+
+  it("missing read endpoints: null on 404 and not retried", async () => {
     const { f, calls } = fakeFetch({});
     const c = new MuestraClient({ fetchImpl: f });
     expect(await c.getSummary()).toBeNull();
     expect(await c.getSummary()).toBeNull();
     expect(await c.getPeaks("renders/v001/mix.wav", 100)).toBeNull();
     expect(await c.getPeaks("renders/v002/mix.wav", 100)).toBeNull();
-    expect(calls.filter((x) => x.url.startsWith("/summary"))).toHaveLength(1);
-    expect(calls.filter((x) => x.url.startsWith("/peaks"))).toHaveLength(1);
+    expect(calls.filter((x) => x.url.startsWith("/project"))).toHaveLength(1);
+    expect(calls.filter((x) => x.url.startsWith("/waveform"))).toHaveLength(1);
   });
 
-  it("uses the peaks accelerator when present", async () => {
-    const { f, calls } = fakeFetch({ "/peaks/renders/v001/mix.wav": () => json({ peaks: [[[-0.5, 0.5]]] }) });
+  it("converts GET /waveform channels into peaks", async () => {
+    const { f, calls } = fakeFetch({
+      "/waveform": () =>
+        json({ path: "renders/v001/mix.wav", sample_rate: 48000, frames: 2, duration_s: 1, points: 2, channels: [{ min: [-0.5, -0.1], max: [0.5, 0.2] }] }),
+    });
     const c = new MuestraClient({ fetchImpl: f });
-    expect((await c.getPeaks("renders/v001/mix.wav", 64))?.peaks[0][0]).toEqual([-0.5, 0.5]);
-    expect(calls[0].url).toBe("/peaks/renders/v001/mix.wav?buckets=64");
+    const p = await c.getPeaks("renders/v001/mix.wav", 64);
+    expect(p?.peaks[0]).toEqual([
+      [-0.5, 0.5],
+      [-0.1, 0.2],
+    ]);
+    expect(p?.duration_s).toBe(1);
+    expect(calls[0].url).toBe("/waveform?path=renders%2Fv001%2Fmix.wav&points=64");
   });
 
   it("encodes file paths per segment and derives the websocket URL", () => {

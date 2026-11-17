@@ -140,7 +140,7 @@ def _root_report(rep: IndexReport) -> RootIndexReport:
 
 
 def library_index(
-    p: LibraryIndexParams, progress: Callable[[int, int, str], None] | None = None
+    p: LibraryIndexParams, progress: Callable[[float, str | None], None] | None = None
 ) -> LibraryIndexResult:
     """Index a sample library into <root>/.muestra-index.json (incremental, parallel).
 
@@ -180,10 +180,19 @@ def library_index(
                 "no_library", "No library roots to index.", hint=_NO_LIBRARY_HINT
             )
 
-    reports = [
-        _root_report(index_root(r, progress=progress, workers=p.workers, force=p.force))
-        for r in roots
-    ]
+    reports = []
+    for number, r in enumerate(roots):
+        per_file = None
+        if progress is not None:
+            # The transports' convention is progress(fraction 0..1, message);
+            # index_root reports (done, total, rel_path) per root.
+            def per_file(done, total, rel, number=number, root=r):
+                fraction = (number + (done / total if total else 1.0)) / len(roots)
+                progress(fraction, f"{root.name}: {done}/{total} {rel}".rstrip())
+
+        reports.append(
+            _root_report(index_root(r, progress=per_file, workers=p.workers, force=p.force))
+        )
     problems = sum(r.problems_total for r in reports)
     hint = f"{problems} file(s) could not be read; see roots[].problems." if problems else None
     return LibraryIndexResult(

@@ -83,3 +83,32 @@ print(json.dumps({'ok': True}))
     assert result.ok and not result.data["skipped"]
     assert result.data["count"] == 36
     assert len({e["text"] for e in result.data["events"]}) == 36
+
+
+def test_render_text_for_agents_is_a_short_report():
+    """WP11: a render lands in the agent context every iteration."""
+    from pathlib import Path
+
+    from muestra.api.core import compact_result
+    from muestra.errors import ToolResult
+
+    data = {
+        "version": "v002",
+        "mix_path": "renders/v002/mix.wav",
+        "metrics_path": "renders/v002/metrics.json",
+        "metrics_summary": "v002: -10.1 LUFS (target -10) | 0 problema(s), 0 aviso(s)",
+        "hint": None,
+        "meta": {
+            "parent": "v001",
+            "range_bars": [1, 17],
+            "duration_s": 30.72,
+            "render_time_s": 6.2,
+            "tracks": [{"id": "sample"}, {"id": "drums"}],
+            "diff": [{"path": "chops.c1.warp.pitch_semitones", "from": 0, "to": 1}],
+        },
+    }
+    text = compact_result(ToolResult(tool="render", ok=True, data=data), Path("/song"))
+    assert "render OK: v002 (parent v001)" in text
+    assert "chops.c1.warp.pitch_semitones 0→1" in text
+    assert "0 problema(s)" in text and "renders/v002/metrics.json" in text
+    assert len(text) < 600

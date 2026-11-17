@@ -19,7 +19,7 @@ def agent_setup(repo: Path, project: Path | None, write: Path | None = None) -> 
             "--repo must point to the Muestra source checkout containing pyproject.toml."
         )
     command = shutil.which("uv") or "uv"
-    args = ["run", "--directory", str(repo), "--extra", "server", "muestra", "mcp"]
+    args = ["run", "--directory", str(repo), "muestra", "mcp"]
     if project:
         args += ["--project", str(project.resolve())]
     entry = {"command": command, "args": args}
@@ -66,8 +66,10 @@ def agent_setup(repo: Path, project: Path | None, write: Path | None = None) -> 
         codex_config.setdefault("mcp_servers", {})["muestra"] = tomllib.loads(codex)["mcp_servers"][
             "muestra"
         ]
-        claude_path.write_text(json.dumps(existing, indent=2) + "\n", encoding="utf-8")
+        claude_path.write_text(
+            json.dumps(existing, indent=2) + "\n", encoding="utf-8", newline="\n"
+        )
         codex_path.parent.mkdir(parents=True, exist_ok=True)
-        codex_path.write_text(tomli_w.dumps(codex_config), encoding="utf-8")
+        codex_path.write_text(tomli_w.dumps(codex_config), encoding="utf-8", newline="\n")
         result["written"] = [str(claude_path), str(codex_path)]
     return result

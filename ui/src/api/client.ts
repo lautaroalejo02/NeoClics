@@ -15,12 +15,15 @@ import type {
   PeaksData,
   ProjectOpenResult,
   ProjectSummary,
+  ProjectView,
   RenderMeta,
   SongGetResult,
   ToolResult,
   VersionId,
   VersionsDiffResult,
+  VersionsGetResult,
   VersionsListResult,
+  WaveformData,
   WsEvent,
   WsEventType,
 } from "./types";
@@ -77,6 +80,7 @@ export class MuestraClient {
   private readonly fetchImpl: typeof fetch;
   /** Optional endpoints we already know are missing (404) — don't retry. */
   private missing = new Set<string>();
+  private versionRequests = new Map<VersionId, Promise<VersionsGetResult | null>>();
 
   constructor(opts: ClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? "").replace(/\/$/, "");
@@ -155,9 +159,29 @@ export class MuestraClient {
 
   // ---------------------------------------------------------------- project
 
-  /** Optional accelerator (NOT in the contract): GET /summary. */
-  getSummary(): Promise<ProjectSummary | null> {
-    return this.optional<ProjectSummary>("summary", "/summary");
+  /** GET /project (muestra-api): song, versions with meta + metrics,
+   *  candidate sets and source analyses in one round-trip. null when the
+   *  endpoint is missing (404, remembered) or the request fails (retried
+   *  next time), so the per-tool fallback still works. */
+  async getSummary(): Promise<ProjectSummary | null> {
+    const view = await this.projectView();
+    return view ? summaryFromProjectView(view) : null;
+  }
+
+  private async projectView(): Promise<ProjectView | null> {
+    if (this.missing.has("summary")) return null;
+    try {
+      const res = await this.fetchImpl(this.url("/project"));
+      if (res.status === 404) {
+        this.missing.add("summary");
+        return null;
+      }
+      if (!res.ok) return null;
+      const view = (await res.json()) as ProjectView;
+      return view && Array.isArray(view.versions) ? view : null;
+    } catch {
+      return null;
+    }
   }
 
   openProject(): Promise<ProjectOpenResult> {
@@ -179,33 +203,42 @@ export class MuestraClient {
     return this.tool<VersionsDiffResult>("versions_diff", { a, b });
   }
 
-  /** meta.json lives under renders/, which /files serves (contract). */
+  /** One version's meta + metrics through the readonly `versions.get` tool
+   *  (/files only serves audio). Concurrent getMeta/getMetrics for the same
+   *  version share one request. */
+  private getVersion(version: VersionId): Promise<VersionsGetResult | null> {
+    let pending = this.versionRequests.get(version);
+    if (!pending) {
+      pending = this.tool<VersionsGetResult>("versions_get", { version }).catch(() => null);
+      this.versionRequests.set(version, pending);
+      void pending.finally(() => this.versionRequests.delete(version));
+    }
+    return pending;
+  }
+
   async getMeta(version: VersionId): Promise<RenderMeta | null> {
-    return this.getJson<RenderMeta>(`/files/renders/${encodeURIComponent(version)}/meta.json`);
+    return (await this.getVersion(version))?.meta ?? null;
   }
 
   async getMetrics(version: VersionId): Promise<Metrics | null> {
-    return this.getJson<Metrics>(`/files/renders/${encodeURIComponent(version)}/metrics.json`);
+    return (await this.getVersion(version))?.metrics ?? null;
   }
 
-  /** Optional accelerator (NOT in the contract): GET /peaks/<wav path>. */
+  /** GET /waveform?path=&points= → per-channel min/max, as PeaksData. */
   async getPeaks(projectPath: string, buckets: number): Promise<PeaksData | null> {
-    const d = await this.optional<PeaksData>(
+    const d = await this.optional<WaveformData>(
       "peaks",
-      `/peaks/${encodePath(projectPath)}?buckets=${buckets}`,
+      `/waveform?path=${encodeURIComponent(projectPath)}&points=${buckets}`,
     );
-    if (d && Array.isArray(d.peaks) && d.peaks.length > 0 && Array.isArray(d.peaks[0])) return d;
-    return null;
+    if (!d || !Array.isArray(d.channels) || d.channels.length === 0) return null;
+    const peaks = d.channels.map((ch) => ch.min.map((mn, i): [number, number] => [mn, ch.max[i] ?? mn]));
+    return { peaks, duration_s: d.duration_s };
   }
 
-  /** Source analysis for the chop panel. cache/analysis/ is NOT in the
-   *  /files whitelist and `source.analyze` is a long-running COMPUTE tool,
-   *  so we only read it from /summary or (requested) /files. */
+  /** Source analysis for the chop panel: /project carries `analyses`
+   *  (/files only serves audio; `source.analyze` is a compute tool). */
   async getAnalysis(sourceId: string): Promise<Analysis | null> {
-    return this.optional<Analysis>(
-      `analysis:${sourceId}`,
-      `/files/cache/analysis/${encodeURIComponent(sourceId)}.json`,
-    );
+    return (await this.projectView())?.analyses?.[sourceId] ?? null;
   }
 
   // ---------------------------------------------------------------- feedback
@@ -269,4 +302,34 @@ export class MuestraClient {
     const d = (typeof data.type === "string" ? data : data.event) as FeedbackEvent | undefined;
     return d && typeof d.type === "string" && typeof d.ts === "string" ? d : null;
   }
+}
+
+/** muestra-api's `GET /project` → the UI's boot summary (one place that
+ *  knows the server shape). Only versions with a valid meta.json are listed
+ *  by the server, so every version here is playable. */
+export function summaryFromProjectView(view: ProjectView): ProjectSummary {
+  const metas: Record<VersionId, RenderMeta> = {};
+  const metrics: Record<VersionId, Metrics | null> = {};
+  const versions = view.versions.map((v) => {
+    metas[v.version] = v.meta;
+    metrics[v.version] = v.metrics ?? null;
+    return {
+      version: v.version,
+      parent: v.meta.parent ?? null,
+      created_at: v.meta.created_at,
+      summary: v.meta.summary ?? null,
+    };
+  });
+  const song = (view.song ?? null) as SongGetResult["song"] | null;
+  const title = song?.meta?.title ?? view.project_path?.split(/[\\/]/).filter(Boolean).pop() ?? null;
+  return {
+    project_path: view.project_path,
+    title,
+    has_song: !!song,
+    song,
+    versions,
+    metas,
+    metrics,
+    analyses: view.analyses ?? {},
+  };
 }

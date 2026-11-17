@@ -113,8 +113,10 @@ def test_tools_doctor_and_setup(tmp_project, tmp_path):
     diagnosis = cli("doctor", "--project", tmp_project.root)
     checks = json.loads(diagnosis.stdout)["checks"]
     names = {c["name"].split(":")[0] for c in checks}
-    assert {"ffmpeg", "git", "project", "library", "plugin", "models", "port"} <= names
+    assert {"ffmpeg", "git", "python-core", "python-separation", "model", "ui"} <= names
+    assert {"project", "library", "plugin", "port"} <= names
     assert all(c["fix"] for c in checks if c["status"] != "ok")
+    assert {c["status"] for c in checks} <= {"ok", "missing", "optional"}
     workspace = tmp_path / "agent workspace"
     workspace.mkdir()
     (workspace / ".mcp.json").write_text('{"mcpServers":{"other":{"command":"other"}}}', "utf-8")

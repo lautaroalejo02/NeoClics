@@ -17,6 +17,15 @@ dependencies = [
     "pedalboard>=0.9.14",
     "mido>=1.3.3",
     "pyloudnorm>=0.2.0,<0.3",
+    # A plain `uv sync` does everything except heavy stem separation
+    # (WP11, docs/decisions.md): server (HTTP API + MCP), beat tracking.
+    "fastapi>=0.163.1,<1",
+    "uvicorn[standard]>=0.54,<1",
+    "mcp>=2.3,<3",
+    "portalocker>=4.4.2,<5",
+    "beat-this>=1.1.0,<2",
+    "psutil>=7.2,<8",
+    "audioread>=3.0,<4",
 ]
 
 # Optional dependency groups, one per work package. Each WP adds its own
@@ -24,42 +33,31 @@ dependencies = [
 # so parallel work does not conflict on this file.
 [project.optional-dependencies]
 
-# WP1 (ingest: separation + analysis)
-ingest = [
+# Stem separation (Demucs / Mel-Band RoFormer): the only heavy optional part.
+# `uv sync --extra separation`. Model weights download on first use.
+separation = [
     "demucs-infer>=4.4.0,<5",
     "audio-separator[cpu]>=0.48.0,<0.49",
-    "beat-this>=1.1.0,<2",
-    "pyloudnorm>=0.2.0,<0.3",
-    "psutil>=7.2,<8",
-    "audioread>=3.0,<4",
 ]
 
-# WP2 (renderer)
+# Backwards-compatible alias of the WP1 group name.
+ingest = [
+    "muestra[separation]",
+]
+
+# Kept (empty) so older `--extra <name>` commands keep working; their
+# dependencies now live in the base install.
+server = [
+]
 render = [
-    "pyloudnorm>=0.1.1",
-    "mido>=1.3.3",
 ]
-
-# WP3 (plugin hosting + instruments)
 plugins = [
 ]
-
-# WP4 (sample library)
 library = [
 ]
 
 # WP6 (ears / metrics)
 ears = [
-]
-
-# WP7 (API + MCP + CLI)
-server = [
-    "fastapi>=0.163.1,<1",
-    "uvicorn[standard]>=0.54,<1",
-    "mcp>=2.3,<3",
-    "portalocker>=4.4.2,<5",
-    # httpx is required by starlette's TestClient (used in tests/server)
-    "httpx>=0.28,<1",
 ]
 
 [project.scripts]
@@ -69,6 +67,8 @@ muestra = "muestra.cli.main:main"
 dev = [
     "pytest>=8.3",
     "ruff>=0.8",
+    # starlette's TestClient (tests/api)
+    "httpx>=0.28,<1",
 ]
 
 [build-system]

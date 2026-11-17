@@ -170,7 +170,36 @@ def measure_tonal(ctx: RenderContext) -> tuple[TonalReport, list[Alarm]]:
 
     report.detune = _detune(ctx, tunings, alarms)
     report.bass_vs_sample = _bass_vs_sample(ctx, chromas, alarms)
+    _soften_transpositions(report, alarms)
     return report, alarms
+
+
+def _soften_transpositions(report: TonalReport, alarms: list[Alarm]) -> None:
+    """``track_transposed`` from key profiles cannot tell a tonic from its
+    dominant: a bass on a dominant pedal (G in C) or a sample sitting on the
+    fifth reads as "5 semitones off" while ``bass_vs_sample`` says the bass and
+    the sample fit (skill finding 3: no ``meta.key`` silenced both). A
+    fourth/fifth shift, or one contradicted by a fitting bass/sample pair, is
+    reported as ``info`` only."""
+    for alarm in alarms:
+        if alarm.code != "track_transposed" or alarm.severity == "info":
+            continue
+        k = int(alarm.value or 0)
+        fits = any(
+            alarm.track in (b.bass_track, b.sample_track)
+            and b.best_shift_semitones == 0
+            and b.fit >= 0.5
+            for b in report.bass_vs_sample
+        )
+        if abs(k) in (5, 7) or fits:
+            alarm.severity = "info"
+            reason = (
+                "el bajo y el sample encajan entre sí"
+                if fits
+                else "una cuarta/quinta suele ser un pedal de dominante, no un error"
+            )
+            head = alarm.message.split(": ", 1)[0]  # "`bass` suena 5 semitonos abajo de C"
+            alarm.message = f"{head}: probablemente a propósito ({reason}); si no lo es, ver fix."
 
 
 def _reference_tuning(
@@ -202,6 +231,12 @@ def _detune(ctx: RenderContext, tunings, alarms: list[Alarm]) -> list[DetuneChec
                 chop_ids.append(cl.chop)
         measured, strength = tunings[track.id]
         ok = measured is not None and strength >= th.tuning_min_strength
+        # A weak measurement (strength under tuning_min_strength) never creates an
+        # alarm, but it overrides a PREDICTION: the prediction assumes the record
+        # is tuned to A440, and old records often are not (skill finding 2: a
+        # record at -45 cents, compensated by +0.45 st, measured +2 while the
+        # prediction kept saying +45 and its fix re-detuned it).
+        weak = measured is not None and not ok and strength > 0.0
         ref = _reference_tuning(ctx, tunings, exclude={track.id})
         for cid in chop_ids:
             chop = next((c for c in ctx.song.chops if c.id == cid), None)
@@ -218,6 +253,7 @@ def _detune(ctx: RenderContext, tunings, alarms: list[Alarm]) -> list[DetuneChec
                 shift = ps
             exp_cents = None if shift is None else _wrap_cents((shift - round(shift)) * 100.0)
             rel = _wrap_cents(measured - ref) if ok else None
+            weak_rel = _wrap_cents(measured - ref) if weak else None
             out.append(
                 DetuneCheck(
                     track=track.id,
@@ -226,16 +262,30 @@ def _detune(ctx: RenderContext, tunings, alarms: list[Alarm]) -> list[DetuneChec
                     local_bpm=None if local_bpm is None else round(local_bpm, 3),
                     expected_shift_semitones=None if shift is None else round(shift, 3),
                     expected_detune_cents=None if exp_cents is None else round(exp_cents, 1),
-                    measured_cents=None if not ok else round(measured, 1),
+                    measured_cents=None if not (ok or weak) else round(measured, 1),
                     reference_cents=round(ref, 1),
-                    relative_cents=None if rel is None else round(rel, 1),
+                    relative_cents=(
+                        round(rel, 1)
+                        if rel is not None
+                        else None
+                        if weak_rel is None
+                        else round(weak_rel, 1)
+                    ),
                 )
             )
             heard = rel if rel is not None else exp_cents
+            basis = "medido" if rel is not None else "previsto por el resample (sin medir)"
+            if (
+                rel is None
+                and weak_rel is not None
+                and heard is not None
+                and abs(heard) > th.detune_warn_cents
+            ):
+                heard = weak_rel  # what was actually rendered beats the A440 assumption
+                basis = "medido, señal débil"
             if heard is None or abs(heard) <= th.detune_warn_cents:
                 continue
             sev = "error" if abs(heard) > th.detune_error_cents and rel is not None else "warn"
-            basis = "medido" if rel is not None else "previsto por el resample (sin medir)"
             new_ps = round(ps - heard / 100.0, 2)
             fix = f"poné `chops.{cid}.warp.pitch_semitones: {new_ps:g}` (hoy {ps:g})"
             if (

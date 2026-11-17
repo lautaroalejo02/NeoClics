@@ -1,6 +1,6 @@
 """Offline beat evidence and audition clicks; optional independent beat annotations.
 
-uv run --extra ingest python -m muestra.ingest.validation recording.mp3 --output OUT
+uv run --extra separation python -m muestra.ingest.validation recording.mp3 --output OUT
 Annotations JSON: {"beats_s": [...], "downbeats_s": [...]} via --annotations FILE.
 Unannotated onset agreement is a diagnostic, NEVER reported as beat accuracy.
 """

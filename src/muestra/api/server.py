@@ -9,6 +9,7 @@ import socket
 import sys
 import webbrowser
 from contextlib import asynccontextmanager, suppress
+from datetime import UTC, datetime
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Query, Request, WebSocket, WebSocketDisconnect
@@ -18,6 +19,7 @@ from pydantic import ValidationError
 
 from ..errors import MuestraError, ToolResult, issues_from_validation_error
 from ..project.core import open_project
+from ..schemas.api import WsEvent
 from .core import REGISTRY, Runtime, failure, input_schema, project_logger, resolve_project
 from .events import EventBus, ProjectWatcher
 from .files import MIME, audio_path, waveform
@@ -262,7 +264,13 @@ def create_app(
     @app.head("/files/{path:path}", include_in_schema=False)
     def files(path: str):
         target = audio_path(root, path)
-        return FileResponse(target, media_type=MIME[target.suffix.lower()])
+        # ETag/Last-Modified come with FileResponse; no-cache makes the browser
+        # revalidate, so re-rendering a version never plays stale audio.
+        return FileResponse(
+            target,
+            media_type=MIME[target.suffix.lower()],
+            headers={"Cache-Control": "no-cache"},
+        )
 
     @app.get("/waveform")
     @app.get("/waveform/peaks", include_in_schema=False)
@@ -284,6 +292,14 @@ def create_app(
             return
         await websocket.accept()
         queue = bus.subscribe()
+        # A page opened mid-separation must see the running job right away.
+        for job in list(jobs.items.values()):
+            if job.status in ("queued", "running"):
+                await websocket.send_json(
+                    WsEvent(
+                        type="job.updated", ts=datetime.now(UTC), data=job.model_dump(mode="json")
+                    ).model_dump(mode="json")
+                )
 
         async def send():
             while True:

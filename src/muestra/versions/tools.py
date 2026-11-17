@@ -19,7 +19,7 @@ from ..toolbase import ProjectScoped
 from .core import restore_files, snapshot_bytes, song_at
 from .describe import describe_song, musical_summary
 from .diff import song_diff
-from .metrics_delta import compare_metrics, load_metrics
+from .metrics_delta import compare_metrics, ears_delta, load_metrics
 from .models import (
     DiffItem,
     RenderMetaOut,
@@ -116,7 +116,9 @@ def versions_diff(p: VersionsDiffParams) -> VersionsDiffResult:
         sentences = [f"Cambié {e.path} de {_short(e.from_)} a {_short(e.to)}" for e in diff[:8]] + (
             [f"y {len(diff) - 8} cambios más"] if len(diff) > 8 else []
         )
-    delta = compare_metrics(load_metrics(project, p.a), load_metrics(project, p.b))
+    metrics_a, metrics_b = load_metrics(project, p.a), load_metrics(project, p.b)
+    structured = ears_delta(metrics_a, metrics_b)
+    delta = structured.notes if structured is not None else compare_metrics(metrics_a, metrics_b)
     return VersionsDiffResult(
         a=p.a,
         b=p.b,
@@ -124,6 +126,7 @@ def versions_diff(p: VersionsDiffParams) -> VersionsDiffResult:
         musical_summary=musical_summary(sentences, delta),
         changes=sentences,
         metrics_delta=delta,
+        metrics_compare=structured,
         identical=not diff,
     )
 

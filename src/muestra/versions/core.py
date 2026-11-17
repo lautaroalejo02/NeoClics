@@ -98,6 +98,7 @@ VERSIONED_PATHS = (
     SONG_FILE,
     "midi",
     "muestra.toml",
+    "ears.toml",  # optional ears thresholds/reference (WP6): part of the version
     "feedback.jsonl",
     "docs",
     ".gitignore",

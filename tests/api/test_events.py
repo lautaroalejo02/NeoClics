@@ -56,3 +56,18 @@ def test_websocket_events_from_external_file_writes(tmp_project):
                 file.write(line[20:].encode() + b"\n")
             assert receive("feedback.appended")["text"] == "human feedback"
         assert len(client.app.state.bus.subscribers) == 0
+
+
+def test_metrics_landing_reannounces_the_version_with_metrics(tmp_project):
+    """WP11: metrics.json written after meta.json refreshes the UI's Oídos panel."""
+    root = tmp_project.root
+    metrics = root / "renders/v001/metrics.json"
+    saved = metrics.read_bytes()
+    metrics.unlink()
+    with TestClient(create_app(root, watch_interval=0.01, debounce=0.03)) as client:
+        with client.websocket_connect("/events") as ws:
+            metrics.write_bytes(saved)
+            event = WsEvent.model_validate(ws.receive_json())
+            assert event.type == "version.created"
+            assert event.data["version"] == "v001"
+            assert event.data["metrics"]["version"] == "v001"

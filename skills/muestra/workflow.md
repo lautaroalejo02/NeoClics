@@ -77,7 +77,7 @@ Alias de instrumento listos (no hace falta `plugins.list`, que devuelve ~540 KB)
 
 `render(request=..., summary=..., agent=<tu nombre>)`. 16 compases ≈ 4-10 s. Crea `vNNN`
 (commit + tag), `mix.wav`, stems, `meta.json`, `metrics.json`; la respuesta trae
-`data.metrics.summary` (leé eso primero; el resto del modelo es grande). `range_bars:
+`data.metrics_summary` (leé eso primero; el detalle está en `metrics.json`, vía `versions.get`). `range_bars:
 [1, 5]` renderiza solo los compases 1-4. `version: v003` re-renderiza esa versión sin
 crear otra. `preview(target="track:bass", bars=4)` escucha una parte sin crear versión
 (pero sin métricas).

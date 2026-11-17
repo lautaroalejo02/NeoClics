@@ -21,7 +21,7 @@ export default defineConfig({
   ],
   webServer: {
     command: "node mock/server.mjs",
-    url: `http://127.0.0.1:${PORT}/files/renders/v001/meta.json`,
+    url: `http://127.0.0.1:${PORT}/project`,
     reuseExistingServer: false,
     timeout: 60_000,
     env: { PORT: String(PORT), MOCK_DEMO: "0", MOCK_PROJECT_DIR: "test-results/e2e-project" },

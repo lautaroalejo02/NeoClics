@@ -69,6 +69,6 @@ humano que la grilla es rara.
 ## Contexto del agente
 
 - `plugins.list` devuelve ~540 KB (3.000 presets): no lo llames si alcanzan los alias.
-- La respuesta de `render` trae el modelo completo de métricas (12-20 KB): leé
-  `metrics.summary` y, si hace falta, `alarms`.
+- La respuesta de `render` trae solo `metrics_summary` (~1 KB); el modelo completo de métricas
+  (12-20 KB) está en `versions.get` → `metrics`: pedilo solo si hace falta ver `alarms`.
 - `library.search` es compacto por defecto; `detail="full"` solo para pocos resultados.

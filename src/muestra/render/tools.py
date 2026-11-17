@@ -20,12 +20,11 @@ from ..ears import core as ears
 from ..errors import MuestraError
 from ..project import load_song, open_project, validate_song
 from ..schemas._base import IdStr, RelPath, VersionStr
-from ..schemas.metrics import Metrics
 from ..schemas.render_meta import RenderMeta
 from ..schemas.song import BEATS_PER_BAR
 from ..toolbase import ProjectScoped, ToolOutput
 from ..versions import core as versions
-from ..versions.tools import VersionsDiffParams, VersionsListParams, versions_diff, versions_list
+from ..versions.diff import song_diff
 from .audio import fade
 from .core import beat_frame, render_audio, render_chop, render_song
 
@@ -179,8 +178,14 @@ class RenderResult(ToolOutput):
     stem_paths: dict[IdStr, RelPath] = Field(default_factory=dict)
     meta_path: RelPath
     meta: RenderMeta
-    metrics_path: RelPath | None = None
-    metrics: Metrics | None = None
+    metrics_path: RelPath | None = Field(
+        default=None, description="renders/vNNN/metrics.json: the full ears report."
+    )
+    metrics_summary: str | None = Field(
+        default=None,
+        description="Compact Spanish ears summary (headline + worst alarms with their "
+        "song.yaml fixes); the full detail is in metrics_path.",
+    )
     hint: str | None = Field(
         default=None,
         description="Agent-facing note when metrics or history metadata are unavailable.",
@@ -227,28 +232,27 @@ def render(p: RenderParams) -> RenderResult:
     parent = prior.parent if prior else None
     commit = prior.git_commit if prior else None
     diff = prior.diff if prior else []
-    existing = None
-    try:
-        history = versions_list(VersionsListParams(project=str(project.root))).versions
-        if p.version:
-            existing = next((v for v in history if v.version == version), None)
-            if existing:
-                parent, commit = existing.parent, existing.git_commit
-        elif history:
-            parent = history[0].version
-    except NotImplementedError:
-        hints.append("Version-history metadata unavailable until WP5 is installed.")
-    if not p.version:
-        commit = versions.record_version(project, version, p.request, p.summary, p.agent, parent)
+    info = None
+    if p.version:
+        # Re-render: never a new commit. History (tag + trailers) wins over an
+        # old meta.json, and still answers after renders/ was deleted.
+        tag = versions.version_tags(project.root).get(version)
+        info = versions.commit_info(project.root, tag) if tag else None
+        if info is not None:
+            parent, commit = info.parent, info.sha
+    else:
+        # parent=None lets versions derive it from history, which honours
+        # versions.restore (restore v001 -> render -> parent v001).
+        commit = versions.record_version(project, version, p.request, p.summary, p.agent, None)
+        info = versions.commit_info(project.root, commit)
+        parent = info.parent if info else None
     directory = render_song(project, song, version, bars, stems=p.stems)
     (directory / "song.yaml").write_bytes(raw)
-    if parent:
+    if parent and (not p.version or not diff):
         try:
-            diff = versions_diff(
-                VersionsDiffParams(project=str(project.root), a=parent, b=version)
-            ).diff
-        except NotImplementedError:
-            hints.append("Musical diff unavailable until WP5 is installed.")
+            diff = song_diff(versions.song_at(project, parent), song)
+        except MuestraError:
+            hints.append(f"Musical diff against parent {parent} unavailable.")
     relative = directory.relative_to(project.root).as_posix()
     track_meta = []
     if p.stems:
@@ -271,10 +275,10 @@ def render(p: RenderParams) -> RenderResult:
         version=version,
         parent=parent,
         git_commit=commit,
-        created_at=datetime.now(UTC),
-        request=p.request if p.request is not None else (prior.request if prior else None),
-        summary=p.summary or (existing.summary if existing else prior.summary if prior else None),
-        agent=p.agent or (prior.agent if prior else "muestra"),
+        created_at=_created_at(prior, info if p.version else None),
+        request=_first(p.request, info.request if info else None, prior and prior.request),
+        summary=_first(p.summary, info.summary if info else None, prior and prior.summary),
+        agent=_first(p.agent, info.agent if info else None, prior and prior.agent) or "muestra",
         diff=diff,
         render_time_s=time.perf_counter() - started,
         duration_s=sf.info(directory / "mix.wav").duration,
@@ -297,9 +301,21 @@ def render(p: RenderParams) -> RenderResult:
         hints.append(
             "Audio rendered; metrics unavailable until the WP6 ears analyzer is installed."
         )
+    except Exception as exc:  # noqa: BLE001 - a metrics failure never loses a render
+        hints.append(
+            f"Audio rendered; ears could not analyze it ({type(exc).__name__}: {exc}). "
+            f"Retry with ears.analyze version={version}."
+        )
     if metrics is not None:
         _write_json(directory / "metrics.json", metrics)
         metrics_path = f"{relative}/metrics.json"
+    unverified = unverified_reproducibility(song)
+    if unverified:
+        hints.append(
+            "Re-rendering this version is only verified bit-exact for the curated "
+            "instrument aliases and SFZ; these tracks use other plugin presets and may "
+            "come out slightly different next time: " + ", ".join(unverified) + "."
+        )
     files = [f"{relative}/mix.wav", f"{relative}/song.yaml", f"{relative}/meta.json"]
     for track in meta.tracks:
         files.append(track.stem)
@@ -312,16 +328,64 @@ def render(p: RenderParams) -> RenderResult:
         stem_paths={t.id: t.stem for t in meta.tracks},
         meta_path=f"{relative}/meta.json",
         meta=meta,
-        metrics=metrics,
+        metrics_summary=metrics.summary if metrics is not None else None,
         metrics_path=metrics_path,
         files=files,
         hint=" ".join(hints) or None,
     )
 
 
+def unverified_reproducibility(song) -> list[str]:
+    """Tracks whose audio is not known to re-render identically (WP11).
+
+    Curated aliases (plugins.list) use deterministic patch variants and SFZ
+    round robins are seeded; arbitrary Surge patches can use noise/S&H LFOs
+    (measured: Surge 'Basses/Dynamo Square' differs at -40 dBFS RMS between
+    processes) and other VST3s are untested.
+    """
+    from ..plugins.presets import CURATED
+
+    out = []
+    for track in song.tracks:
+        inst = track.instrument
+        if inst is not None:
+            curated = CURATED.get(inst.plugin)
+            if inst.plugin == "sfz" or (curated and inst.preset in (None, curated[1])):
+                pass
+            elif curated and curated[0] == "sfz":
+                pass
+            else:
+                out.append(track.id)
+                continue
+        if any(fx.type == "plugin" for fx in track.fx):
+            out.append(track.id)
+    if any(fx.type == "plugin" for fx in song.master.fx):
+        out.append("master")
+    return out
+
+
+def _created_at(prior, info):
+    """A re-render keeps the version's creation time (UI ordering, feedback
+    'pending' badges); a new version is created now."""
+    if prior is not None:
+        return prior.created_at
+    if info is not None:
+        try:
+            return datetime.fromisoformat(info.committed_at).astimezone(UTC)
+        except ValueError:
+            pass
+    return datetime.now(UTC)
+
+
+def _first(*values):
+    return next((v for v in values if v), None)
+
+
 def _write_json(path, model):
     path.write_text(
-        json.dumps(model.model_dump(mode="json", by_alias=True), indent=2) + "\n", encoding="utf-8"
+        json.dumps(model.model_dump(mode="json", by_alias=True), indent=2) + "\n",
+        encoding="utf-8",
+        newline="\n",
     )
 
 

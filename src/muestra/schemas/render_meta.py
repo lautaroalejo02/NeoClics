@@ -28,7 +28,7 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, Field, model_validator
+from pydantic import AwareDatetime, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from ._base import ContractModel, IdStr, KeyStr, LaneName, RelPath, VersionStr
@@ -48,8 +48,11 @@ class DiffEntry(ContractModel):
     ``tracks.drums.pattern.lanes.kick.steps``, ``meta.bpm``. Elements
     without ids use indices: ``tracks.<id>.clips[<i>]``, and an fx
     without an ``id`` is addressed as ``fx[<i>]``.
-    ``from_`` serializes as ``from``.
+    ``from_`` serializes as ``from`` in every dump (``serialize_by_alias``),
+    whichever envelope or tool returns it.
     """
+
+    model_config = ConfigDict(**ContractModel.model_config, serialize_by_alias=True)
 
     path: str
     from_: Any = Field(alias="from", default=None)

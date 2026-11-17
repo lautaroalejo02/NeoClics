@@ -188,6 +188,7 @@ export interface VersionsGetResult {
   files: string[];
   version: VersionId;
   meta: RenderMeta | null;
+  metrics?: Metrics | null;
   song_yaml: string;
 }
 
@@ -196,16 +197,21 @@ export interface VersionsDiffResult {
   a: VersionId;
   b: VersionId;
   diff: DiffEntry[];
+  /** Spanish producer-style description (WP5). */
   musical_summary?: string | null;
+  /** The same description, one sentence per change. */
+  changes?: string[];
+  /** Spanish notes on how the ears metrics moved (empty without metrics). */
+  metrics_delta?: string[];
+  identical?: boolean;
 }
 
 // ---------- Chop candidates (cache/chops/<src>/<set_id>.json) ----------
 export type StemName = "drums" | "bass" | "vocals" | "other" | "mix";
 
 export interface ChopCandidate {
-  /** The pydantic model (source of truth) and its JSON Schema use the LOCAL
-   *  id ("cand2"); contracts.md R5 says global. The UI accepts both and
-   *  always builds the global id with `globalCandidateId()`. */
+  /** Global id "csNNN/candN" (contracts.md R5; model, schema and fixture agree
+   *  since WP1). The UI also tolerates a local "candN" via globalCandidateId(). */
   id: string;
   source_id: string;
   stem: StemName;
@@ -288,19 +294,42 @@ export interface SongGetResult {
   };
 }
 
-// ---------- OPTIONAL accelerators (NOT in the contract; see API-NEEDS.md) ----------
-/** GET /summary — one round-trip for everything the UI needs at boot. */
+// ---------- muestra-api read endpoints (docs/server.md) ----------
+/** GET /project, as the server sends it. */
+export interface ProjectView {
+  project_path: string;
+  config?: Record<string, unknown>;
+  song?: Record<string, unknown> | null;
+  versions: { version: VersionId; meta: RenderMeta; metrics: Metrics | null; feedback?: unknown }[];
+  candidate_sets?: ChopCandidateSet[];
+  analyses?: Record<string, Analysis>;
+  feedback_cursor?: number;
+  issues?: unknown[];
+}
+
+/** The UI's boot summary, mapped from ProjectView in client.ts. */
 export interface ProjectSummary {
   project_path?: string;
   title?: string | null;
   has_song?: boolean;
+  song?: SongGetResult["song"] | null;
   versions?: VersionInfo[];
   metas?: Record<VersionId, RenderMeta>;
   metrics?: Record<VersionId, Metrics | null>;
   analyses?: Record<string, Analysis>;
 }
 
-/** GET /peaks/<project-relative wav>?buckets=N — min/max per bucket. */
+/** GET /waveform?path=&points=N (server shape). */
+export interface WaveformData {
+  path: string;
+  sample_rate: number;
+  frames: number;
+  duration_s: number;
+  points: number;
+  channels: { min: number[]; max: number[] }[];
+}
+
+/** Waveform peaks as the UI uses them. */
 export interface PeaksData {
   /** peaks[channel][bucket] = [min, max] in -1..1 */
   peaks: [number, number][][];

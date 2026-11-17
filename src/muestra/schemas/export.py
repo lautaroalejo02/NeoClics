@@ -70,7 +70,9 @@ def export_all(out_dir: Path) -> list[Path]:
     for rel, schema in generated_schemas().items():
         path = out_dir / rel
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        path.write_text(
+            json.dumps(schema, indent=2, sort_keys=True) + "\n", encoding="utf-8", newline="\n"
+        )
         written.append(path)
     return written
 

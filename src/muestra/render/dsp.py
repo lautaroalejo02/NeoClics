@@ -45,7 +45,7 @@ def _dependency(name: str):
         f"The renderer needs {name}.",
         path="render",
         value=name,
-        hint="Install renderer dependencies with uv sync --extra render.",
+        hint="Install the renderer dependencies with uv sync (muestra doctor checks them).",
     )
 
 

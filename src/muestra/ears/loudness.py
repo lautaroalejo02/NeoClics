@@ -96,11 +96,34 @@ def measure_loudness(ctx: RenderContext) -> tuple[Loudness, list[Alarm]]:
             why = "el limitador ya está al tope y no deja llegar más fuerte"
             fix = f"bajá `master.target_lufs` a {round(integrated):g} (lo que el master da)."
         elif delta < 0:
-            why = "suena más bajo de lo pedido"
-            fix = "revisá `master.gain_db` y los `gain_db` de los tracks."
+            # With target_lufs the renderer normalises AFTER master.gain_db, so that
+            # gain cancels out (skill finding 1). The true-peak safety limiter caps the
+            # gain when a few peaks (kick/clap) sit far above the rest. Measured on the
+            # WP11 demo loop (-12.96 LUFS, target -10): master.gain_db +6 -> -12.96
+            # (no change); drums -6 dB -> -11.34; sample +6 / bass +3 -> -12.05;
+            # target -13 -> -14.39 (docs/ears.md).
+            why = (
+                "el limitador de seguridad recortó los picos (bombo/clap muy por encima del resto)"
+            )
+            drums = [t.id for t in ctx.song.tracks if t.pattern is not None and not t.mute]
+            lower = (
+                " o ".join(f"`tracks.{d}.gain_db`" for d in drums[:2])
+                if drums
+                else "el `gain_db` de la batería"
+            )
+            fix = (
+                f"bajá {lower} unos 6 dB (los picos bajan y el render normaliza el resto hacia "
+                "el target), o subí los `gain_db` de los tracks que suenan bajos; o aceptá "
+                f"menos volumen: `master.target_lufs: {round(integrated):g}`. `master.gain_db` "
+                "no sirve: el render normaliza después."
+            )
         else:
             why = "suena más fuerte de lo pedido"
-            fix = f"revisá `master.gain_db` (hoy {ctx.song.master.gain_db:g})."
+            fix = (
+                f"el render normaliza hacia `master.target_lufs` (hoy {target_txt}) después de "
+                "`master.gain_db`: revisá los efectos de `master.fx` que agregan nivel después "
+                "de comprimir, o subí el target si es lo que querés."
+            )
         alarms.append(
             make_alarm(
                 tl,

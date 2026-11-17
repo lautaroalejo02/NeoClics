@@ -610,3 +610,67 @@ detection limits are in `docs/ears.md`.
    shipped.
 9. **Style similarity** (CLAP/MERT) is a documented hook only
    (`muestra.ears.style.register`); `style_similarity` stays `null`.
+
+## 2026-11-17 — WP11: integration pass (seams found running the real product)
+
+Contract-visible changes (all additive or bug fixes; schemas regenerated):
+
+1. **LF everywhere.** Every text file Muestra writes (`song.yaml`,
+   `muestra.toml`, `.gitignore`, `feedback.jsonl`, `meta.json`,
+   `metrics.json`, analysis/candidate JSON, schema exports, agent
+   configs) is written with `newline="\n"`. `project.create` used to write
+   CRLF on Windows (contracts.md said so); the exporter produced CRLF
+   schema files.
+2. **`DiffEntry` serialises `from` in every dump** (`serialize_by_alias`),
+   so `meta.diff` reads the same through `run_tool`, MCP, HTTP and disk.
+3. **`render` parentage.** The tool passes `parent=None` to
+   `record_version` (versions derives it, honouring `versions.restore`)
+   and reads parent/commit back with `commit_info`; it used to force the
+   newest version as parent, so restore v001 → render gave parent v002.
+   Re-rendering an existing version (`version=`) never commits; parent,
+   commit, request, summary and agent come from the version tag's
+   trailers (they survive deleting `renders/`), `created_at` is kept
+   (prior meta, else the commit time in UTC). The meta diff is
+   `song_diff(parent, song)` instead of a full `versions.list` +
+   `versions.diff` per render.
+4. **`RenderResult.metrics` → `metrics_summary`** (the compact Spanish
+   ears text) + `metrics_path`. A render lands in the agent's context on
+   every iteration; the full report stays in `metrics.json`. The MCP text
+   content of a render is a short report (version, parent, changes,
+   ears summary); structured content keeps the envelope. An ears crash no
+   longer fails a completed render (hint instead).
+5. **`versions.diff` uses ears** (`ears.report.compare_metrics`):
+   `metrics_delta` = its Spanish notes, new `metrics_compare` = the
+   structured `MetricsDelta`; WP5's local description is only a fallback.
+6. **HTTP API**: `/project` gains `analyses{src: Analysis}` (the UI's
+   chop panel), `/files` stays audio-only and sends `Cache-Control:
+   no-cache`; `version.created` carries `metrics` and is re-sent when
+   `metrics.json` lands; a websocket that connects is first sent
+   `job.updated` for every queued/running job. The UI was adapted to the
+   real `/project`, `/waveform` and `versions.get` shapes (ui/API-NEEDS.md).
+7. **Progress convention.** `library.index`, `source.separate` and
+   `source.analyze` take the transports' `progress(fraction, message)`
+   (library.index used to call it with `(done, total, rel)` and crashed
+   with `internal_error` over HTTP/MCP). The CLI prints long-tool progress
+   on stderr (stdout stays one JSON document).
+8. **Dependency groups.** A plain `uv sync` installs everything except
+   stem separation: server (FastAPI, uvicorn, MCP, portalocker) and beat
+   tracking (beat-this) moved to base dependencies. New extra
+   `separation` (demucs-infer, audio-separator); `ingest` is kept as its
+   alias and the other WP extras stay (empty) so old commands work.
+   `httpx` moved to the dev group. `muestra doctor` reports each missing
+   piece with the one command that fixes it.
+9. **`ears.toml` is versioned** (committed with every version, like
+   `muestra.toml`; restore leaves both alone).
+10. **ears on real renders** (details and numbers: docs/ears.md,
+    "Validation on real renderer output"): the timeline assumptions match
+    the renderer; instrument note onsets out of silence are no longer
+    clicks (`click_onset_rise_db = 12`); the `loudness_off_target` fix
+    names the safety-limiter cause; sample `grid_offset` on dense live
+    records is documented as unreliable (thresholds unchanged).
+11. **Skill findings 1-3 (ears, after merging WP9)**: `loudness_off_target` no longer
+    suggests `master.gain_db` (normalised away); a weak tuning measurement overrides the
+    A440 prediction of `sample_detuned` (never creates one); `track_transposed` at ±5/±7 or
+    contradicted by a fitting bass/sample pair is `info`. The skill's `ears.md`/`workflow.md`
+    were updated to the new behaviour and to `render` returning `metrics_summary`.
+    Thresholds unchanged. Details: docs/ears.md.

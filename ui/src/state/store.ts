@@ -90,6 +90,8 @@ export interface AppState {
   chopSets: ChopCandidateSet[];
   /** chops declared in song.yaml (suggests the chop id on a manual choose) */
   songChops: { id: string; source: string }[];
+  /** versions.diff(parent, v) musical description, fetched when a row opens. */
+  diffs: Record<VersionId, { changes: string[]; metrics: string[] } | "loading" | "error">;
   analyses: Record<string, Analysis>;
   jobs: Record<string, Job>;
   ws: "connecting" | "open" | "closed";
@@ -191,6 +193,7 @@ export class Store {
       sendStatus: {},
       chopSets: [],
       songChops: [],
+      diffs: {},
       analyses: {},
       jobs: {},
       ws: "connecting",
@@ -270,8 +273,10 @@ export class Store {
     const summary = await this.client.getSummary();
     let versions: VersionInfo[] = summary?.versions ?? [];
     let title = summary?.title ?? null;
-    if (summary) {
+    if (summary?.song) {
       // song.yaml chops (to suggest the chop id when choosing manually)
+      this.noteSong({ files: [], song: summary.song });
+    } else if (summary) {
       void this.client
         .getSong()
         .then((s) => this.noteSong(s))
@@ -446,8 +451,9 @@ export class Store {
         break;
       }
       case "version.created": {
-        const d = e.data as { version?: VersionId; meta?: RenderMeta };
-        if (d.version) void this.onNewVersion(d.version, d.meta ?? null);
+        // An upsert: re-sent when metrics.json lands and on re-renders.
+        const d = e.data as { version?: VersionId; meta?: RenderMeta; metrics?: Metrics | null };
+        if (d.version) void this.onNewVersion(d.version, d.meta ?? null, "metrics" in d ? (d.metrics ?? null) : undefined);
         break;
       }
       case "feedback.appended": {
@@ -464,6 +470,20 @@ export class Store {
           .then((s) => s?.song?.meta?.title && this.set({ title: s.song.meta.title }))
           .catch(() => undefined);
         break;
+    }
+  }
+
+  /** The musical diff of a version vs its parent (Spanish sentences). */
+  async loadDiff(version: VersionId): Promise<void> {
+    const parent = this.state.metas[version]?.parent;
+    if (!parent || (this.state.diffs[version] && this.state.diffs[version] !== "error")) return;
+    this.set({ diffs: { ...this.state.diffs, [version]: "loading" } });
+    try {
+      const d = await this.client.diffVersions(parent, version);
+      const changes = d.changes?.length ? d.changes : d.musical_summary ? [d.musical_summary] : [];
+      this.set({ diffs: { ...this.state.diffs, [version]: { changes, metrics: d.metrics_delta ?? [] } } });
+    } catch {
+      this.set({ diffs: { ...this.state.diffs, [version]: "error" } });
     }
   }
 
@@ -488,11 +508,20 @@ export class Store {
     this.set({ feedback: [...this.state.feedback, ev] });
   }
 
-  async onNewVersion(version: VersionId, meta: RenderMeta | null): Promise<void> {
-    if (this.state.metas[version]) return;
+  async onNewVersion(version: VersionId, meta: RenderMeta | null, eventMetrics?: Metrics | null): Promise<void> {
+    if (this.state.metas[version]) {
+      // Known version: metrics.json landed later, or the version was re-rendered.
+      const m = meta ?? this.state.metas[version];
+      const metrics = eventMetrics !== undefined ? eventMetrics : await this.client.getMetrics(version).catch(() => null);
+      this.set({
+        metas: { ...this.state.metas, [version]: m },
+        metrics: { ...this.state.metrics, [version]: metrics ?? this.state.metrics[version] ?? null },
+      });
+      return;
+    }
     const m = meta ?? (await this.client.getMeta(version).catch(() => null));
     if (!m) return;
-    const metrics = await this.client.getMetrics(version).catch(() => null);
+    const metrics = eventMetrics !== undefined ? eventMetrics : await this.client.getMetrics(version).catch(() => null);
     this.engine.register(specOf(m));
     const info: VersionInfo = { version, parent: m.parent ?? null, created_at: m.created_at, summary: m.summary ?? null };
     const versions = sortVersions([...this.state.versions.filter((v) => v.version !== version), info]);

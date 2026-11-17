@@ -8,9 +8,9 @@ metric module works on this object.
 
 Timeline semantics follow docs/contracts.md (render output format R7,
 patterns, swing R13, MIDI R4, track windows R20). Two points the
-contract leaves open are documented in docs/ears.md: a pattern's tiles
-are anchored at the track's ``at_bar``, and clip instances outside the
-track window are treated as silent.
+contract leaves open match the renderer (confirmed in WP11, see
+docs/ears.md): a pattern's tiles are anchored at the track's ``at_bar``,
+and clip instances outside the track window are silent.
 """
 
 from __future__ import annotations

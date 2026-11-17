@@ -1,6 +1,7 @@
 # Leer ears
 
-`render` corre ears y devuelve `data.metrics`; `metrics.summary` es lo que leés primero:
+`render` corre ears y devuelve `data.metrics_summary` (el `metrics.summary` de esa versión): es lo
+que leés primero. El detalle completo queda en `renders/vNNN/metrics.json` (`versions.get` → `metrics`):
 
 ```
 v004: -13.1 LUFS (target -12), pico -1.0 dBTP, PLR 12.2 | 0 problema(s), 2 aviso(s)
@@ -40,8 +41,10 @@ lo tapara).
 El master aplica la ganancia hacia `target_lufs` **después** de sus efectos y después un
 limitador de seguridad. Si el mix tiene mucho pico relativo (PLR > ~10 dB, casi siempre el
 bombo), ese limitador se come 1-3 LU y no llega. Medido en Tiger Rag: target -10 → -12.0,
--11 → -12.5, -12 → -13.0. **Subir `master.gain_db` no cambia nada** (el `fix` de ears lo
-sugiere, pero la normalización lo anula: verificado). Qué sí sirve:
+-11 → -12.5, -12 → -13.0. **Subir `master.gain_db` no cambia nada** (la normalización lo
+anula: verificado; desde WP11 el `fix` de ears ya no lo sugiere y nombra el track de batería).
+Qué sí sirve (medido en el demo de WP11, -12.96 con target -10: batería -6 dB → -11.34,
+sample +6 / bajo +3 → -12.05, target -13 → -14.39):
 
 - aceptar un target realista (-12 para loops con sample viejo y bombo punchy);
 - bajar el pico: bombo -2 dB, compresor en el master (`threshold_db: -18, ratio: 3`);
@@ -101,7 +104,7 @@ mide.
 | code | qué significa | qué cambiar |
 |---|---|---|
 | `bass_sample_clash` | el bajo encajaría mejor transpuesto (`best_shift_semitones`) | transponé el bajo esa cantidad (todas las notas) |
-| `track_transposed` | un track encaja con `meta.key` corrido k semitonos | si k es ±5/±7 (cuarta/quinta) y `bass_vs_sample` encaja: probablemente es un pedal de dominante, no un error; ajustá `meta.key` o preguntá |
+| `track_transposed` | un track encaja con `meta.key` corrido k semitonos | aviso solo si k no es ±5/±7 y el bajo y el sample no encajan entre sí; si no, ears lo baja a `info` ("probablemente a propósito": pedal de dominante) |
 | `key_mismatch` | el mix suena en otra tonalidad que `meta.key` | con confianza < 0.4, no persigas el número; confiá en `bass_vs_sample` |
 | `sample_detuned` | el sample cae entre dos notas | ver abajo |
 
@@ -112,12 +115,14 @@ Dos variantes, decí cuál es:
 - **medido** (`tonal.detune[].measured_cents` con valor): la afinación del stem se midió con
   fuerza suficiente. Corregí: el `fix` da `pitch_semitones` o un `meta.bpm` que cae en
   semitono entero.
-- **previsto por el resample (sin medir)**: ears calculó `12·log2(bpm/local_bpm)` y asume que
-  el disco está en La 440. Si vos ya compensaste un disco corrido (Tiger Rag: -45 cents en
-  `tonal.tracks.sample.tuning_cents` de la fuente, el stem y el render), la alarma es un falso
-  positivo y su `fix` lo desafinaría. Verificalo: `tonal.tracks.<sample>.tuning_cents`
-  cerca de 0 después de tu corrección = bien. Contáselo al humano y pedile que confirme de
-  oído ("¿el bajo y el sample suenan afinados juntos o baten?").
+- **medido, señal débil**: la medición del render no llega a `tuning_min_strength` pero
+  existe; desde WP11 le gana a la predicción (que asume un disco en La 440): si ya
+  compensaste un disco corrido (Tiger Rag: -45 cents) y el render mide cerca de 0, no hay
+  alarma; si mide desafinado, el `fix` sale de la medición. Una medición débil nunca crea
+  una alarma que la predicción no tenga.
+- **previsto por el resample (sin medir)**: no hubo ninguna medición; ears calculó
+  `12·log2(bpm/local_bpm)` y asume La 440. Contáselo al humano y pedile que confirme de oído
+  ("¿el bajo y el sample suenan afinados juntos o baten?").
 
 Las estimaciones de tonalidad en discos viejos saltan entre versiones (Tiger Rag: C#, F,
 F#, B con confianzas 0.07-0.54). Usá `bass_vs_sample.fit` (0..1, ≥ 0.45 = encaja) como guía

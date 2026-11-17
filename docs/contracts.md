@@ -104,13 +104,16 @@ user identity when configured and fall back to
 `Muestra <muestra@localhost>` (via `-c user.name/-c user.email` for that
 commit only) when none exists.
 
-- `.gitignore`: `renders/`, `cache/`, `.venv/`, `__pycache__/`. Git
-  versions `song.yaml`, `midi/`, `muestra.toml`, `feedback.jsonl`,
-  `docs/` (+ `.gitignore`, `.gitattributes`); everything under `renders/`
+- `.gitignore`: `renders/`, `cache/`, `sources/` (WP11), `.venv/`, `__pycache__/`. Git
+  versions `song.yaml`, `midi/`, `muestra.toml`, `ears.toml` (optional),
+  `feedback.jsonl`, `docs/` (+ `.gitignore`, `.gitattributes`); restore
+  rewinds only `song.yaml` and `midi/` (the two config files are
+  configuration, not the arrangement); everything under `renders/`
   and `cache/` is derived data, and Muestra never commits `sources/` or
   `library/`. `.gitattributes` is `* -text` and every Muestra git call
   pins `core.autocrlf=false`: files are stored byte-for-byte whatever the
-  user's git config (`project.create` writes CRLF on Windows).
+  user's git config. **Every text file Muestra writes uses LF on every OS**
+  (WP11; it used to write CRLF on Windows).
 - **One version = one commit + one annotated tag `vNNN`.** Commit
   message: subject `vNNN: <summary>` (bare `vNNN` without a summary), then
   trailers `Muestra-Version:`, `Muestra-Request:`, `Muestra-Agent:`,
@@ -506,15 +509,28 @@ fallbacks. Implemented in `muestra.library.discovery`.
   routes never carry the project path.
 - Tool routes: `POST /tools/<mcp_name>` (`GET` allowed for
   `readonly` tools). Static audio under `/files/<project-relative path>`
-  with HTTP Range support, restricted to `renders/` and
-  `cache/previews/`.
+  with HTTP Range support, restricted to audio under `renders/` and
+  `cache/previews/` (`Cache-Control: no-cache` + ETag). JSON (meta,
+  metrics, analyses) comes from `GET /project`, never from `/files`.
+- `GET /project` (alias `/project/summary`): `{project_path, config, song,
+  versions: [{version, meta, metrics, feedback}], candidate_sets,
+  analyses: {<src>: Analysis}, feedback, feedback_cursor, feedback_skipped,
+  issues}` — the one shape the UI boots from (WP11).
+- `GET /waveform?path=<audio>&points=N` (alias `/waveform/peaks`):
+  `{path, sample_rate, frames, duration_s, points, channels: [{min, max}]}`.
+- Tool status codes: success 200; expected tool failure 422 (500
+  internal, 501 not implemented, 409 other project); the body is always
+  the `ToolResult` envelope, so clients read `ok`, not the status.
 - Jobs: `long_running` tools return `{job_id}` immediately;
   `GET /jobs/<id>` returns `Job{id, tool, status ∈ queued|running|done|failed,
   progress 0..1|null, message?, result?}`. Over MCP and CLI the same
   tools simply block.
 - Events on websocket `/events`: `WsEvent{type, ts, data}` with
   `type ∈ job.updated | version.created | candidates.created |
-  feedback.appended | song.changed`. The API server produces them by
+  feedback.appended | song.changed`. `version.created` data is
+  `{version, meta, metrics}` and is re-sent (upsert) when `metrics.json`
+  lands after `meta.json`; a websocket that connects receives
+  `job.updated` for every queued/running job first. The API server produces them by
   **watching the project folder** (`renders/`, `cache/chops/`,
   `feedback.jsonl`, `song.yaml`), because renders are usually triggered
   from a separate MCP process.
@@ -535,9 +551,9 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `feedback.read/append` | `muestra.feedback.tools` | real; cursor + skipped reporting |
 | `source.import/separate/analyze/find_chops` | `muestra.ingest.tools` | WP1 |
 | `chops.choose`, `chops.list` | `muestra.ingest.tools` | WP1; choose gains `chop_id` (writes that chop into song.yaml via ruamel) |
-| `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version` |
+| `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version`; its result carries `metrics_summary` (compact ears text) + `metrics_path`, never the full metrics (WP11) |
 | plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py |
 | `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
-| `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta`, `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
+| `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta` (ears notes), `metrics_compare` (ears `MetricsDelta`), `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
 | `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary`; compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

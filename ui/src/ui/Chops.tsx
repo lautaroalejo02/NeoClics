@@ -278,11 +278,13 @@ function CandidateCard(p: {
   };
   const score = cand.score?.value ?? null;
   const len = cand.length_beats + adjust.length_beats;
+  // ids are global (csNNN/candN); the card names the candidate inside its set
+  const name = localId(set, cand.id) ?? cand.id;
 
   return (
-    <article className={`cand-card${p.selected ? " sel" : ""}`} onClick={p.onSelect} data-testid={`cand-${cand.id}`} aria-label={`Candidato ${cand.id}`}>
+    <article className={`cand-card${p.selected ? " sel" : ""}`} onClick={p.onSelect} data-testid={`cand-${name}`} aria-label={`Candidato ${name}`}>
       <div className="cand-head">
-        <strong className="mono">{cand.id}</strong>
+        <strong className="mono">{name}</strong>
         {p.picked && <span className="tag info">el agente</span>}
         {p.chosen && <span className="tag ok">en uso</span>}
         <span className="header-spacer" />
@@ -294,7 +296,7 @@ function CandidateCard(p: {
         <div className="ph" ref={phRef} style={{ display: "none" }} />
       </div>
       <div className="fb-compose-row">
-        <button type="button" className="btn small" onClick={(e) => (e.stopPropagation(), toggle())} disabled={!cand.preview} aria-pressed={playing} data-testid={`preview-${cand.id}`}>
+        <button type="button" className="btn small" onClick={(e) => (e.stopPropagation(), toggle())} disabled={!cand.preview} aria-pressed={playing} data-testid={`preview-${name}`}>
           {playing ? <I.Stop size={13} /> : <I.Play size={14} />} {playing ? "Parar" : "Escuchar en loop"}
         </button>
         <span className="hint mono">
@@ -322,9 +324,9 @@ function CandidateCard(p: {
       )}
       <div className="nudge" onClick={(e) => e.stopPropagation()}>
         <span>Inicio</span>
-        <Stepper value={adjust.start_beats} fmt={(v) => `${signed(v)} beats`} onChange={(v) => p.onAdjust({ ...adjust, start_beats: v })} min={-16} max={16} label={`Inicio de ${cand.id}`} />
+        <Stepper value={adjust.start_beats} fmt={(v) => `${signed(v)} beats`} onChange={(v) => p.onAdjust({ ...adjust, start_beats: v })} min={-16} max={16} label={`Inicio de ${name}`} />
         <span>Largo</span>
-        <Stepper value={len} fmt={(v) => `${v} beats`} onChange={(v) => p.onAdjust({ ...adjust, length_beats: v - cand.length_beats })} min={1} max={64} label={`Largo de ${cand.id}`} />
+        <Stepper value={len} fmt={(v) => `${v} beats`} onChange={(v) => p.onAdjust({ ...adjust, length_beats: v - cand.length_beats })} min={1} max={64} label={`Largo de ${name}`} />
       </div>
       {outside && <p className="hint" style={{ margin: 0, color: "var(--warn)" }}>El preview no cubre este ajuste: escuchás la parte que hay; el agente renderiza el corte completo al confirmar.</p>}
       {err && <p className="hint" style={{ margin: 0, color: "var(--err)" }}>No pude cargar el preview.</p>}

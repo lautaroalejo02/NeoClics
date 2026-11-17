@@ -169,7 +169,7 @@ def plugins_scan(params: PluginsScanParams) -> PluginsScanResult:
     result = PluginsScanResult(plugins=entries, files=["cache/plugins/scan.json"])
     cache = project.cache_dir / result.files[0].removeprefix("cache/")
     cache.parent.mkdir(parents=True, exist_ok=True)
-    cache.write_text(result.model_dump_json(indent=2), encoding="utf-8")
+    cache.write_text(result.model_dump_json(indent=2), encoding="utf-8", newline="\n")
     return result
 
 

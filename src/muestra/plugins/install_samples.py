@@ -67,7 +67,9 @@ def prepare_maps(root):
         region["sample"] = region["sample"].replace("\\", "/")
         region["volume"] = "-6"
         lines.append("<region> " + " ".join(f"{k}={v}" for k, v in region.items()))
-    (bass / "muestra-finger.sfz").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (bass / "muestra-finger.sfz").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8", newline="\n"
+    )
     rhodes = root / "jrhodes"
     folder = rhodes / "jRhodes3c-looped-flac-sfz"
     lines = ["// Muestra: Jeffrey Learman jRhodes3c mono; explicit original sample loops."]
@@ -78,7 +80,9 @@ def prepare_maps(root):
         region["volume"] = "-6"
         region["sample"] = "jRhodes3c-looped-flac-sfz/" + region["sample"]
         lines.append("<region> " + " ".join(f"{k}={v}" for k, v in region.items()))
-    (rhodes / "muestra-rhodes.sfz").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    (rhodes / "muestra-rhodes.sfz").write_text(
+        "\n".join(lines) + "\n", encoding="utf-8", newline="\n"
+    )
 
 
 def install(root=None):
@@ -110,6 +114,7 @@ def install(root=None):
             f"Source: https://github.com/sfzinstruments/{repo}\nRevision: {commit}\n"
             f"Commercial use in music: {allowed}\n\n" + (destination / "LICENSE").read_text(),
             encoding="utf-8",
+            newline="\n",
         )
     prepare_maps(root)
     print(f"Ready: {root}. Undo: remove only swagbass/ and jrhodes/ under this directory.")
