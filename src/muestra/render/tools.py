@@ -309,6 +309,13 @@ def render(p: RenderParams) -> RenderResult:
     if metrics is not None:
         _write_json(directory / "metrics.json", metrics)
         metrics_path = f"{relative}/metrics.json"
+    unverified = unverified_reproducibility(song)
+    if unverified:
+        hints.append(
+            "Re-rendering this version is only verified bit-exact for the curated "
+            "instrument aliases and SFZ; these tracks use other plugin presets and may "
+            "come out slightly different next time: " + ", ".join(unverified) + "."
+        )
     files = [f"{relative}/mix.wav", f"{relative}/song.yaml", f"{relative}/meta.json"]
     for track in meta.tracks:
         files.append(track.stem)
@@ -326,6 +333,35 @@ def render(p: RenderParams) -> RenderResult:
         files=files,
         hint=" ".join(hints) or None,
     )
+
+
+def unverified_reproducibility(song) -> list[str]:
+    """Tracks whose audio is not known to re-render identically (WP11).
+
+    Curated aliases (plugins.list) use deterministic patch variants and SFZ
+    round robins are seeded; arbitrary Surge patches can use noise/S&H LFOs
+    (measured: Surge 'Basses/Dynamo Square' differs at -40 dBFS RMS between
+    processes) and other VST3s are untested.
+    """
+    from ..plugins.presets import CURATED
+
+    out = []
+    for track in song.tracks:
+        inst = track.instrument
+        if inst is not None:
+            curated = CURATED.get(inst.plugin)
+            if inst.plugin == "sfz" or (curated and inst.preset in (None, curated[1])):
+                pass
+            elif curated and curated[0] == "sfz":
+                pass
+            else:
+                out.append(track.id)
+                continue
+        if any(fx.type == "plugin" for fx in track.fx):
+            out.append(track.id)
+    if any(fx.type == "plugin" for fx in song.master.fx):
+        out.append("master")
+    return out
 
 
 def _created_at(prior, info):

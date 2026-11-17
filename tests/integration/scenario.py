@@ -130,6 +130,7 @@ class Sound:
     keys: str | None = None  # optional second instrument (SFZ alias)
     kit: dict[str, str] = field(default_factory=dict)  # lane -> uri, from library.kits
     chop_warp: str = "resample"
+    sample_gain_db: float = 0.0
 
 
 def song_text(
@@ -189,6 +190,7 @@ tracks:
   - {{id: hp, type: highpass, cutoff_hz: 150}}
   - {{id: lp, type: lowpass, cutoff_hz: 18000}}
   - {{id: sc, type: sidechain, key_track: drums, key_lane: kick, depth: {depth}}}
+  gain_db: {sound.sample_gain_db:g}
 - id: drums
   pattern:
     steps_per_bar: 16
@@ -351,6 +353,7 @@ class Scenario:
             "render v003", "render", {"summary": "Desde v001", "agent": "integration-test"}
         )
         original = (p / "renders/v001/mix.wav").read_bytes()
+        mixes = {v: (p / f"renders/{v}/mix.wav").read_bytes() for v in ("v001", "v002", "v003")}
         shutil.rmtree(p / "renders")
         again = self.run("re-render v001", "render", {"version": "v001"})
         return {
@@ -364,6 +367,7 @@ class Scenario:
             "found": found,
             "original_mix": original,
             "chop": chop,
+            "mixes": mixes,
         }
 
 

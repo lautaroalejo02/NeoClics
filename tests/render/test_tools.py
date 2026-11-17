@@ -191,3 +191,26 @@ def test_validation_failure_does_not_record_version(project, monkeypatch):
     result = run_tool("render", {"project": str(project.root)})
     assert not result.ok
     assert any(issue.path.startswith("meta") for issue in result.errors)
+
+
+def test_render_names_tracks_whose_reproducibility_is_unverified():
+    """WP11: an arbitrary Surge patch (noise LFOs) re-rendered differently in
+    another process; curated aliases and SFZ are bit-exact."""
+    song = Song.model_validate(
+        {
+            "meta": {"title": "t", "bpm": 120, "key": "Am", "length_bars": 1},
+            "tracks": [
+                {"id": "a", "instrument": {"plugin": "slap-bass"}, "notes": []},
+                {"id": "b", "instrument": {"plugin": "synth-bass"}, "notes": []},
+                {"id": "c", "instrument": {"plugin": "rhodes"}, "notes": []},
+                {
+                    "id": "d",
+                    "instrument": {"plugin": "slap-bass", "preset": "Basses/Dynamo Square"},
+                    "notes": [],
+                },
+                {"id": "e", "instrument": {"plugin": "surge-xt"}, "notes": []},
+                {"id": "f", "instrument": {"plugin": "sfz", "preset": "x.sfz"}, "notes": []},
+            ],
+        }
+    )
+    assert tools.unverified_reproducibility(song) == ["d", "e"]
