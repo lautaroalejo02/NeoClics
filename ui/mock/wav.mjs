@@ -90,7 +90,8 @@ export function encodeWav(wav, format = "float32") {
 
   for (let f = 0; f < frames; f++) {
     for (let c = 0; c < channels; c++) {
-      const v = Math.max(-1, Math.min(1, wav.data[c][f]));
+      // float stems may exceed ±1 (pre-master): only PCM is clamped
+      const v = isFloat ? wav.data[c][f] : Math.max(-1, Math.min(1, wav.data[c][f]));
       const off = 44 + (f * channels + c) * bytesPer;
       if (isFloat) {
         buf.writeFloatLE(v, off);

@@ -1,240 +1,349 @@
-// Derives extra render versions (v002, v003, and later simulated renders)
-// from the fixture v001 so the UI has a meaningful version history and
-// A/B actually sounds different. Pure DSP on the fixture wavs — no deps.
+// Derives a meaningful version history for the mock from the ONE real
+// fixture render (fixtures/example-project/renders/v001, a 1-bar render).
+//
+//  * Every version is extended to MOCK_BARS bars (default 8) by tiling the
+//    fixture audio, so the player, loops and comments have room.
+//  * Derived versions change the stems with real DSP (filter sweeps, gain,
+//    saturation) and rebuild mix.wav = master(sum of stems), so mixer
+//    toggles and A/B both sound different.
+//  * metrics.json loudness/spectral/masking values are MEASURED from the
+//    generated audio (approximations: RMS-based "LUFS", no K-weighting), so
+//    the loudness-match toggle has real differences to compensate.
+//
+// History: v001 -> v002 -> v003, and v004 branches from v002 (as after a
+// `versions.restore`), so the versions panel shows a tree.
 
 import fs from "node:fs";
 import path from "node:path";
-import {
-  decodeWav, encodeWav, clone, gain, lowpass, highpass, saturate, sumInto, peaks,
-} from "./wav.mjs";
+import { decodeWav, encodeWav, clone, gain, lowpass, highpass, saturate, sumInto } from "./wav.mjs";
 
-function readMeta(projectDir, version) {
-  return JSON.parse(fs.readFileSync(path.join(projectDir, "renders", version, "meta.json"), "utf8"));
-}
+const BARS = Math.max(1, Number(process.env.MOCK_BARS ?? 8));
 
-function readWav(projectDir, rel) {
-  return decodeWav(fs.readFileSync(path.join(projectDir, rel)));
-}
-
-function writeWav(projectDir, rel, wav, format) {
-  const p = path.join(projectDir, rel);
+const rd = (dir, rel) => decodeWav(fs.readFileSync(path.join(dir, rel)));
+const wr = (dir, rel, wav, fmt) => {
+  const p = path.join(dir, rel);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, encodeWav(wav, format));
+  fs.writeFileSync(p, encodeWav(wav, fmt));
+};
+const readJson = (dir, rel) => JSON.parse(fs.readFileSync(path.join(dir, rel), "utf8"));
+const writeJson = (dir, rel, obj) => fs.writeFileSync(path.join(dir, rel), JSON.stringify(obj, null, 2) + "\n");
+
+function tile(wav, times) {
+  if (times <= 1) return wav;
+  const n = wav.frames;
+  const data = wav.data.map((ch) => {
+    const out = new Float32Array(n * times);
+    for (let t = 0; t < times; t++) out.set(ch, t * n);
+    return out;
+  });
+  return { ...wav, frames: n * times, data };
 }
 
-/**
- * A "recipe" describes how to alter audio + what meta/metrics to write.
- * stemFx: {trackId | "trackId.lane": (wav)=>wav}
- */
+/** Time-varying one-pole lowpass: cutoff goes from f0 to f1 (exp) over [t0,t1] s. */
+function sweepLowpass(wav, f0, f1, t0, t1) {
+  const sr = wav.sampleRate;
+  for (const ch of wav.data) {
+    let y = 0;
+    for (let i = 0; i < ch.length; i++) {
+      const t = i / sr;
+      const u = Math.min(1, Math.max(0, (t - t0) / (t1 - t0)));
+      const f = f0 * (f1 / f0) ** u;
+      const a = 1 - Math.exp((-2 * Math.PI * f) / sr);
+      y += a * (ch[i] - y);
+      ch[i] = y;
+    }
+  }
+  return wav;
+}
+
+/** Master: drive into a soft clipper, normalise towards a target RMS. */
+function master(sum, { targetDb, drive = 1.2 }) {
+  const out = clone(sum);
+  saturate(out, drive);
+  const r = rmsDb(out);
+  gain(out, targetDb - r);
+  // ceiling ~ -0.8 dBFS
+  const ceil = 10 ** (-0.8 / 20);
+  for (const ch of out.data) for (let i = 0; i < ch.length; i++) ch[i] = Math.max(-ceil, Math.min(ceil, ch[i]));
+  return out;
+}
+
+function rmsDb(w) {
+  let acc = 0;
+  let n = 0;
+  for (const ch of w.data)
+    for (let i = 0; i < ch.length; i++) {
+      acc += ch[i] * ch[i];
+      n++;
+    }
+  return 10 * Math.log10(Math.max(1e-12, acc / Math.max(1, n)));
+}
+
+function peakDb(w) {
+  let p = 0;
+  for (const ch of w.data) for (let i = 0; i < ch.length; i++) p = Math.max(p, Math.abs(ch[i]));
+  return 20 * Math.log10(Math.max(1e-9, p));
+}
+
+function bandDb(w, lo, hi) {
+  const c = clone(w);
+  if (lo) highpass(c, lo);
+  if (hi) lowpass(c, hi);
+  return Math.round(rmsDb(c) * 10) / 10;
+}
+
+const r1 = (x) => Math.round(x * 10) / 10;
+
+function measure(mix, stems, version, base, extraAlarms = []) {
+  const lufs = r1(rmsDb(mix) - 0.691);
+  const tp = r1(peakDb(mix) + 0.3);
+  const tracks = {};
+  const energy = {};
+  for (const [id, w] of Object.entries(stems)) {
+    tracks[id] = { low_db: bandDb(w, 20, 250), mid_db: bandDb(w, 250, 4000), high_db: bandDb(w, 4000, 0) };
+    energy[id] = bandDb(w, 40, 150);
+  }
+  const ranked = Object.entries(energy).sort((a, b) => b[1] - a[1]);
+  const alarms = [...extraAlarms];
+  if (ranked.length > 1 && ranked[0][1] - ranked[1][1] < 2.5) {
+    alarms.push({
+      code: "low_end_masking",
+      severity: "warn",
+      message: `${ranked[0][0]} y ${ranked[1][0]} se pisan en 40-150 Hz (diferencia de ${r1(ranked[0][1] - ranked[1][1])} dB)`,
+      track: ranked[1][0],
+      at_s: null,
+    });
+  }
+  if (tp > -1) {
+    alarms.push({ code: "true_peak", severity: "warn", message: `True peak de ${tp} dBTP: muy cerca de 0`, track: null, at_s: null });
+  }
+  return {
+    ...base,
+    version,
+    loudness: { integrated_lufs: lufs, true_peak_dbtp: tp, clipping: tp > 0, clipped_samples: 0 },
+    spectral: {
+      bands_hz: base.spectral.bands_hz,
+      mix: { low_db: bandDb(mix, 20, 250), mid_db: bandDb(mix, 250, 4000), high_db: bandDb(mix, 4000, 0) },
+      tracks,
+    },
+    low_end_masking: { band_hz: [40, 150], energy_db: energy, dominant_track: ranked[0]?.[0] ?? null },
+    alarms,
+  };
+}
+
+function retarget(meta, version) {
+  const swap = (p) => p.replace(/^renders\/v\d+\//, `renders/${version}/`);
+  return {
+    ...meta,
+    version,
+    mix: swap(meta.mix),
+    tracks: meta.tracks.map((t) => ({ ...t, stem: swap(t.stem), lanes: (t.lanes ?? []).map((l) => ({ ...l, stem: swap(l.stem) })) })),
+  };
+}
+
+/** Load a version's stems (track + lane) keyed by id / "track.lane". */
+function loadStems(dir, meta) {
+  const tracks = {};
+  const lanes = {};
+  for (const t of meta.tracks) {
+    tracks[t.id] = rd(dir, t.stem);
+    for (const l of t.lanes ?? []) lanes[`${t.id}.${l.id}`] = rd(dir, l.stem);
+  }
+  return { tracks, lanes };
+}
+
+function writeVersion(dir, meta, stems, mix, metrics) {
+  const vdir = path.join(dir, "renders", meta.version);
+  fs.mkdirSync(path.join(vdir, "stems"), { recursive: true });
+  for (const t of meta.tracks) {
+    wr(dir, t.stem, stems.tracks[t.id], "float32");
+    for (const l of t.lanes ?? []) wr(dir, l.stem, stems.lanes[`${t.id}.${l.id}`], "float32");
+  }
+  wr(dir, meta.mix, mix, "pcm24");
+  writeJson(dir, `renders/${meta.version}/meta.json`, meta);
+  writeJson(dir, `renders/${meta.version}/metrics.json`, metrics);
+}
+
+/** A simple synth bass line in F#m (the fixture's bass stem is silent:
+ *  the instrument track needs a plugin host that the fixture doesn't run). */
+function synthBass(frames, sr, bpm) {
+  const notes = [30, 30, 33, 30, 28, 30, 37, 28]; // F#1 F#1 A1 F#1 E1 F#1 C#2 E1 (8ths)
+  const step = (60 / bpm) / 2;
+  const out = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    const t = i / sr;
+    const k = Math.floor(t / step);
+    const tn = t - k * step;
+    const f = 440 * 2 ** ((notes[k % notes.length] - 69) / 12);
+    const env = Math.min(1, tn / 0.004) * Math.exp(-tn * 5.5);
+    const ph = 2 * Math.PI * f * t;
+    out[i] = 0.32 * env * (Math.sin(ph) + 0.35 * Math.sin(2 * ph) + 0.12 * Math.sin(3 * ph));
+  }
+  return out;
+}
+
+/** Extend the fixture v001 in place to BARS bars (tiled audio). */
+function extendV001(dir) {
+  const meta = readJson(dir, "renders/v001/meta.json");
+  const bars = meta.range_bars[1] - meta.range_bars[0];
+  const times = Math.max(1, Math.round(BARS / bars));
+  if (times === 1) return meta;
+  const stems = loadStems(dir, meta);
+  for (const k of Object.keys(stems.tracks)) stems.tracks[k] = tile(stems.tracks[k], times);
+  for (const k of Object.keys(stems.lanes)) stems.lanes[k] = tile(stems.lanes[k], times);
+  const frames = Object.values(stems.tracks)[0].frames;
+  if (stems.tracks.bass && rmsDb(stems.tracks.bass) < -90) {
+    const b = synthBass(frames, stems.tracks.bass.sampleRate, meta.bpm);
+    stems.tracks.bass.data = stems.tracks.bass.data.map(() => Float32Array.from(b));
+  }
+  const sum = clone(Object.values(stems.tracks)[0]);
+  for (const ch of sum.data) ch.fill(0);
+  for (const w of Object.values(stems.tracks)) sumInto(sum, w);
+  const mix = master(sum, { targetDb: -16.5, drive: 1.1 });
+  const newMeta = {
+    ...meta,
+    range_bars: [meta.range_bars[0], meta.range_bars[0] + bars * times],
+    duration_s: (meta.duration_s ?? mix.frames / mix.sampleRate) * times,
+  };
+  const base = readJson(dir, "renders/v001/metrics.json");
+  const metrics = measure(mix, stems.tracks, "v001", base, [
+    { code: "click", severity: "info", message: "Posible click en el borde del chop c1 (compás 5)", track: "sample", at_s: r1(newMeta.duration_s / 2) },
+  ]);
+  writeVersion(dir, newMeta, stems, mix, metrics);
+  return newMeta;
+}
+
 const RECIPES = {
   v002: {
-    request: "más filtrado en la intro, el bajo más gordo",
+    parent: "v001",
+    minutes: 9,
+    request: "Más filtrado en la intro, el bajo más gordo y el sample medio tono más arriba",
     summary:
-      "Cerré el low-pass del sample a 1400 Hz y le di +3.5 dB al bajo. El bombo quedó igual.",
+      "Filtro low-pass automatizado en el sample (compases 1-4, de 600 Hz a abierto), bajo +3.5 dB con un poco de saturación y el chop c1 un semitono más arriba.",
     diff: [
-      { path: "tracks.sample.fx.lp.cutoff_hz", from: 18000, to: 1400 },
+      { path: "automation[0].points", from: [[1, 800], [5, 18000]], to: [[1, 600], [5, 18000]] },
       { path: "tracks.bass.gain_db", from: 0, to: 3.5 },
+      { path: "tracks.bass.fx[0]", from: null, to: { type: "saturation", drive_db: 4 } },
+      { path: "chops.c1.warp.pitch_semitones", from: 1, to: 2 },
     ],
-    mixFx: (w) => gain(lowpass(clone(w), 1400), -0.5),
-    stemFx: {
-      sample: (w) => lowpass(w, 1200),
-      bass: (w) => gain(w, 3.5),
+    apply(st, spb) {
+      sweepLowpass(st.tracks.sample, 600, 16000, 0, 4 * spb * 4);
+      saturate(gain(st.tracks.bass, 3.5), 1.6);
     },
-    metrics: (m) => ({
-      ...m,
-      loudness: { ...m.loudness, integrated_lufs: -13.1, true_peak_dbtp: -1.8 },
-      spectral: {
-        ...m.spectral,
-        mix: { low_db: -16.9, mid_db: -21.8, high_db: -38.5 },
-        tracks: {
-          ...m.spectral.tracks,
-          sample: { low_db: -26.0, mid_db: -23.1, high_db: -44.0 },
-          bass: { low_db: -16.5, mid_db: -31.5, high_db: -50.0 },
-        },
-      },
-      low_end_masking: {
-        ...m.low_end_masking,
-        energy_db: { drums: -19.0, bass: -16.5, sample: -30.0 },
-        dominant_track: "bass",
-      },
-      alarms: [
-        {
-          code: "low_end_masking",
-          severity: "warn",
-          message: "El bajo y el bombo se pisan fuerte en 40-150 Hz",
-          track: "bass",
-          at_s: 0.5,
-        },
-      ],
-    }),
+    targetDb: -11.8,
+    alarms: [
+      { code: "low_end_masking", severity: "warn", message: "El bajo domina 40-150 Hz y tapa el cuerpo del sample", track: "bass", at_s: 2.0 },
+      { code: "alignment", severity: "info", message: "Transientes del sample hasta 4 ms corridos de la grilla", track: "sample", at_s: 8.0 },
+    ],
   },
   v003: {
-    request: "recuperá brillo y que pegue más",
-    summary:
-      "Abrí el filtro de vuelta, saturación leve en el master (+0.8 dB percibido) y batería +1 dB.",
+    parent: "v002",
+    minutes: 17,
+    request: "Recuperá brillo y que la batería pegue más",
+    summary: "Abrí el filtro del sample del todo, +1.5 dB a la batería y más empuje en el master (saturación suave).",
     diff: [
-      { path: "tracks.sample.fx.lp.cutoff_hz", from: 1400, to: 16000 },
-      { path: "tracks.drums.gain_db", from: 0, to: 1 },
-      { path: "master.fx[1]", from: null, to: { type: "saturation", drive_db: 6 } },
-      { path: "master.gain_db", from: 0, to: 0.8 },
+      { path: "automation[0]", from: { target: "tracks.sample.fx.lp.cutoff_hz" }, to: null },
+      { path: "tracks.drums.gain_db", from: 0, to: 1.5 },
+      { path: "master.fx[2]", from: null, to: { type: "saturation", drive_db: 6 } },
+      { path: "master.target_lufs", from: -10, to: -9 },
     ],
-    mixFx: (w) => gain(saturate(clone(w), 1.4), 0.8),
-    stemFx: {
-      drums: (w) => gain(w, 1),
-      sample: (w) => gain(w, 0.5),
+    apply(st) {
+      gain(st.tracks.drums, 1.5);
+      for (const k of Object.keys(st.lanes)) if (k.startsWith("drums.")) gain(st.lanes[k], 1.5);
     },
-    metrics: (m) => ({
-      ...m,
-      loudness: { ...m.loudness, integrated_lufs: -10.9, true_peak_dbtp: -0.9 },
-      spectral: {
-        ...m.spectral,
-        mix: { low_db: -17.8, mid_db: -20.4, high_db: -29.0 },
-      },
-      clicks: {
-        count: 1,
-        events: [{ track: "sample", at_s: 1.0, severity: 0.3 }],
-      },
-      alarms: [
-        {
-          code: "click",
-          severity: "info",
-          message: "Posible click en el borde de un chop",
-          track: "sample",
-          at_s: 1.0,
-        },
-        {
-          code: "true_peak",
-          severity: "warn",
-          message: "True peak muy cerca de 0 dBTP (−0.9)",
-          track: null,
-          at_s: null,
-        },
-      ],
-    }),
+    targetDb: -9.6,
+    drive: 1.9,
+    alarms: [{ code: "click", severity: "info", message: "Posible click en el borde del chop c1", track: "sample", at_s: 6.0 }],
   },
-  // Recipe used for simulated `render` tool calls (v004+), cycled by index.
-  next: (n) => ({
-    request: "iteración pedida por chat",
-    summary: `Ajuste fino ${n}: balance de batería y brillo general.`,
+  v004: {
+    parent: "v002",
+    minutes: 26,
+    request: "Volvé a la v002 pero con el sample más atrás y sin el semitono extra",
+    summary: "Partí de la v002: sample −3 dB y un high-pass a 220 Hz para dejarle lugar al bombo; el chop vuelve a +1 semitono.",
     diff: [
-      { path: "tracks.drums.gain_db", from: 1, to: 0.5 + (n % 3) * 0.5 },
-      { path: "master.gain_db", from: 0.8, to: 0.4 },
+      { path: "chops.c1.warp.pitch_semitones", from: 2, to: 1 },
+      { path: "tracks.sample.gain_db", from: -2, to: -5 },
+      { path: "tracks.sample.fx.hp.cutoff_hz", from: 150, to: 220 },
     ],
-    mixFx: (w) => gain(saturate(clone(w), 1.2), 0.4),
-    stemFx: { drums: (w) => gain(w, 0.5 + (n % 3) * 0.5) },
-    metrics: (m) => ({
-      ...m,
-      loudness: { ...m.loudness, integrated_lufs: -11.6, true_peak_dbtp: -1.1 },
-      alarms: [],
-    }),
-  }),
+    apply(st) {
+      highpass(gain(st.tracks.sample, -3), 220);
+    },
+    targetDb: -12.6,
+  },
 };
 
-/**
- * Render a derived version inside projectDir.
- * @returns {object} the meta object written
- */
-export function renderVersion(projectDir, version, parent, recipe) {
-  const srcMeta = readMeta(projectDir, parent);
-  const dir = path.join(projectDir, "renders", version);
-  fs.mkdirSync(path.join(dir, "stems"), { recursive: true });
-
-  const stemFx = recipe.stemFx ?? {};
-  // Stems: copy parent stems, applying per-track fx.
-  for (const track of srcMeta.tracks) {
-    const rel = track.stem.replace(`renders/${parent}/`, `renders/${version}/`);
-    const wav = readWav(projectDir, track.stem);
-    if (stemFx[track.id]) stemFx[track.id](wav);
-    writeWav(projectDir, rel, wav, "float32");
-    for (const lane of track.lanes ?? []) {
-      const lrel = lane.stem.replace(`renders/${parent}/`, `renders/${version}/`);
-      const lwav = readWav(projectDir, lane.stem);
-      const laneFx = stemFx[`${track.id}.${lane.id}`];
-      if (laneFx) laneFx(lwav);
-      writeWav(projectDir, lrel, lwav, "float32");
-    }
-  }
-
-  // Mix: either explicit mixFx on the parent mix, or the sum of the new stems.
-  const mixRel = `renders/${version}/mix.wav`;
-  if (recipe.mixFx) {
-    writeWav(projectDir, mixRel, recipe.mixFx(readWav(projectDir, srcMeta.mix)), "pcm24");
-  } else {
-    const first = readWav(projectDir, `renders/${version}/stems/${srcMeta.tracks[0].id}.wav`);
-    const mix = clone(first);
-    for (const ch of mix.data) ch.fill(0);
-    for (const t of srcMeta.tracks) {
-      sumInto(mix, readWav(projectDir, `renders/${version}/stems/${t.id}.wav`));
-    }
-    writeWav(projectDir, mixRel, mix, "pcm24");
-  }
-
-  // created_at: at least a few minutes after the parent so the history
-  // timeline stays ordered (fixture timestamps are fictional).
-  const parentTs = Date.parse(srcMeta.created_at ?? "") || 0;
-  const created = new Date(Math.max(Date.now(), parentTs + 8 * 60_000));
+function deriveVersion(dir, version, recipe, rootCreated) {
+  const parentMeta = readJson(dir, `renders/${recipe.parent}/meta.json`);
+  const stems = loadStems(dir, parentMeta);
+  const spb = 60 / parentMeta.bpm;
+  recipe.apply(stems, spb);
+  const first = Object.values(stems.tracks)[0];
+  const sum = clone(first);
+  for (const ch of sum.data) ch.fill(0);
+  for (const w of Object.values(stems.tracks)) sumInto(sum, w);
+  const mix = master(sum, { targetDb: recipe.targetDb, drive: recipe.drive });
   const meta = {
-    ...srcMeta,
-    version,
-    parent,
-    created_at: created.toISOString(),
+    ...retarget(parentMeta, version),
+    parent: recipe.parent,
+    git_commit: (version.repeat(10) + "0".repeat(40)).replace(/[^0-9a-f]/g, "0").slice(0, 40),
+    created_at: new Date(rootCreated + recipe.minutes * 60_000).toISOString(),
     request: recipe.request,
-    agent: "mock-agent",
+    agent: "claude-code",
     summary: recipe.summary,
-    diff: recipe.diff ?? [],
-    mix: mixRel,
-    tracks: srcMeta.tracks.map((t) => ({
-      ...t,
-      stem: t.stem.replace(`renders/${parent}/`, `renders/${version}/`),
-      lanes: (t.lanes ?? []).map((l) => ({
-        ...l,
-        stem: l.stem.replace(`renders/${parent}/`, `renders/${version}/`),
-      })),
-    })),
+    diff: recipe.diff,
+    render_time_s: 4.1 + Math.random() * 2,
   };
-  fs.writeFileSync(path.join(dir, "meta.json"), JSON.stringify(meta, null, 2));
-  fs.copyFileSync(
-    path.join(projectDir, "renders", parent, "song.yaml"),
-    path.join(dir, "song.yaml"),
-  );
-
-  const parentMetrics = JSON.parse(
-    fs.readFileSync(path.join(projectDir, "renders", parent, "metrics.json"), "utf8"),
-  );
-  const metrics = { ...(recipe.metrics ? recipe.metrics(parentMetrics) : parentMetrics), version };
-  fs.writeFileSync(path.join(dir, "metrics.json"), JSON.stringify(metrics, null, 2));
-
-  // peaks.json — NOT in the contract; the mock serves it to exercise the
-  // optional endpoint (UI falls back to local decode without it).
-  const mixWav = readWav(projectDir, mixRel);
-  fs.writeFileSync(
-    path.join(dir, "peaks.json"),
-    JSON.stringify({ version, peaks: peaks(mixWav, 900) }),
-  );
+  const base = readJson(dir, `renders/${recipe.parent}/metrics.json`);
+  writeVersion(dir, meta, stems, mix, measure(mix, stems.tracks, version, base, recipe.alarms ?? []));
+  fs.copyFileSync(path.join(dir, "renders", recipe.parent, "song.yaml"), path.join(dir, "renders", version, "song.yaml"));
   return meta;
 }
 
-/** Create v002, v003 (+peaks for v001) in a freshly copied fixture project. */
-export function seedVersions(projectDir) {
-  const v1meta = readMeta(projectDir, "v001");
-  const mix = readWav(projectDir, v1meta.mix);
-  fs.writeFileSync(
-    path.join(projectDir, "renders/v001/peaks.json"),
-    JSON.stringify({ version: "v001", peaks: peaks(mix, 900) }),
-  );
-  const v2 = renderVersion(projectDir, "v002", "v001", RECIPES.v002);
-  renderVersion(projectDir, "v003", "v002", RECIPES.v003);
-  return { v1meta, v2 };
+/**
+ * Seed the copied project: extend v001, derive v002..v004. Timestamps are
+ * anchored `hoursAgo` before now so "hace X min" reads naturally.
+ */
+export function seedVersions(dir, { hoursAgo = 1 } = {}) {
+  extendV001(dir);
+  const root = Date.now() - hoursAgo * 3600_000;
+  const m1 = readJson(dir, "renders/v001/meta.json");
+  m1.created_at = new Date(root).toISOString();
+  writeJson(dir, "renders/v001/meta.json", m1);
+  for (const v of ["v002", "v003", "v004"]) deriveVersion(dir, v, RECIPES[v], root);
+  return { root, durationS: m1.duration_s };
 }
 
-/** Recipe + render for a simulated new version vNNN (used by the render job). */
-export function renderNext(projectDir) {
-  const renders = fs
-    .readdirSync(path.join(projectDir, "renders"))
-    .filter((d) => /^v\d+$/.test(d))
+/** Simulated agent render (the `render` job): a new version off the latest. */
+export function renderNext(dir) {
+  const ids = fs
+    .readdirSync(path.join(dir, "renders"))
+    .filter((d) => /^v\d{3,}$/.test(d))
     .sort();
-  const parent = renders[renders.length - 1];
-  const n = renders.length + 1;
+  const parent = ids[ids.length - 1];
+  const n = Number(parent.slice(1)) + 1;
   const version = `v${String(n).padStart(3, "0")}`;
-  return renderVersion(projectDir, version, parent, RECIPES.next(n));
+  const k = n % 3;
+  const recipe = {
+    parent,
+    minutes: 0,
+    request: ["Que respire más con el bombo", "Más brillo arriba", "El bajo un toque más adelante"][k],
+    summary: [
+      "Sidechain del sample más profundo (0.6 → 0.75) y release más corto.",
+      "Shelf de agudos +2 dB en el sample y hats +1 dB.",
+      "Bajo +1.5 dB y un poco más de saturación.",
+    ][k],
+    diff: [
+      [{ path: "tracks.sample.fx.sc.depth", from: 0.6, to: 0.75 }],
+      [{ path: "tracks.drums.pattern.lanes.ohat.gain_db", from: 0, to: 1 }],
+      [{ path: "tracks.bass.gain_db", from: 3.5, to: 5 }],
+    ][k],
+    apply(st) {
+      if (k === 0) gain(st.tracks.sample, -1);
+      if (k === 1) gain(st.tracks.drums, 0.8);
+      if (k === 2) saturate(gain(st.tracks.bass, 1.5), 1.3);
+    },
+    targetDb: -11 + k * 0.4,
+  };
+  const meta = deriveVersion(dir, version, recipe, Date.now());
+  return meta;
 }
