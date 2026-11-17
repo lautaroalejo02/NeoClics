@@ -37,7 +37,9 @@ def build(root: Path) -> Path:
     shutil.copytree(FIXTURES / "library", library)
     kit = {lane: f"kits/disco-01/{lane}.wav" for lane in ("kick", "clap", "ohat")}
     (library / "starter-kits.json").write_text(
-        json.dumps({"schema_version": 0, "kits": {"disco-01": {"description": "e2e", "lanes": kit}}}),
+        json.dumps(
+            {"schema_version": 0, "kits": {"disco-01": {"description": "e2e", "lanes": kit}}}
+        ),
         encoding="utf-8",
     )
     record = fakes.synth_record(root / "inbox" / "record.wav")
@@ -54,12 +56,19 @@ def build(root: Path) -> Path:
     call("source.analyze", project=str(project), source_id=src["source_id"])
     song = (project / "song.yaml").read_text("utf-8").replace("bpm: 120.0", "bpm: 125")
     (project / "song.yaml").write_bytes(song.encode("utf-8"))
-    found = call("source.find_chops", project=str(project), source_id=src["source_id"], length_beats=8)
+    found = call(
+        "source.find_chops", project=str(project), source_id=src["source_id"], length_beats=8
+    )
     pick = found["set"]["pick"]["candidate_id"]
     call("chops.choose", project=str(project), candidate_id=pick, chop_id="c1", mode="auto")
     chosen = next(c for c in found["set"]["candidates"] if c["id"] == pick)
-    chop = {"source": src["source_id"], "file": src["file"], "stem": chosen["stem"],
-            "start_downbeat": chosen["start_downbeat"], "length_beats": chosen["length_beats"]}
+    chop = {
+        "source": src["source_id"],
+        "file": src["file"],
+        "stem": chosen["stem"],
+        "start_downbeat": chosen["start_downbeat"],
+        "length_beats": chosen["length_beats"],
+    }
     bass = fakes.tiny_sfz(root, "bass", 65.4)
     kits = call("library.kits", project=str(project), name="disco-01")
     sound = Sound(bass="", bass_v2="", kit={x["lane"]: x["uri"] for x in kits["kits"][0]["lanes"]})
