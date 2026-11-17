@@ -17,7 +17,7 @@ CURATED = {
     "synth-bass": ("surge-xt", "Basses/Attacky", "Punchy factory synth bass."),
     "rhodes": ("sfz", "jrhodes/muestra-rhodes.sfz", "Recorded 1977 Rhodes, five velocity layers."),
     "brass-stab": ("surge-xt", "Polysynths/Fonk", "Factory funk polysynth for chord stabs."),
-    "pad": ("surge-xt", "Pads/Soft", "Factory sustained pad."),
+    "pad": ("surge-xt", "Pads/MKS-70 Warm Pad", "Factory Roland-style warm pad."),
 }
 
 

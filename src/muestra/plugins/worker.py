@@ -34,15 +34,16 @@ def set_parameters(plugin, params):
 
 
 def main():
-    from pedalboard import load_plugin
+    from .lazy import load_plugin
 
     plugin = None
     for line in sys.stdin:
         try:
             command = json.loads(line)
             op = command["op"]
-            if op == "load":
-                plugin = load_plugin(command["path"])
+            if op in {"load", "preset"}:
+                if op == "load":
+                    plugin = load_plugin(command["path"])
                 if command["preset"]:
                     try:
                         load_preset(
@@ -55,6 +56,7 @@ def main():
                             path="preset",
                             hint="Choose a compatible .vstpreset or Surge XT .fxp file.",
                         ) from e
+                plugin.refresh_parameters()
                 set_parameters(plugin, command["params"])
                 response = dict(
                     name=plugin.name,

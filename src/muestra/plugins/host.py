@@ -15,6 +15,10 @@ import numpy as np
 from ..errors import Issue, MuestraError
 
 
+def worker_command():
+    return [sys.executable, "-u", "-m", "muestra.plugins.worker"]
+
+
 class PluginHost:
     def __init__(
         self,
@@ -31,7 +35,7 @@ class PluginHost:
         self.root = Path(self.directory.name)
         self.messages = queue.Queue()
         self.process = subprocess.Popen(
-            [sys.executable, "-u", "-m", "muestra.plugins.worker"],
+            worker_command(),
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,

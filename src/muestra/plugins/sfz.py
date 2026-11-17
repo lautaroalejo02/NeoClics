@@ -15,7 +15,7 @@ import soundfile as sf
 from scipy.signal import resample_poly
 
 from ..errors import MuestraError
-from ..music import parse_note
+from ..music import parse_note_name
 
 SUPPORTED = {
     "sample",
@@ -64,7 +64,7 @@ def key(value):
     try:
         return int(value)
     except ValueError:
-        return parse_note(value)
+        return parse_note_name(value)
 
 
 def parse_sfz(path: Path) -> list[dict]:
