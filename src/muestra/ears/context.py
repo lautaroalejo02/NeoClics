@@ -30,7 +30,7 @@ from ..project.core import Project
 from ..project.validate import chop_times, load_analysis
 from ..schemas.analysis import Analysis
 from ..schemas.render_meta import RenderMeta, RenderTrackMeta, StemLaneRef
-from ..schemas.song import BEATS_PER_BAR, Song, Track, parse_steps
+from ..schemas.song import BEATS_PER_BAR, Song, Track, clip_passes, pattern_hits
 from . import dsp
 from .config import EarsConfig, load_config
 
@@ -105,26 +105,19 @@ class Timeline:
         track = self.tracks.get(track_id)
         if track is None or track.pattern is None or track.mute:
             return {}
-        pat = track.pattern
-        step_beats = BEATS_PER_BAR / pat.steps_per_bar
-        swing = pat.swing * step_beats / 3.0
-        until = track.until_bar or self.song.meta.length_bars + 1
-        parsed = {name: parse_steps(lane.steps) for name, lane in pat.lanes.items()}
-        out: dict[str, list[Event]] = {name: [] for name in pat.lanes}
-        for bar in range(max(track.at_bar, self.start_bar), min(until, self.end_bar)):
-            tile = (bar - track.at_bar) % pat.bars
-            base = tile * pat.steps_per_bar
-            for name, steps in parsed.items():
-                for s in range(pat.steps_per_bar):
-                    vel = steps[base + s]
-                    if vel is None:
-                        continue
-                    beat0 = (bar - 1) * BEATS_PER_BAR + s * step_beats
-                    if s % 2 == 1:
-                        beat0 += swing
-                    t = self.to_s(beat0)
-                    if self._in_render(t):
-                        out[name].append(Event(t=t, velocity=float(vel), lane=name))
+        # WP16: tiles, per-bar overrides, free hits and swing come from the one
+        # shared expansion the renderer uses.
+        out: dict[str, list[Event]] = {name: [] for name in track.pattern.lanes}
+        lo_b = (max(track.at_bar, self.start_bar) - 1) * BEATS_PER_BAR
+        hi_b = (
+            min(track.until_bar or self.song.meta.length_bars + 1, self.end_bar) - 1
+        ) * BEATS_PER_BAR
+        for hit in pattern_hits(self.song, track):
+            if not lo_b - 1e-9 <= hit.beat0 < hi_b - 1e-9:
+                continue
+            t = self.to_s(hit.beat0)
+            if self._in_render(t):
+                out[hit.lane].append(Event(t=t, velocity=float(hit.velocity), lane=hit.lane))
         return out
 
     def notes(self, track_id: str) -> list[Event]:
@@ -160,24 +153,16 @@ class Timeline:
         track = self.tracks.get(track_id)
         if track is None or track.clips is None or track.mute:
             return []
-        chops = {c.id: c for c in self.song.chops}
         w_lo, w_hi = self.window_s(track)
         out: list[ClipInstance] = []
-        for ci, clip in enumerate(track.clips):
-            if clip.chop is not None:
-                chop = chops.get(clip.chop)
-                length = chop.length_beats if chop else 0.0
-            else:
-                length = clip.length_beats or 0.0
-            if length <= 0:
+        for ps in clip_passes(self.song, track):  # WP16: trims, muted passes
+            if ps.mute:
                 continue
-            start0 = (clip.at_bar - 1) * BEATS_PER_BAR + clip.offset_beats
-            for r in range(clip.repeat):
-                s = self.to_s(start0 + r * length)
-                e = s + length * self.spb
-                if e <= w_lo + 1e-9 or s >= w_hi - 1e-9:
-                    continue
-                out.append(ClipInstance(track.id, ci, r, clip.chop, s, e))
+            s = self.to_s(ps.start0)
+            e = s + ps.length * self.spb
+            if e <= w_lo + 1e-9 or s >= w_hi - 1e-9:
+                continue
+            out.append(ClipInstance(track.id, ps.clip_index, ps.instance - 1, ps.chop, s, e))
         return sorted(out, key=lambda c: (c.start_s, c.clip_index))
 
     def triggers(self, key_track: str, key_lane: str | None) -> list[float]:
