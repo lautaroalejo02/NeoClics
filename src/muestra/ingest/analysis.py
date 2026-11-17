@@ -13,6 +13,7 @@ from ..errors import MuestraError
 from ..project import Project, load_analysis
 from ..schemas.analysis import Analysis, KeyEstimate, Section, Stems
 from .audio import decode
+from .pulse import QUALITY_VERSION, PulseEvidence, pulse_evidence
 from .separation import Progress, report
 from .storage import digest, project_lock, read_json, source_file, write_json
 
@@ -201,7 +202,11 @@ def _song_chops_on(project: Project, source_id: str) -> bool:
 
 
 def _grid_on_cache_hit(
-    project: Project, source_id: str, analysis: Analysis, tempo_range: tuple[float, float] | None
+    project: Project,
+    source_id: str,
+    analysis: Analysis,
+    tempo_range: tuple[float, float] | None,
+    pulse: PulseEvidence | None = None,
 ) -> Analysis:
     """Keep manual corrections; upgrade pre-WP12 analyses without moving song chops."""
     from . import grid as g
@@ -209,17 +214,20 @@ def _grid_on_cache_hit(
     current = analysis.grid
     if len(analysis.beats_s) < 2 or not analysis.downbeats_s or analysis.bpm_global is None:
         return analysis
+    strength = pulse.at(g.raw_of(analysis).beats_s) if pulse is not None else None
     if current is None:
         # Written before WP12: the effective grid IS the tracker grid. Apply the
         # automatic octave only when no song chop depends on this grid.
         apply = not _song_chops_on(project, source_id)
-        return g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE, apply=apply)
+        return g.auto_correct(
+            analysis, tempo_range or g.DEFAULT_TEMPO_RANGE, apply=apply, beat_strength=strength
+        )
     if (
         current.origin == "auto"
         and tempo_range is not None
         and tuple(tempo_range) != tuple(current.tempo_range_bpm)
     ):
-        return g.auto_correct(analysis, tempo_range)
+        return g.auto_correct(analysis, tempo_range, beat_strength=strength)
     return analysis
 
 
@@ -255,18 +263,39 @@ def analyze(
     with project_lock(project):
         separated = active_stems(project, source_id, content_hash)
         if cache.exists() and meta.exists() and read_json(meta).get("identity") == identity:
+            metadata = read_json(meta)
             analysis = load_analysis(project, source_id)
             analysis.stems = Stems(**separated["stems"]) if separated else None
             analysis.separation_model = separated.get("model")
-            analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range)
+            if "pulse" in metadata and metadata.get("quality_version") == QUALITY_VERSION:
+                pulse = PulseEvidence.from_dict(metadata["pulse"])
+            else:
+                audio, sr = decode(path)
+                pulse = pulse_evidence(audio, sr)
+                metadata["pulse"] = pulse.to_dict()
+            analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range, pulse)
+            if (
+                metadata.get("quality_version") != QUALITY_VERSION
+                and analysis.grid is not None
+                and analysis.grid.origin == "auto"
+                and not _song_chops_on(project, source_id)
+            ):
+                analysis = g.auto_correct(
+                    analysis,
+                    tempo_range or tuple(analysis.grid.tempo_range_bpm),
+                    beat_strength=pulse.at(analysis.grid.raw.beats_s),
+                )
+            metadata["quality_version"] = QUALITY_VERSION
             from .reliability import assess_reliability
 
-            analysis.reliability = assess_reliability(analysis)
+            analysis.reliability = assess_reliability(analysis, pulse)
             write_json(cache, analysis.model_dump(mode="json"))
+            write_json(meta, metadata)
             report(progress, 1, "Analysis ready (cache)")
             return analysis
         report(progress, 0.05, "Decoding source")
         audio, sr = decode(path)
+        pulse = pulse_evidence(audio, sr)
         duration = len(audio) / sr
         if np.max(abs(audio)) < 1e-7:
             raise MuestraError.one("grid_mismatch", "Silent audio has no reliable beat grid.")
@@ -293,7 +322,15 @@ def analyze(
 
             analysis.reliability = assess_reliability(analysis)
             write_json(cache, analysis.model_dump(mode="json"))
-            write_json(meta, {"identity": identity, "method": ANALYSIS_METHOD})
+            write_json(
+                meta,
+                {
+                    "identity": identity,
+                    "method": ANALYSIS_METHOD,
+                    "quality_version": QUALITY_VERSION,
+                    "pulse": pulse.to_dict(),
+                },
+            )
             report(progress, 1, "Audio analyzed; no reliable grid detected")
             return analysis
         consistency = meter_consistency(beats, downbeats)
@@ -323,10 +360,12 @@ def analyze(
         )
         # Tempo octave inside the plausible range (the tracker often counts eighths
         # on old records); sections are snapped to the CORRECTED downbeats.
-        analysis = g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE)
+        analysis = g.auto_correct(
+            analysis, tempo_range or g.DEFAULT_TEMPO_RANGE, beat_strength=pulse.at(beats)
+        )
         from .reliability import assess_reliability
 
-        analysis.reliability = assess_reliability(analysis)
+        analysis.reliability = assess_reliability(analysis, pulse)
         analysis.sections = detect_sections(
             times, spectrum, chroma, np.asarray(analysis.downbeats_s), duration
         )
@@ -338,6 +377,8 @@ def analyze(
                 "method": ANALYSIS_METHOD,
                 "tempo_interval_spread": float(spread),
                 "four_beat_bar_consistency": consistency,
+                "quality_version": QUALITY_VERSION,
+                "pulse": pulse.to_dict(),
             },
         )
         report(progress, 1, "Analysis ready; audition downbeats on old or noisy records")

@@ -1,0 +1,517 @@
+"""Opt-in real source.analyze evaluation; see docs/ingest-evaluation.md.
+
+uv run --with mir-eval python -m muestra.ingest.evaluation AUDIO_OR_MANIFEST --report report.md
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import time
+from pathlib import Path
+
+import numpy as np
+
+from .storage import write_json
+
+
+def match_events(reference, estimated, tolerance=0.07) -> list[tuple[int, int]]:
+    reference, estimated = np.asarray(reference), np.asarray(estimated)
+    matches = []
+    ref_index = est_index = 0
+    while ref_index < len(reference) and est_index < len(estimated):
+        delta = estimated[est_index] - reference[ref_index]
+        if abs(delta) <= tolerance:
+            matches.append((ref_index, est_index))
+            ref_index += 1
+            est_index += 1
+        elif delta < 0:
+            est_index += 1
+        else:
+            ref_index += 1
+    return matches
+
+
+def event_metrics(reference, estimated) -> dict:
+    from mir_eval.beat import continuity
+
+    reference = np.asarray(reference, dtype=float)
+    estimated = np.asarray(estimated, dtype=float)
+    matches = match_events(reference, estimated)
+    cmlc, cmlt, amlc, amlt = continuity(reference, estimated)
+    return {
+        "f70": 2 * len(matches) / max(1, len(reference) + len(estimated)),
+        "precision70": len(matches) / len(estimated) if len(estimated) else 0.0,
+        "recall70": len(matches) / len(reference) if len(reference) else 0.0,
+        "cmlc": float(cmlc),
+        "cmlt": float(cmlt),
+        "amlc": float(amlc),
+        "amlt": float(amlt),
+    }
+
+
+def tempo_metrics(reference_bpm, estimated_bpm) -> dict:
+    if reference_bpm is None or not np.isfinite(reference_bpm) or reference_bpm <= 0:
+        return {"absolute_pct": None, "octave": "missing-reference", "strict_correct": None}
+    if estimated_bpm is None:
+        return {"absolute_pct": None, "octave": "missing", "strict_correct": False}
+    ratio = estimated_bpm / reference_bpm
+    candidates = {"correct": 1.0, "half": 0.5, "double": 2.0, "3:2": 1.5, "2:3": 2 / 3}
+    label, factor = min(candidates.items(), key=lambda item: abs(np.log2(ratio / item[1])))
+    return {
+        "reference_bpm": reference_bpm,
+        "estimated_bpm": estimated_bpm,
+        "absolute_pct": 100 * abs(ratio - 1),
+        "octave": label if abs(ratio / factor - 1) <= 0.04 else "other",
+        "strict_correct": bool(abs(ratio - 1) <= 0.04),
+    }
+
+
+def reliability_metrics(analysis, reference_beats, reference_downbeats) -> dict:
+    duration = analysis.duration_s
+    marked = correct = false = actual = 0.0
+    beats = np.asarray(analysis.beats_s)
+    ref_beats = np.asarray(reference_beats)
+    ref_downs = np.asarray(reference_downbeats)
+    downs = np.asarray(analysis.downbeats_s)
+    bars = analysis.reliability.bars if analysis.reliability else []
+    for bar in bars:
+        length = bar.end_s - bar.start_s
+        estimated = beats[(beats >= bar.start_s - 1e-6) & (beats <= bar.end_s + 1e-6)]
+        truth = ref_beats[(ref_beats >= bar.start_s - 0.07) & (ref_beats <= bar.end_s + 0.07)]
+        beat_ok = len(match_events(truth, estimated)) == len(truth) == len(estimated)
+        phase_ok = all(np.any(abs(ref_downs - bound) <= 0.07) for bound in (bar.start_s, bar.end_s))
+        accurate = beat_ok and phase_ok
+        actual += length * accurate
+        if bar.reliable:
+            marked += length
+            correct += length * accurate
+            false += length * (not accurate)
+    beat_ok = event_metrics(reference_beats, beats)["f70"] >= 0.9
+    phase_f = event_metrics(reference_downbeats, downs)["f70"]
+    return {
+        "reliable_duration_s": marked,
+        "false_reliable_duration_s": false,
+        "reliable_fraction": marked / duration,
+        "actually_correct_fraction": actual / duration,
+        "false_reliable_track_fraction": false / duration,
+        "false_reliable_given_reliable": false / marked if marked else None,
+        "reliable_precision": correct / marked if marked else None,
+        "beats_right_bar_phase_wrong": bool(beat_ok and phase_f < 0.5),
+    }
+
+
+def key_error(reference, estimate) -> str:
+    if estimate is None:
+        return "missing"
+    names = {
+        name: index
+        for index, name in enumerate(
+            ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+        )
+    }
+    names.update({"Db": 1, "D#": 3, "Gb": 6, "G#": 8, "A#": 10})
+    offset = (names[estimate["tonic"]] - names[reference["tonic"]]) % 12
+    same_mode = estimate["mode"] == reference["mode"]
+    if offset == 0:
+        return "correct" if same_mode else "parallel"
+    if not same_mode and offset == (9 if reference["mode"] == "major" else 3):
+        return "relative"
+    return "fifth" if same_mode and offset in {5, 7} else "other"
+
+
+def key_alternative(chroma) -> dict | None:
+    if not np.any(chroma > 1e-8):
+        return None
+    normalized = chroma / np.maximum(np.linalg.norm(chroma, axis=0), 1e-12)
+    votes = []
+    names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+    for mode, scale in (("major", [0, 2, 4, 5, 7, 9, 11]), ("minor", [0, 2, 3, 5, 7, 8, 10])):
+        template = np.zeros(12)
+        template[scale] = 1
+        template[[0, 7]] = [3, 2]
+        template /= np.linalg.norm(template)
+        for tonic in range(12):
+            scores = np.roll(template, tonic) @ normalized
+            votes.append((float(np.mean(scores)), tonic, mode))
+    votes.sort(reverse=True)
+    best, tonic, mode = votes[0]
+    return {
+        "tonic": names[tonic],
+        "mode": mode,
+        "confidence": float(np.clip((best - votes[1][0]) / 0.2, 0, 1)),
+        "method": "frame-normalized weighted diatonic scale cosine (not calibrated)",
+    }
+
+
+def load_tracks(path: Path) -> tuple[Path, list[dict]]:
+    if path.suffix.lower() == ".json":
+        return path.parent, json.loads(path.read_text(encoding="utf-8"))["tracks"]
+    files = (
+        [path]
+        if path.is_file()
+        else sorted(
+            candidate
+            for candidate in path.iterdir()
+            if candidate.suffix.lower() in {".wav", ".flac", ".mp3", ".m4a", ".aiff", ".ogg"}
+        )
+    )
+    return path.parent if path.is_file() else path, [
+        {"id": f"track-{index:03d}", "title": candidate.stem, "audio": str(candidate.resolve())}
+        for index, candidate in enumerate(files, 1)
+    ]
+
+
+def aggregate(results) -> dict:
+    annotated = [result for result in results if "beats" in result]
+    means = {}
+    for group in ("beats", "downbeats", "tempo", "reliability"):
+        keys = {key for result in annotated for key in result[group]}
+        means[group] = {
+            key: float(np.mean(values))
+            for key in sorted(keys)
+            if (
+                values := [
+                    result[group][key]
+                    for result in annotated
+                    if isinstance(result[group].get(key), (int, float))
+                    and result[group][key] is not None
+                ]
+            )
+        }
+    means["tempo_errors"] = {
+        label: sum(result["tempo"]["octave"] == label for result in annotated)
+        for label in ("correct", "half", "double", "3:2", "2:3", "other", "missing")
+    }
+    means["key_errors"] = {
+        label: sum(result.get("key_error") == label for result in results)
+        for label in ("correct", "relative", "parallel", "fifth", "other", "missing")
+    }
+    means["key_annotated"] = sum("key_error" in result for result in results)
+    for field in ("key_alternative_error", "key_harmonic_error"):
+        labelled = [result for result in results if field in result]
+        means[field + "s"] = {
+            "annotated": len(labelled),
+            **{
+                label: sum(result[field] == label for result in labelled)
+                for label in ("correct", "relative", "parallel", "fifth", "other", "missing")
+            },
+        }
+    means["key_confidence_bins"] = []
+    for lower, upper in ((0, 0.25), (0.25, 0.5), (0.5, 0.75), (0.75, 1.000001)):
+        labelled = [
+            result
+            for result in results
+            if "key_error" in result
+            and result.get("key")
+            and lower <= result["key"]["confidence"] < upper
+        ]
+        means["key_confidence_bins"].append(
+            {
+                "range": [lower, min(1, upper)],
+                "n": len(labelled),
+                "observed_exact_accuracy": float(
+                    np.mean([result["key_error"] == "correct" for result in labelled])
+                )
+                if labelled
+                else None,
+            }
+        )
+    means["tracks"] = len(results)
+    means["annotated_tracks"] = len(annotated)
+    means["failed_tracks"] = sum("error" in result for result in results)
+    means["analysis_s"] = sum(result.get("analysis_s", 0) for result in results)
+    means["analysis_cached_tracks"] = sum(
+        result.get("analysis_cache_present", False) for result in results
+    )
+    return means
+
+
+def write_report(path, results):
+    summary = aggregate(results)
+    write_json(path.with_suffix(".json"), {"aggregate": summary, "results": results})
+    rows = [
+        "# Muestra ingest evaluation",
+        "",
+        "CPU measurements, not listening judgements. Missing annotations = no accuracy claim.",
+        "F70 uses one-to-one event matching at 70 ms. CML/AML: mir_eval.beat.continuity",
+        "(17.5% phase/period thresholds; no 5-second trim). Macro means; errors retained.",
+        "Reliability correctness requires ALL beats and BOTH bar boundaries within 70 ms.",
+        "False reliable is reported both per whole track and conditional on reliable time.",
+        "",
+        "## Aggregate",
+        "",
+        "```json",
+        json.dumps(summary, indent=2),
+        "```",
+        "",
+        "| Track | BPM (ref) | Beat F70 | Down F70 | Reliable % | False-reliable % track | s |",
+        "|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for result in results:
+        rel = result.get("reliability", {})
+        marked = rel.get("reliable_fraction", result.get("reliable_time_fraction", 0))
+
+        def number(value):
+            return "n/a" if value is None else f"{value:.3f}"
+
+        rows.append(
+            f"| {result['title']} | {number(result.get('bpm'))} "
+            f"({number(result.get('tempo', {}).get('reference_bpm'))}) | "
+            f"{number(result.get('beats', {}).get('f70'))} | "
+            f"{number(result.get('downbeats', {}).get('f70'))} | "
+            f"{number(100 * marked)} | "
+            f"{number(100 * rel['false_reliable_track_fraction'] if rel else None)} | "
+            f"{number(result.get('analysis_s'))} |"
+        )
+    for result in results:
+        rows.extend(
+            [
+                "",
+                f"## {result['title']}",
+                "",
+                "```json",
+                json.dumps(
+                    {key: value for key, value in result.items() if key != "grid_snapshot"},
+                    indent=2,
+                    ensure_ascii=False,
+                ),
+                "```",
+            ]
+        )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
+
+
+def separated_input(audio_path, work, track_id, model, max_seconds):
+    import soundfile as sf
+
+    from muestra.project import create_project, open_project
+
+    from .audio import decode
+    from .tools import SourceImportParams, SourceSeparateParams, source_import, source_separate
+
+    directory = work / track_id / f"separation-{model}"
+    project = (
+        open_project(directory)
+        if (directory / "muestra.toml").exists()
+        else create_project(directory)
+    )
+    audio, sr = decode(audio_path)
+    if max_seconds is not None:
+        audio = audio[: round(max_seconds * sr)]
+    temporary = directory / "input.wav"
+    sf.write(temporary, audio, sr, subtype="PCM_16")
+    imported = source_import(SourceImportParams(project=str(directory), path=str(temporary)))
+    temporary.unlink()
+    output = source_separate(
+        SourceSeparateParams(project=str(directory), source_id=imported.source_id, model=model)
+    )
+    return project.resolve(imported.file), project.resolve(output.stems["drums"])
+
+
+def evaluate_track(
+    root: Path,
+    track: dict,
+    work: Path,
+    previews=True,
+    input_mode="mix",
+    fresh=False,
+    separation_model=None,
+    max_seconds=None,
+) -> dict:
+    from muestra.project import create_project, load_analysis, open_project
+
+    from .analysis import spectral_features
+    from .audio import decode
+    from .grid_tools import SourcePreviewGridParams, source_preview_grid
+    from .tools import SourceAnalyzeParams, SourceImportParams, source_analyze, source_import
+
+    project_root = work / track["id"] / input_mode
+    project = (
+        open_project(project_root)
+        if (project_root / "muestra.toml").exists()
+        else create_project(project_root)
+    )
+    audio_path = root / track["audio"]
+    drum_path = None
+    if separation_model is not None:
+        audio_path, drum_path = separated_input(
+            audio_path, work, track["id"], separation_model, max_seconds
+        )
+    if input_mode != "mix":
+        import soundfile as sf
+
+        drum_paths = track.get("reference_stems", {}).get("drums", [])
+        if not drum_paths and drum_path is None:
+            raise ValueError("No reference drum stems available")
+        drums, drum_sr = decode(drum_path or root / drum_paths[0])
+        if input_mode == "fusion":
+            mix, mix_sr = decode(audio_path)
+            if mix_sr != drum_sr or len(mix) != len(drums):
+                raise ValueError("Reference drum/mix sample alignment differs")
+            drums = (mix + drums) / 2
+        audio_path = project_root / f"{input_mode}.wav"
+        sf.write(audio_path, drums, drum_sr, subtype="PCM_16")
+    imported = source_import(SourceImportParams(project=str(project_root), path=str(audio_path)))
+    if input_mode != "mix":
+        audio_path.unlink()
+        audio_path = project.resolve(imported.file)
+    metadata_path = project.path(f"cache/analysis/{imported.source_id}.meta.json")
+    if fresh:
+        metadata_path.unlink(missing_ok=True)
+    cached = metadata_path.exists()
+    started = time.perf_counter()
+    output = source_analyze(
+        SourceAnalyzeParams(project=str(project_root), source_id=imported.source_id)
+    )
+    elapsed = time.perf_counter() - started
+    analysis = load_analysis(project, imported.source_id)
+    result = {
+        "id": track["id"],
+        "title": track["title"],
+        "input_mode": input_mode,
+        "rhythm_stems": (
+            None
+            if input_mode == "mix"
+            else separation_model or "published reference stems (oracle)"
+        ),
+        "input_warning": (
+            "Oracle stems may not align with the published mix: use the mix-run reference "
+            "reconstruction gate for a matched valid subset."
+            if input_mode != "mix" and separation_model is None
+            else None
+        ),
+        "reference_strength": track.get("reference_strength", "none; audition only"),
+        "audio": str(audio_path),
+        "analysis_s": elapsed,
+        "analysis_cache_present": cached,
+        "bpm": analysis.bpm_global,
+        "tempo_variable": analysis.tempo_variable,
+        "duration_s": analysis.duration_s,
+        "sections": [section.model_dump() for section in analysis.sections],
+        "key": analysis.key.model_dump() if analysis.key else None,
+        "grid": output.grid.model_dump(mode="json") if output.grid else None,
+        "reliability_map": analysis.reliability.model_dump() if analysis.reliability else None,
+        "reliable_time_fraction": sum(
+            region.end_s - region.start_s
+            for region in analysis.reliability.regions
+            if region.reliable
+        )
+        / analysis.duration_s
+        if analysis.reliability
+        else 0,
+        "analysis_path": str(project.resolve(output.analysis_path)),
+        "grid_snapshot": {
+            "beats_s": analysis.beats_s,
+            "downbeats_s": analysis.downbeats_s,
+            "raw": analysis.grid.raw.model_dump() if analysis.grid else None,
+        },
+    }
+    if track.get("beats"):
+        annotation = np.loadtxt(root / track["beats"], ndmin=2)
+        annotation = annotation[annotation[:, 0] <= analysis.duration_s]
+        reference_beats = annotation[:, 0]
+        reference_downs = annotation[annotation[:, 1] == 1, 0]
+        result["beats"] = event_metrics(reference_beats, analysis.beats_s)
+        result["downbeats"] = event_metrics(reference_downs, analysis.downbeats_s)
+        reference_bpm = (
+            60 / np.median(np.diff(reference_beats)) if len(reference_beats) >= 2 else None
+        )
+        result["tempo"] = tempo_metrics(reference_bpm, analysis.bpm_global)
+        result["reliability"] = reliability_metrics(analysis, reference_beats, reference_downs)
+    audio, sr = decode(audio_path)
+    _, _, chroma = spectral_features(audio, sr)
+    result["key_frame_normalized"] = key_alternative(chroma)
+    if input_mode == "mix" and track.get("reference_stems") and max_seconds is None:
+        from .analysis import estimate_key
+        from .separation_evaluation import reference_audio, reference_consistency
+
+        mix, ref_sr, references = reference_audio(root, track)
+        consistency = reference_consistency(mix, references)
+        result["reference_consistency"] = consistency
+        harmonic = [references[name] for name in ("other", "bass") if name in references]
+        if harmonic and consistency["usable"]:
+            _, _, harmonic_chroma = spectral_features(sum(harmonic), ref_sr)
+            estimated = estimate_key(harmonic_chroma)
+            result["key_harmonic_reference"] = estimated.model_dump() if estimated else None
+            result["key_harmonic_alternative"] = key_alternative(harmonic_chroma)
+    if track.get("key"):
+        result["key_error"] = key_error(track["key"], result["key"])
+        result["key_alternative_error"] = key_error(track["key"], result["key_frame_normalized"])
+        if "key_harmonic_reference" in result:
+            result["key_harmonic_error"] = key_error(track["key"], result["key_harmonic_reference"])
+    if previews:
+        preview = source_preview_grid(
+            SourcePreviewGridParams(
+                project=str(project_root),
+                source_id=imported.source_id,
+                window_s=(0, min(20.0, analysis.duration_s)),
+                alternatives=True,
+            )
+        )
+        result["previews"] = [str(project.resolve(item.path)) for item in preview.previews]
+        result["listen"] = preview.listen
+    return result
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("input", type=Path)
+    parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--work", type=Path)
+    parser.add_argument("--only", nargs="*")
+    parser.add_argument("--input-mode", choices=["mix", "drums", "fusion"], default="mix")
+    parser.add_argument("--no-previews", action="store_true")
+    parser.add_argument(
+        "--fresh", action="store_true", help="Re-run model analysis in audit projects"
+    )
+    parser.add_argument(
+        "--separate-model", choices=["htdemucs", "htdemucs_ft", "mel-roformer+htdemucs"]
+    )
+    parser.add_argument(
+        "--max-seconds", type=float, help="Only with --separate-model: paired short-clip cohort"
+    )
+    args = parser.parse_args()
+    if args.max_seconds is not None and (args.max_seconds <= 0 or args.separate_model is None):
+        parser.error("--max-seconds requires a positive duration and --separate-model")
+    root, tracks = load_tracks(args.input.resolve())
+    work = (args.work or args.report.parent / "evaluation-projects").resolve()
+    results = []
+    for track in tracks:
+        if args.only and track["id"] not in args.only:
+            continue
+        print(f"Analyzing {track['id']} ({args.input_mode})", flush=True)
+        try:
+            result = evaluate_track(
+                root,
+                track,
+                work,
+                not args.no_previews,
+                args.input_mode,
+                args.fresh,
+                args.separate_model,
+                args.max_seconds,
+            )
+        except Exception as exc:
+            result = {
+                "id": track["id"],
+                "title": track["title"],
+                "error": f"{type(exc).__name__}: {exc}",
+            }
+        results.append(result)
+        write_report(args.report.resolve(), results)
+        print(
+            json.dumps(
+                {
+                    key: result[key]
+                    for key in ("id", "error", "bpm", "beats", "downbeats")
+                    if key in result
+                }
+            ),
+            flush=True,
+        )
+
+
+if __name__ == "__main__":
+    main()

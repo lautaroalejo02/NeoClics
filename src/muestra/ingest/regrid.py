@@ -148,9 +148,11 @@ def regrid(
             history=history[-20:],
         )
         after = g.apply_correction(before, correction)
+        from .pulse import pulse_evidence
         from .reliability import assess_reliability
 
-        after.reliability = assess_reliability(after)
+        audio, sr = decode(project.resolve(after.file))
+        after.reliability = assess_reliability(after, pulse_evidence(audio, sr))
         outcome = RegridOutcome(analysis=after, before=before)
 
         # ---- song.yaml chops on this source: keep the same audio, report every move

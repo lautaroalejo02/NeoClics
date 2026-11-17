@@ -81,18 +81,17 @@ def stem_path(project: Project, analysis, stem: str) -> Path:
     return project.resolve(path)
 
 
-def score_loop(audio, sr, start, end, beats, stem, vocal=None, reference=None) -> CandidateScore:
-    excerpt = audio[round(start * sr) : round(end * sr)].mean(axis=1)
-    if len(excerpt) < 4:
-        return CandidateScore(value=0, reasons=["El corte es demasiado corto para evaluar."])
-    width = min(round(sr * 0.08), len(excerpt) // 4)
-    # Compare context AFTER the end to context AFTER the start: tail-vs-head waveforms
-    # alone confuse ordinary periodic motion with a discontinuity.
-    head = audio[round(start * sr) : round(start * sr) + width].mean(axis=1)
-    tail = audio[round(end * sr) : round(end * sr) + width].mean(axis=1)
-    if len(tail) != width or not width:
-        seam = 0.0
-    else:
+def loop_continuity(audio, sr, start, end) -> float:
+    first, last = round(start * sr), round(end * sr)
+    if first < 0 or last <= first or last >= len(audio):
+        return 0.0
+    similarities = []
+    for seconds in (0.08, 0.32):
+        width = min(round(sr * seconds), (last - first) // 4)
+        head = audio[first : first + width].mean(axis=1)
+        tail = audio[last : last + width].mean(axis=1)
+        if len(tail) != width or not width:
+            return 0.0
         a, b = (
             abs(np.fft.rfft(head * np.hanning(width))),
             abs(np.fft.rfft(tail * np.hanning(width))),
@@ -100,7 +99,24 @@ def score_loop(audio, sr, start, end, beats, stem, vocal=None, reference=None) -
         similarity = float(a @ b / max(np.linalg.norm(a) * np.linalg.norm(b), 1e-12))
         rms_a, rms_b = np.sqrt(np.mean(head**2)), np.sqrt(np.mean(tail**2))
         level = float(min(rms_a, rms_b) / max(rms_a, rms_b, 1e-8))
-        seam = similarity * level
+        similarities.append(similarity * level)
+    width = round(sr * 0.08)
+    context = np.r_[
+        audio[max(0, first - width) : first + width].mean(axis=1),
+        audio[max(0, last - width) : min(len(audio), last + width)].mean(axis=1),
+    ]
+    natural = float(np.percentile(abs(np.diff(context)), 95))
+    step = float(abs(audio[last - 1].mean() - audio[first].mean()))
+    ratio = step / max(natural, 1e-6)
+    safe = float(np.exp(-max(0, ratio - 1) / 4))
+    return float(np.sqrt(np.prod(similarities)) * safe)
+
+
+def score_loop(audio, sr, start, end, beats, stem, vocal=None, reference=None) -> CandidateScore:
+    excerpt = audio[round(start * sr) : round(end * sr)].mean(axis=1)
+    if len(excerpt) < 4:
+        return CandidateScore(value=0, reasons=["El corte es demasiado corto para evaluar."])
+    seam = loop_continuity(audio, sr, start, end)
     grid = np.array(beats)
     intervals = np.diff(grid[(grid >= start - 1e-6) & (grid <= end + 1e-6)])
     if len(intervals) > 2:
@@ -149,7 +165,7 @@ def score_loop(audio, sr, start, end, beats, stem, vocal=None, reference=None) -
     return CandidateScore(
         value=score,
         reasons=[
-            f"Continuidad del loop: {seam:.3f} (espectro y nivel en el punto de vuelta).",
+            f"Continuidad del loop: {seam:.3f} (espectro a 80/320 ms, nivel y salto de la junta).",
             f"Pulso estable: {stability:.3f}; irregularidad residual {jitter * 100:.2f}% "
             "descontando la deriva gradual del tempo.",
             f"Energía relativa: {energy:.3f}; ataques por segundo: {onset_rate:.2f}.",

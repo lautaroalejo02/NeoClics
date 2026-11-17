@@ -124,8 +124,10 @@ Official models and their licences:
   `https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt`.
 
 No BS-RoFormer model was benchmarked. The licensed Mel model was the
-RoFormer alternative evaluated. HTDemucs FT is selectable through the
-same backend, but its larger model bag was not downloaded or benchmarked.
+RoFormer alternative evaluated. HTDemucs FT was not benchmarked in WP1;
+WP19 subsequently measured it on licensed reference multitracks, including
+a repeated 240-second workload. See `docs/ingest-evaluation.md` for current
+SDR, bleed projections, timings and recommendations.
 
 Downloaded model disk usage (not Python/Torch packages):
 
@@ -143,6 +145,10 @@ cache from the direct Demucs installation probe remains under
 chosen backend does not use it. Model files and test audio are outside git.
 
 ## Measurements and choice of default
+
+The measurements in this section are historical WP1 runs. WP19 adds the
+23-track annotated corpus and reference separation comparisons documented
+in `docs/ingest-evaluation.md`; those newer results retain HTDemucs as default.
 
 Fresh worker process per benchmark; psutil sampled process-tree RSS at
 100 ms intervals, including model load and Python runtime. Weights are
@@ -229,9 +235,11 @@ downbeats agree on it. Sections are snapped to the corrected downbeats.
 
 Confidence is a documented heuristic, not a probability: tempo 0.85 when only
 the tracked octave fits, 0.5 when two octaves fit the range, 0.7 after an
-octave correction, 0.25 when none fits; bar phase = the tracked four-beat-bar
-consistency, but 0.5 after halving (the tracker cannot say which of its two
-half-bar downbeats is the real "one"). `ask_human` when either is < 0.6.
+octave correction, 0.25 when none fits. The bar-phase base is tracked
+four-beat-bar consistency, or 0.5 after halving (which half-bar is the one is
+ambiguous). WP19 caps automatic bar-phase confidence at 0.55: meter regularity
+does not verify the one. Manual corrections retain their existing confidence.
+`ask_human` when either confidence is < 0.6.
 `grid.alternatives` lists the other readings as ready-to-pass `source.regrid`
 parameters (half/double, "the one two beats later", the other beat phase,
 the one ±1 beat). Analyses cached before WP12 are upgraded on the next
@@ -291,6 +299,102 @@ inferred parent; time windows are the supported excerpt-selection workflow.
 Valid nonrhythmic audio produces descriptors and an unavailable grid
 (`bpm_global=null`, empty arrays, zero confidence); preview plays explicitly
 labelled audio without clicks. Silence and undecodable audio remain errors.
+
+## WP19: repeatable quality evaluation
+
+See `docs/ingest-evaluation.md` for measured results and limitations. Audio is
+never downloaded during ordinary tests. Prepare the explicitly CC-BY-NC-SA
+MDB Drums collection (noncommercial evaluation only):
+
+```powershell
+uv run python -m muestra.ingest.evaluation_data "$HOME/Documents/MuestraLibrary/_test-audio/eval/mdb-drums"
+```
+
+Evaluate the owner's own local songs, with confidence, alternative grids,
+key alternatives, reliability maps and click previews, **without annotations**:
+
+```powershell
+uv run --with mir-eval python -m muestra.ingest.evaluation "C:/path/to/your/songs" --report "$HOME/Documents/MuestraLibrary/_test-audio/eval/own-songs.md"
+```
+
+This runs the real `source.import` and `source.analyze` tools in separate audit
+projects, never modifying an existing song project. Results are persisted after
+each track as Markdown and JSON. Preview paths and listening instructions are
+included per track. The default audition is the first 20 s, including a possible
+nonrhythmic intro; full-file maps show later windows to audition with
+`source.preview_grid(window_s=[start,end])`. Re-runs reuse caches (recorded in
+the JSON); `--fresh` reruns analysis. A single local audio file also works.
+
+For annotations, pass `.../mdb-drums/manifest.json` instead of the songs folder.
+Manifest tracks have `id`, `title`, `audio`, optional `beats` (two columns:
+seconds and 1-based beat position), optional `key: {tonic, mode}`, and optional
+`reference_stems: {drums: [path], bass: [path], other: [path], vocals: [path]}`.
+Relative paths resolve beside the manifest. Missing labels remain unmeasured,
+never guessed from tracker agreement. CML/AML use the optional `mir-eval`
+package supplied by `--with`; it is not a new product dependency.
+`--input-mode drums` / `fusion` compare **reference** drums / 50:50 drum+mix
+inputs, not separated stems. Reference reconstruction validity is reported for
+the mix; badly aligned released multitracks must not support SDR claims.
+For actual estimated-stem comparisons, use `--separate-model htdemucs` in
+each mode (shared separation cache); optional `--max-seconds 20` builds a
+paired short-clip cohort and crops annotations to the same audio duration.
+Do not compare those short-clip results to a whole-file run. JSON also freezes
+raw/effective grid snapshots; mutable analysis-cache paths are not the only
+record of a newly generated report.
+
+`python -m muestra.ingest.separation_evaluation MANIFEST --report separation.md`
+measures the three supported models in isolated CPU subprocesses with bounded
+timeouts, reference SDR/SI-SDR, wrong-source projection and sampled peak RSS.
+Use `--duration 240 --only disco --timeout 1800` for a measured four-minute
+repetition (explicitly labelled, not four minutes of unique performance).
+`python -m muestra.ingest.chop_evaluation MANIFEST --report chops.md` evaluates
+8/16-beat ranking on reference grids. It reports seam/harmonic proxies and
+Spearman correlation, **not** human phrase-start or perceptual accuracy.
+Add `--analysis-report after.json` to also measure the real
+`source.find_chops` proposals against the annotations, with their current
+reliability filtering; it writes ordinary candidate previews in audit projects.
+
+### Conservative acoustic evidence
+
+Half-time beat parity can now override majority downbeat parity only with at
+least 16 tracked beats and >1.5:1 onset-strength evidence. Spectral flux in
+35-180 Hz and 180-4000 Hz is measured independently of neural meter labels.
+This does not solve tempo-octave selection generally, or distinguish beat 1
+from beat 3. The 70-160 BPM range policy remains, and genuinely fast/slow
+material still needs human confirmation. Automatic bar-phase confidence is
+capped at .55: consistent four-beat bars are **not** verification of the one.
+Manual corrections retain their confidence and are never silently upgraded.
+Existing song chops also prevent a quality upgrade from moving their grid.
+
+Reliable bars additionally require at least two distinct spectral onsets within
+70 ms of beats (at least 40% of the beats); silence and sustained-tone intros
+cannot qualify merely because the tracker emitted a regular grid. Pulse
+evidence is cached in the analysis sidecar and reused; explicit regrid measures
+it against the new grid. The timestamps can still include speculative intro
+beats, but their pulse-free bars are unverified. This is a conservative
+evidence filter, not a probability of correctness or an independent downbeat
+detector. Mix-first remains the cheap default; separation does not move grids.
+
+### Instrumental and no-drums chop sources
+
+After `source.separate`, build sample-aligned sums without changing stem enums
+or the renderer/song contract:
+
+```powershell
+uv run python -m muestra.ingest.derived_mix PROJECT SOURCE --kind instrumental --import-as src-inst
+uv run python -m muestra.ingest.derived_mix PROJECT SOURCE --kind no-drums --import-as src-nodrums
+```
+
+Instrumental = drums+bass+other; no-drums = bass+vocals+other. These are FLOAT
+WAV sums with no normalization, not subtraction from a potentially inconsistent
+original mix. Provenance contains model and component hashes. Omit `--import-as`
+to only get the derived WAV path. With it, an ordinary source is registered and
+inherits a **snapshot** of the parent's full-file grid, with newly measured key,
+loudness and reliability (no neural retracking). Parent corrections do not
+silently move that snapshot. Request `source.find_chops(source_id=src-inst,
+stem=mix)` or `source_id=src-nodrums`. A native agent-facing tool/UI selector
+would require a separate integration; neither existing stem enum nor schema
+has been extended here.
 
 Independent synthesized ground truth: 64 drum beats drift gradually from
 0.48 to 0.56 seconds per beat. With 70 ms one-to-one matching, the interior
@@ -427,8 +531,10 @@ is optional in the Python model despite the prose; ChopChoiceEvent has no
 set_id field despite the prose (recoverable from candidate_id); start offsets
 allow ±4096 in Python versus ±64 in prose. See decisions.md.
 
-No actual 1980s Argentine record, Japanese city-pop/fusion recording, reference
-multitrack or human beat annotation was available. Sound quality on those
+No actual 1980s Argentine record or Japanese city-pop/fusion recording was
+available. WP19 adds published beat-position annotations on 23 Music Delta
+recordings and ten reconstruction-valid reference multitracks; this does not
+establish quality on the owner's material. Sound quality on those target
 sources and macOS execution are not verified. Old mono mixes, swing, 2/4 or
 3/4 meter, noisy transfers, free-time intros, weak kicks, tape pitch drift,
 modulation and vocal bleed remain difficult. The grid checks deliberately

@@ -9,9 +9,10 @@ from __future__ import annotations
 import numpy as np
 
 from ..schemas.analysis import Analysis, GridBar, GridRegion, GridReliability
+from .pulse import PulseEvidence
 
 
-def assess_reliability(analysis: Analysis) -> GridReliability:
+def assess_reliability(analysis: Analysis, pulse: PulseEvidence | None = None) -> GridReliability:
     if len(analysis.beats_s) < 2 or len(analysis.downbeats_s) < 2:
         return GridReliability(
             confidence=0,
@@ -50,7 +51,8 @@ def assess_reliability(analysis: Analysis) -> GridReliability:
             )
             if a < end - 0.05 and b > start + 0.05
         )
-        reliable = int(j - i) == bpb and stable and supported
+        audible = pulse is None or pulse.supports(beats, start, end)
+        reliable = int(j - i) == bpb and stable and supported and audible
         reason = (
             "Compás consistente; confirmar el uno de oído."
             if reliable
@@ -58,6 +60,8 @@ def assess_reliability(analysis: Analysis) -> GridReliability:
             if int(j - i) != bpb or not supported
             else "Saltos locales de tempo; revisar los clicks."
         )
+        if not audible:
+            reason = "Sin ataques regulares suficientes sobre los beats; pulso no verificado."
         bars.append(
             GridBar(
                 start_s=start,
