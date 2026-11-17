@@ -1668,6 +1668,21 @@
           "title": "Clips",
           "type": "array"
         },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Heuristic trust in the clip-track offset (stability x count x tightness); not a probability.",
+          "title": "Confidence"
+        },
         "drift_ms": {
           "default": 0.0,
           "description": "Fitted offset change across one clip instance (or the render), ms.",
@@ -1728,6 +1743,20 @@
           "description": "Median offset of onsets near the off-beat 16ths (swing), ms.",
           "title": "Offbeat Offset Ms"
         },
+        "onsets_per_beat": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detected onsets per quarter note inside the clips.",
+          "title": "Onsets Per Beat"
+        },
         "p90_abs_offset_ms": {
           "default": 0.0,
           "minimum": 0.0,
@@ -1748,6 +1777,33 @@
           "default": null,
           "description": "Fraction of quarter notes that carry an onset (clip tracks). Low = no clear pulse: offsets are not trusted.",
           "title": "Pulse Share"
+        },
+        "verified": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clip tracks: True when the offset estimate is stable enough to alarm on; False = the material is too dense/ambiguous (only an info note is raised).",
+          "title": "Verified"
+        },
+        "window_spread_ms": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Self-test error: every onset is moved by \u00b1timing_probe_ms (as a chop that late/early would be) and re-measured; this is how far the estimate misses that known shift, ms. Large = which onsets count depends on the shift itself.",
+          "title": "Window Spread Ms"
         }
       },
       "required": [

@@ -303,7 +303,93 @@ def _beats_basis(ctx: RenderContext, tid: str, alarms: list[Alarm]) -> TrackAlig
             f"{pulse:.0%} de los tiempos): no se evalúa"
         )
         return res
+    # Honesty check (WP12). On dense live material (an onset on most 16ths, swing,
+    # ornaments) which onsets fall inside the ±1/8-beat window depends on the shift
+    # itself, so the median is not a shift estimator (a 30 ms late chop read +60,
+    # an early one read what the clean loop read). Self-test on THIS material: move
+    # every onset by ±probe ms (what a chop that late/early would do) and re-measure.
+    # A usable estimator follows the probe; if it does not, nothing is alarmed.
+    n_active = int(np.count_nonzero(active))
+    per_beat = n_active / max(1, len(quarters))
+    probe = th.timing_probe_ms
+
+    def onbeat_median(shift_ms: float) -> float | None:
+        p = (on.times + shift_ms / 1000.0) / spb
+        qq = np.round(p)
+        sel_p = (np.abs(p - qq) <= 0.125) & active
+        if np.count_nonzero(sel_p) < th.timing_min_onsets:
+            return None
+        return float(np.median((p[sel_p] - qq[sel_p]) * spb * 1000.0 + FLUX_BIAS_MS))
+
+    # Keep the probed estimate inside the window (a chop already 45 ms late cannot be
+    # probed another +20 ms at 120 BPM): clip each direction, skip it if < 5 ms.
+    room = 0.125 * spb * 1000.0 - 10.0
+    errors = []
+    for d in (-probe, probe):
+        d = max(-room - med, min(room - med, d))
+        if abs(d) < 5.0:
+            continue
+        m = onbeat_median(d)
+        errors.append(float("inf") if m is None else abs(m - med - d))
+    spread = max(errors) if errors else float("inf")
+    stable = spread <= th.timing_max_window_spread_ms
+    dense = per_beat >= th.timing_dense_onsets_per_beat
+    count_f = min(1.0, off.size / (3 * th.timing_min_onsets))
+    tight_f = max(0.0, 1.0 - mad / (2 * th.timing_max_mad_ms))
+    stab_f = (
+        0.0
+        if not np.isfinite(spread)
+        else max(0.0, 1.0 - (spread / th.timing_max_window_spread_ms) ** 2)
+    )
+    confidence = round(count_f * tight_f * stab_f, 2)
+    verified = stable
+    res.onsets_per_beat = round(per_beat, 2)
+    res.window_spread_ms = None if not np.isfinite(spread) else round(spread, 1)
+    res.confidence = confidence
+    res.verified = verified
+
+    def unverified(reasons: list[str]) -> None:
+        res.verified = False
+        why = (f"hay {per_beat:.1f} ataques por tiempo y " if dense else "") + " y ".join(reasons)
+        chops = sorted({c.chop for c in inst if c.chop})
+        alarms.append(
+            make_alarm(
+                tl,
+                "grid_unverified",
+                "info",
+                f"No pude verificar si `{tid}` cae en la grilla: {why}. No es una alarma: "
+                f"es un límite de la medición (confianza {confidence:.2f}).",
+                track=tid,
+                chop=chops[0] if len(chops) == 1 else None,
+                value=spread if np.isfinite(spread) else None,
+                threshold=th.timing_max_window_spread_ms,
+                unit="ms",
+                fix="pedile al humano que escuche el loop contra el bombo; si se siente "
+                "corrido, corregí la grilla de la fuente (`source.regrid`) o "
+                "`start_offset_beats` del chop.",
+            )
+        )
+
+    if not verified:
+        reasons = []
+        if not np.isfinite(spread):
+            reasons.append(f"con un corrimiento de {probe:.0f} ms los ataques salen de la ventana")
+        elif not stable:
+            reasons.append(
+                f"un corrimiento de {probe:.0f} ms se mediría con {spread:.0f} ms de error"
+            )
+        if mad > th.timing_max_mad_ms:
+            reasons.append(f"los ataques cerca de cada tiempo varían ±{mad:.0f} ms")
+        unverified(reasons)
+        return res
+    before = len(alarms)
     _clip_track_alarms(ctx, tid, inst, off, t_sel, own_sel, rel, clip_offs, alarms)
+    explained = any(a.track == tid for a in alarms[before:])
+    if mad > th.timing_max_mad_ms and not explained:
+        # Too scattered for grid_offset and no drift / single clip explains it:
+        # say that the timing was not verified instead of staying silent.
+        unverified([f"los ataques cerca de cada tiempo varían ±{mad:.0f} ms"])
+        return res
     # swing: the sample's off-beat 16ths vs the drums' swing
     if offbeat_med is not None and mad <= th.timing_max_mad_ms:
         sample_swing_ms = offbeat_med - med
