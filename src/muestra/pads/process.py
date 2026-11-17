@@ -14,11 +14,17 @@ from ..schemas.pads import Take, TakeEvent, TakeQuantize
 
 __all__ = [
     "GRID_BEATS",
+    "PICKUP_BEATS",
     "quantize_beat",
     "ProcessedEvent",
     "process_events",
     "Cleanup",
 ]
+
+#: presses up to this many beats (a 64th note) before a take's beat 0 are
+#: early hits ON beat 0's side (stored slightly negative), never "the end of
+#: the loop": loop takes fold into [-PICKUP_BEATS, loop - PICKUP_BEATS).
+PICKUP_BEATS = 0.0625
 
 #: grid step in beats (quarter notes)
 GRID_BEATS: dict[str, float | None] = {
@@ -44,8 +50,8 @@ def _grid_point(i: int, step: float, swing: float, straight: bool) -> float:
 def quantize_beat(beat: float, q: TakeQuantize, wrap: float | None = None) -> float:
     """``beat`` moved ``strength`` of the way to the nearest (swung) grid point.
 
-    ``wrap`` (loop takes): the result is folded into ``[0, wrap)`` so a press a
-    hair before the loop start lands on beat 0 of the cycle. Rounded to 1e-6
+    ``wrap`` (loop takes): the result is folded into ``[-PICKUP_BEATS, wrap -
+    PICKUP_BEATS)``: a press a hair before the loop start stays an early beat 1. Rounded to 1e-6
     beats (the precision ``song.edit`` stores)."""
     step = GRID_BEATS[q.grid]
     target = beat
@@ -61,10 +67,11 @@ def quantize_beat(beat: float, q: TakeQuantize, wrap: float | None = None) -> fl
         target = best[1]
     out = beat + q.strength * (target - beat)
     if wrap:
-        out = out % wrap
-        if out > wrap - 1e-6:
-            out = 0.0
-    return _round(out, 6)
+        # fold into [-PICKUP, wrap - PICKUP): a press a hair before the loop
+        # start is an early beat 1, not the end of the cycle
+        out = (out + PICKUP_BEATS) % wrap - PICKUP_BEATS
+    out = _round(out, 6)
+    return 0.0 if out == 0 else out
 
 
 @dataclass(frozen=True)

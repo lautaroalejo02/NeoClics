@@ -96,7 +96,7 @@ describe("quantise (same vectors as muestra.pads.process)", () => {
   it("places a loop take N times from a bar", () => {
     const take = { ...mkTake([{ beat: 3.97, pad: "KeyZ", velocity: 0.8, cycle: 2 }], { grid: "1/16", strength: 1, swing: 0 }), loop_beats: 4, length_beats: 4 };
     expect(takeSpan(take)).toBe(4);
-    expect(placedBeats(take, 3, 2).map((h) => h.beat)).toEqual([9, 13]);
+    expect(placedBeats(take, 3, 2).map((h) => h.beat)).toEqual([9, 13]); // 3.97 quantised to 4 = beat 1 of the cycle
   });
 });
 
@@ -115,10 +115,12 @@ describe("latency compensation", () => {
     const rec = { loopStartS: 2, loopLenS: 4, originBeat: 4, startCycle: 0 };
     expect(placePress(0.5, rec, 120)).toEqual({ beat: 1, cycle: 1 });
     expect(placePress(4.5, rec, 120)).toEqual({ beat: 1, cycle: 2 });
-    // a press 10 ms before the loop start belongs to the end of the cycle
+    // a press 10 ms before the loop start is an early beat 1 of the next pass
     const early = placePress(-0.01, rec, 120);
     expect(early.cycle).toBe(1);
-    expect(early.beat).toBeCloseTo(7.98, 6);
+    expect(early.beat).toBeCloseTo(-0.02, 6);
+    const late = placePress(3.9, rec, 120); // 0.2 beat before the end: still this pass
+    expect(late).toEqual({ beat: expect.closeTo(7.8, 6), cycle: 1 });
     // linear takes: song beats from the origin (negative during the count-in)
     expect(placePress(1.0, { loopStartS: 0, loopLenS: null, originBeat: 8, startCycle: 0 }, 120).beat).toBeCloseTo(-6, 9);
   });

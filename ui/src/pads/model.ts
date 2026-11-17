@@ -84,6 +84,9 @@ export function padSound(p: PadJson): SoundJson | null {
 
 // ------------------------------------------------------------------ quantise
 
+/** Presses up to a 64th note before beat 0 are an early beat 1 (= muestra.pads.process.PICKUP_BEATS). */
+export const PICKUP_BEATS = 0.0625;
+
 export const GRID_BEATS: Record<QuantizeGrid, number | null> = {
   off: null,
   "1/16": 0.25,
@@ -127,10 +130,7 @@ export function quantizeBeat(beat: number, q: QuantizeJson, wrap?: number | null
     target = best![1];
   }
   let out = beat + q.strength * (target - beat);
-  if (wrap) {
-    out = ((out % wrap) + wrap) % wrap;
-    if (out > wrap - 1e-6) out = 0;
-  }
+  if (wrap) out = ((((out + PICKUP_BEATS) % wrap) + wrap) % wrap) - PICKUP_BEATS;
   const r = roundTo(out, 6);
   return r === 0 ? 0 : r;
 }
@@ -225,7 +225,14 @@ export function placePress(
     const L = rec.loopLenS;
     const k = Math.floor(unwrappedS / L);
     const into = unwrappedS - k * L;
-    return { beat: into / spb, cycle: Math.max(1, k - rec.startCycle + 1) };
+    let beat = into / spb;
+    let cycle = k - rec.startCycle + 1;
+    if (beat >= L / spb - PICKUP_BEATS) {
+      // a hair before the loop start: an early beat 1 of the next pass
+      beat -= L / spb;
+      cycle += 1;
+    }
+    return { beat, cycle: Math.max(1, cycle) };
   }
   return { beat: (rec.loopStartS + unwrappedS) / spb - rec.originBeat, cycle: 1 };
 }
@@ -314,7 +321,7 @@ export function placedBeats(take: TakeJson, atBar: number, repeat: number, q: Qu
   const ev = processEvents(take, q);
   for (let k = 0; k < repeat; k++)
     for (const e of ev) {
-      if (e.beat < -1e-9 || e.beat >= span - 1e-9) continue;
+      if (e.beat < -PICKUP_BEATS - 1e-9 || e.beat >= span - 1e-9) continue;
       out.push({ beat: roundTo((atBar - 1) * 4 + k * span + e.beat + 1, 6), pad: e.pad, velocity: e.velocity });
     }
   return out;

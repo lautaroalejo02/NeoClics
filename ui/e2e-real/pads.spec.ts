@@ -87,7 +87,8 @@ async function playRhythm(page: Page, notes: { beat: number; code: string }[]): 
               const down = new KeyboardEvent("keydown", { code: n.code, key: n.code.slice(3).toLowerCase(), bubbles: true });
               window.dispatchEvent(down);
               const u = unwrapped(heardNow(down.timeStamp));
-              out.push({ code: n.code, target: n.beat, actual: (u - Math.floor(u / L) * L) / spb });
+              const into = (u - Math.floor(u / L) * L) / spb;
+              out.push({ code: n.code, target: n.beat, actual: into >= L / spb - 0.0625 ? into - L / spb : into });
               setTimeout(() => {
                 window.dispatchEvent(new KeyboardEvent("keyup", { code: n.code, bubbles: true }));
                 resolve();

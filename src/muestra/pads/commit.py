@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from ..errors import MuestraError
 from ..schemas.pads import Pad, Take, TakeQuantize
 from ..schemas.song import BEATS_PER_BAR, PatternLane, Song
-from .process import Cleanup, ProcessedEvent, process_events, take_span_beats
+from .process import PICKUP_BEATS, Cleanup, ProcessedEvent, process_events, take_span_beats
 
 __all__ = ["CommitPlan", "commit_ops", "lane_name", "pad_lane", "pads_from_track"]
 
@@ -166,7 +166,7 @@ def commit_ops(
         out = []
         for k in range(repeat):
             for e in evs:
-                if e.beat < -1e-9 or e.beat >= span - 1e-9:
+                if e.beat < -PICKUP_BEATS - 1e-9 or e.beat >= span - 1e-9:
                     if k == 0:
                         plan.dropped += 1
                     continue
