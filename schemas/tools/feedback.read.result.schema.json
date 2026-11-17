@@ -342,6 +342,41 @@
       "title": "NoteRef",
       "type": "object"
     },
+    "PadRef": {
+      "additionalProperties": false,
+      "description": "A pad (WP17): bank id + physical key code (pads/banks.json).",
+      "properties": {
+        "bank": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Bank",
+          "type": "string"
+        },
+        "key": {
+          "pattern": "^[A-Za-z0-9]{1,16}$",
+          "title": "Key",
+          "type": "string"
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Name"
+        }
+      },
+      "required": [
+        "bank",
+        "key"
+      ],
+      "title": "PadRef",
+      "type": "object"
+    },
     "RatingEvent": {
       "additionalProperties": false,
       "properties": {
@@ -479,6 +514,18 @@
           "title": "Notes",
           "type": "array"
         },
+        "pad": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PadRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "WP17: a pad of pads/banks.json."
+        },
         "paths": {
           "description": "song.edit paths of the selected elements (versions.diff grammar).",
           "items": {
@@ -544,6 +591,20 @@
           ],
           "default": null,
           "title": "Start Beat"
+        },
+        "take": {
+          "anyOf": [
+            {
+              "pattern": "^t[0-9]{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "WP17: a recorded take (pads/takes/<id>.json; read it with pads.take_get).",
+          "title": "Take"
         },
         "track": {
           "anyOf": [

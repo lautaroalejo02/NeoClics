@@ -866,6 +866,22 @@ export class EditorStore {
     return ok;
   }
 
+  /** "Pedile al agente" about something outside the timeline (WP17: a take or a pad). */
+  async askAbout(text: string, selection: { label: string; take?: string; pad?: { bank: string; key: string; name?: string } }): Promise<boolean> {
+    if (!text.trim()) return false;
+    const ev: CommentEvent = {
+      ts: new Date().toISOString(),
+      type: "comment",
+      text: text.trim(),
+      selection,
+      ...(this.state.revision ? { song_revision: this.state.revision } : {}),
+      version: null,
+    };
+    const ok = await this.app.append(ev);
+    if (ok) this.app.toast("Listo: se lo dejé al agente, apuntando a eso.", "ok");
+    return ok;
+  }
+
   /** Song hash (diagnostics). */
   songKey(): string {
     return this.state.song ? stable(this.state.song) : "";

@@ -3,6 +3,7 @@ import "@fontsource-variable/space-grotesk/wght.css";
 import "@fontsource-variable/jetbrains-mono/wght.css";
 import "./styles.css";
 import "./ui/editor/editor.css";
+import "./ui/pads/pads.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { MuestraClient, resolveBaseUrl } from "./api/client";

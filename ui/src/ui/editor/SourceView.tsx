@@ -7,6 +7,8 @@ import { useEditor, useEditorStore } from "../../editor/react";
 import { BEATS_PER_BAR, trackKind, type ChopJson } from "../../editor/song";
 import * as I from "../icons";
 import { anchorFor, beatTime, chopSpan, timeBeat } from "../../editor/sourcegrid";
+import { usePadsMaybe } from "../../pads/react";
+import { SliceOptions } from "../pads/PadsView";
 
 // --------------------------------------------------------------- view
 
@@ -23,6 +25,9 @@ export function SourceView({ sourceId, onClose }: { sourceId: string; onClose: (
   const [view, setView] = useState<{ t0: number; t1: number } | null>(null);
   const [drag, setDrag] = useState<Drag | null>(null);
   const [region, setRegion] = useState<[number, number] | null>(null);
+  const pads = usePadsMaybe();
+  const [slicing, setSlicing] = useState(false);
+  const [sliceBusy, setSliceBusy] = useState(false);
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
   const [w, setW] = useState(900);
@@ -297,6 +302,27 @@ export function SourceView({ sourceId, onClose }: { sourceId: string; onClose: (
               <button type="button" className="btn small primary" onClick={create} data-testid="sv-create">
                 Crear chop
               </button>
+              {pads && (
+                <button type="button" className="btn small" aria-expanded={slicing} onClick={() => setSlicing(!slicing)} data-testid="sv-slice">
+                  Cortar en pads
+                </button>
+              )}
+              {pads && slicing && (
+                <SliceOptions busy={sliceBusy} onSlice={async (by, speed) => {
+                  setSliceBusy(true);
+                  try {
+                    const anchor = anchorFor(a, region[0]);
+                    const n = await pads.sliceToPads({ source: sourceId, stem, start_downbeat: anchor.start_downbeat, start_beats: anchor.start_offset_beats, length_beats: round6(Math.min(64, region[1] - region[0])) }, by, speed, pads.state.selected ?? undefined, sourceId);
+                    editor.app.toast(`Corté la región en ${n} pads: tocalos en otro orden.`, "ok");
+                    pads.openPanel(true);
+                    onClose();
+                  } catch (e) {
+                    editor.app.toast(`No pude cortar: ${e instanceof Error ? e.message : String(e)}`, "warn");
+                  } finally {
+                    setSliceBusy(false);
+                  }
+                }} />
+              )}
             </>
           )}
           {!region &&

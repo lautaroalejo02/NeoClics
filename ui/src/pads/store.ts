@@ -82,6 +82,9 @@ export interface CalibState {
 export interface PadsState {
   status: "off" | "loading" | "ready" | "error" | "unsupported";
   error: string | null;
+  /** the pads panel is open in the Arreglo view */
+  panel: boolean;
+  /** the pads capture the keyboard */
   on: boolean;
   banks: PadsFileJson;
   takes: TakeSummary[];
@@ -169,6 +172,7 @@ export class PadsStore {
     this.state = {
       status: "off",
       error: null,
+      panel: false,
       on: false,
       banks: defaultBanks(),
       takes: [],
@@ -456,6 +460,18 @@ export class PadsStore {
   }
 
   // ------------------------------------------------------------ on / off + keys
+
+  /** Open/close the pads panel (opening turns the keyboard on). */
+  openPanel(open: boolean): void {
+    if (open === this.state.panel) {
+      if (open && !this.state.on) this.setOn(true);
+      return;
+    }
+    this.set({ panel: open });
+    if (open) {
+      void this.init().then(() => this.setOn(true));
+    } else this.setOn(false);
+  }
 
   setOn(on: boolean): void {
     if (on === this.state.on) return;

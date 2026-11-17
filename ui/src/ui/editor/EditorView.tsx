@@ -27,6 +27,8 @@ import { Inspector } from "./Inspector";
 import { Timeline } from "./Timeline";
 import { SourceView } from "./SourceView";
 import { EDITOR_SHORTCUTS } from "../../editor/shortcuts";
+import { PadsPanel } from "../pads/PadsView";
+import { usePads, usePadsMaybe } from "../../pads/react";
 
 
 export function EditorView({ onListen }: { onListen: () => void }) {
@@ -40,6 +42,7 @@ export function EditorView({ onListen }: { onListen: () => void }) {
   const source = useEditor((s) => s.source);
   const [help, setHelp] = useState(false);
   const askRef = useRef<HTMLTextAreaElement>(null);
+  const padsPanel = usePads((s) => s.panel);
 
   useEffect(() => {
     void editor.init();
@@ -79,9 +82,22 @@ export function EditorView({ onListen }: { onListen: () => void }) {
         </div>
         {inspector && <Inspector askRef={askRef} onAudition={audition} narrow={layout === "narrow"} onClose={() => store.state && editor.setInspector(false)} />}
       </div>
+      {padsPanel && <PadsPanel />}
       {help && <EditorHelp onClose={() => setHelp(false)} />}
       {source && <SourceView sourceId={source.id} onClose={() => editor.openSource(null)} />}
     </section>
+  );
+}
+
+function PadsButton() {
+  const pads = usePadsMaybe();
+  const open = usePads((s) => s.panel);
+  const on = usePads((s) => s.on);
+  if (!pads) return null;
+  return (
+    <button type="button" className={`btn small ${on ? "primary" : ""}`} aria-pressed={open} onClick={() => pads.openPanel(!open)} title="Pads: tocar sonidos con el teclado y grabar tomas (K)" data-testid="ed-pads">
+      Pads
+    </button>
   );
 }
 
@@ -131,6 +147,7 @@ function Toolbar({ onHelp, onAsk }: { onHelp: () => void; onAsk: () => void }) {
         >
           <I.Loop size={16} />
         </button>
+        <PadsButton />
       </div>
       <div className="ed-group">
         <label className="ed-snap" title="Imán de la grilla (Alt lo apaga mientras arrastrás)">
@@ -393,6 +410,7 @@ function EditorHelp({ onClose }: { onClose: () => void }) {
 
 /** Editor keyboard (only while the Arreglo view is shown). */
 function useEditorKeys(openHelp: () => void, focusAsk: () => void): void {
+  const padsRef = useRef(usePadsMaybe());
   const editor = useEditorStore();
   const store = useStore();
   const theme = useApp((s) => s.theme);
@@ -477,6 +495,12 @@ function useEditorKeys(openHelp: () => void, focusAsk: () => void): void {
             if (!s.inspector) editor.setInspector(true);
             setTimeout(focusAsk, 30);
           }
+          return;
+        case "k":
+        case "K":
+          // open the pads (the keyboard then plays them; Esc gives it back)
+          done();
+          padsRef.current?.openPanel(true);
           return;
         case "l":
         case "L": {

@@ -19,6 +19,7 @@ export const EDITOR_SHORTCUTS: [string[], string][] = [
   [["F"], "Escuchar el render final del estado actual (borrador) ⇄ vista previa"],
   [["P"], "Pedile al agente algo sobre lo seleccionado"],
   [["L"], "Loop on/off (arrastrá sobre la regla para elegir compases)"],
+  [["K"], "Pads: tocar sonidos con el teclado y grabar (Esc devuelve el teclado al editor)"],
   [["+", "−"], "Zoom (Ctrl + rueda también)"],
   [["Esc"], "Deseleccionar"],
   [["?"], "Esta ayuda"],
