@@ -67,6 +67,7 @@ def test_create_git_inits_and_ignores_derived(tmp_path):
     # renders/ and cache/ are entirely git-ignored (derived data)
     assert "renders/" in (dst / ".gitignore").read_text(encoding="utf-8")
     assert "cache/" in (dst / ".gitignore").read_text(encoding="utf-8")
+    assert "sources/" in (dst / ".gitignore").read_text(encoding="utf-8")
     check = subprocess.run(
         ["git", "-C", str(dst), "check-ignore", "renders/x", "cache/x"],
         capture_output=True,

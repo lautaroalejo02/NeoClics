@@ -70,6 +70,8 @@ _GITIGNORE = """\
 # muestra project
 renders/
 cache/
+# imported audio: big binaries Muestra never commits (contracts.md)
+sources/
 .venv/
 __pycache__/
 """

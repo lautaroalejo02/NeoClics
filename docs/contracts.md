@@ -104,7 +104,7 @@ user identity when configured and fall back to
 `Muestra <muestra@localhost>` (via `-c user.name/-c user.email` for that
 commit only) when none exists.
 
-- `.gitignore`: `renders/`, `cache/`, `.venv/`, `__pycache__/`. Git
+- `.gitignore`: `renders/`, `cache/`, `sources/` (WP11), `.venv/`, `__pycache__/`. Git
   versions `song.yaml`, `midi/`, `muestra.toml`, `ears.toml` (optional),
   `feedback.jsonl`, `docs/` (+ `.gitignore`, `.gitattributes`); restore
   rewinds only `song.yaml` and `midi/` (the two config files are
