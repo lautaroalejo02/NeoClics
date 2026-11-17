@@ -725,3 +725,6 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
    mix is being crushed: stop and say so in the render hint rather than
    hit the number). `render_audio`/`render_song` take an optional `report`
    dict (additive) that `master()` fills.
+8. **One ffmpeg resolver** (`muestra.media`): override, `MUESTRA_FFMPEG`,
+   PATH, known install locations; `decode_error` vs `ffmpeg_missing` vs
+   `ffmpeg_unusable`. Render's `audio_decode` code became `decode_error`.

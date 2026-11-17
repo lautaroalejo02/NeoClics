@@ -60,7 +60,11 @@ Every problem is an `Issue`:
   `unknown_tool`, `internal_error`; versioning (WP5): `unknown_version`,
   `version_exists`, `not_git_repo`, `git_not_installed`, `repo_locked`,
   `repo_busy`, `detached_head`, `git_unsafe_repo`, `git_error`, see
-  `docs/versions.md`).
+  `docs/versions.md`); WP13: `render_failed`, `local_only`, `unauthorized`,
+  `plugin_missing`/`preset_missing` (also from `song.validate`),
+  `ffmpeg_missing` (only when a format really needs ffmpeg), `ffmpeg_unusable`,
+  `decode_error` ("the file is damaged or is not audio"; replaces render's
+  `audio_decode`)).
 - Validation **collects all issues**; never stops at the first.
 - Duplicate YAML mapping keys in `song.yaml` are a `duplicate_key` issue
   (with the key's path and a hint) — never silently dropped.

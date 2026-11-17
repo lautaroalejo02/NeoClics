@@ -72,7 +72,7 @@ def test_decode_ffmpeg_fallback_uses_argument_list(tmp_path, monkeypatch):
         return subprocess.CompletedProcess(command, 0, stdout=encoded.getvalue())
 
     monkeypatch.setattr("muestra.ingest.audio.sf.read", read)
-    monkeypatch.setattr("muestra.ingest.audio.subprocess.run", run)
+    monkeypatch.setattr("muestra.media.subprocess.run", run)  # shared resolver (WP13)
     data, sr = decode(path, ffmpeg="custom-ffmpeg")
     assert data.shape == (100, 2) and sr == 8000
     assert calls[0][0] == "custom-ffmpeg" and str(path) in calls[0]

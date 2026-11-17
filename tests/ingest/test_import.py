@@ -46,7 +46,8 @@ def test_import_without_song_and_conflicting_id(project, audio, tmp_path):
 
 def test_missing_ffmpeg_hint(monkeypatch):
     monkeypatch.delenv("MUESTRA_FFMPEG", raising=False)
-    monkeypatch.setattr("muestra.ingest.audio.shutil.which", lambda _: None)
+    monkeypatch.setattr("muestra.media.shutil.which", lambda _: None)
+    monkeypatch.setattr("muestra.media.known_ffmpeg_locations", lambda: [])
     with pytest.raises(MuestraError, match="ffmpeg was not found") as exc:
         ffmpeg_path()
     assert "MUESTRA_FFMPEG" in exc.value.hint

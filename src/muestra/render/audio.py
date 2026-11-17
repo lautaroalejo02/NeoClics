@@ -5,7 +5,6 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import subprocess
 import uuid
 from pathlib import Path
 
@@ -16,6 +15,7 @@ import soundfile as sf
 from scipy.signal import resample, resample_poly
 
 from ..errors import MuestraError
+from ..media import run_ffmpeg
 from ..project.core import Project
 
 # Bump whenever decoding/warping or its quality settings change.
@@ -64,36 +64,16 @@ def decode(project: Project, path: Path, sample_rate: int) -> tuple[np.ndarray, 
         return cached, content
     try:
         audio, native_rate = sf.read(path, dtype="float32", always_2d=True)
-    except (RuntimeError, sf.LibsndfileError):
-        try:
-            proc = subprocess.run(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-i",
-                    str(path),
-                    "-f",
-                    "f32le",
-                    "-ac",
-                    "2",
-                    "-ar",
-                    str(sample_rate),
-                    "pipe:1",
-                ],
-                capture_output=True,
-                check=True,
-            )
-            audio = np.frombuffer(proc.stdout, dtype="<f4").reshape(-1, 2).copy()
-            native_rate = sample_rate
-        except (OSError, subprocess.CalledProcessError) as exc:
-            raise MuestraError.one(
-                "audio_decode",
-                f"Cannot decode {path.name}: {exc}",
-                path=str(path),
-                value=str(path),
-                hint="Use a valid WAV/FLAC or install ffmpeg for other formats.",
-            ) from exc
+    except (RuntimeError, sf.LibsndfileError) as native:
+        # WP13: the shared resolver (MUESTRA_FFMPEG, PATH, install locations);
+        # a damaged WAV is "cannot decode", never "ffmpeg missing".
+        data = run_ffmpeg(
+            path,
+            ["-f", "f32le", "-ac", "2", "-ar", str(sample_rate), "pipe:1"],
+            native_error=native,
+        )
+        audio = np.frombuffer(data[: len(data) // 8 * 8], dtype="<f4").reshape(-1, 2).copy()
+        native_rate = sample_rate
     if audio.shape[1] == 1:
         audio = np.repeat(audio, 2, axis=1)
     elif audio.shape[1] != 2:

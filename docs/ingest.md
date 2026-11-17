@@ -40,6 +40,17 @@ callables are deliberately absent from the JSON tool parameter contracts.
 
 ## Imports and caches
 
+**ffmpeg (WP13).** One resolver for import, analysis, chop previews and
+render decoding (`muestra.media`, also used by `muestra doctor`): explicit
+override → `MUESTRA_FFMPEG` → `ffmpeg` on PATH → the usual install
+locations (winget `Gyan.FFmpeg`, scoop, chocolatey, Homebrew), so an ffmpeg
+installed after the terminal started is still found. A WAV/FLAC/AIFF/OGG/MP3
+that soundfile cannot read is `decode_error` "the file is damaged or is not
+audio" (ffmpeg is tried when present, never blamed when absent); a format
+that needs ffmpeg (m4a/aac) without it is `ffmpeg_missing` naming the file.
+Before, render decoding called a bare `ffmpeg` and ignored `MUESTRA_FFMPEG`,
+so an m4a imported fine and then failed at chop-finding time.
+
 WAV/FLAC/MP3/M4A originals are copied byte-for-byte to safe generated names
 under `sources/`, never transcoded in place. Soundfile decodes first, with
 ffmpeg as a fallback. Empty, nonfinite or multichannel audio is rejected.
