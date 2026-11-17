@@ -117,16 +117,16 @@ def test_ears_toml_overrides(tmp_path):
     generate(CorpusSpec(sr=24000, bars=8), root)
     (root / "ears.toml").write_text(
         '[spectral]\nprofile = "pink"\ntolerance_db = {air = 3}\n\n'
-        "[thresholds]\ntiming_warn_ms = 0.5\ntiming_max_mad_ms = 50\n",
+        "[thresholds]\ndc_warn_db = -100\nclip_run_error = 3\n",
         encoding="utf-8",
     )
     cfg = load_config(root)
     assert cfg.reference.name == "pink" and cfg.reference.tolerance_db["air"] == 3
-    assert cfg.thresholds.timing_warn_ms == 0.5
+    assert cfg.thresholds.dc_warn_db == -100.0 and cfg.thresholds.clip_run_error == 3
     m = analyze(open_project(root), "v001")
     assert m.spectral.reference.name == "pink"
-    # an absurdly strict timing threshold must now fire on the clean mix
-    assert any(a.code == "grid_offset" for a in m.alarms)
+    # an absurdly strict DC threshold must now fire on the clean mix
+    assert any(a.code == "dc_offset" for a in m.alarms)
 
 
 @pytest.mark.parametrize(

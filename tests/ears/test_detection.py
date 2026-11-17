@@ -165,3 +165,22 @@ def test_tonal_estimate_on_clean_mix(render):
 def test_clean_at_48k_is_also_quiet(render):
     _p, m = render(spec={"sr": 48000})
     assert codes(m) == set(), [(a.code, a.message) for a in m.alarms]
+
+
+@pytest.mark.parametrize(
+    ("defect", "code", "flagged"),
+    [
+        # documented detection limits (docs/ears.md): threshold +- margin
+        ({"late_chop_ms": 17.0}, "grid_offset", True),
+        ({"late_chop_ms": 13.0}, "grid_offset", False),
+        ({"detune_cents": 24.0}, "sample_detuned", True),
+        ({"detune_cents": 16.0}, "sample_detuned", False),
+        ({"applied_depth": 0.45}, "sidechain_weak", False),
+        ({"applied_depth": 0.2}, "sidechain_weak", True),
+        ({"kick_late_ms": 19.0}, "lane_offset", True),
+        ({"kick_late_ms": 12.0}, "lane_offset", False),
+    ],
+)
+def test_detection_limits(render, defect, code, flagged):
+    _p, m = render(**defect)
+    assert (code in codes(m)) is flagged, [(a.code, a.value) for a in m.alarms]
