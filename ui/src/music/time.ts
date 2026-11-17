@@ -34,7 +34,7 @@ export function secondsToBarBeat(seconds: number, t: Pick<Timing, "bpm" | "first
   // tiny epsilon so 1.9999999 beats (float noise) reads as beat 3, not 2
   const beats = rel + 1e-9;
   const barIdx = Math.floor(beats / BEATS_PER_BAR);
-  const beat = beats - barIdx * BEATS_PER_BAR + 1;
+  const beat = Math.max(1, rel - barIdx * BEATS_PER_BAR + 1);
   return { bar: t.firstBar + barIdx, beat, relBeats: rel };
 }
 

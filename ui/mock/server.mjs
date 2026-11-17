@@ -521,8 +521,9 @@ wss.on("connection", (ws) => {
 // ---------------------------------------------------------------- boot
 freshProject();
 server.listen(PORT, () => {
+  const port = server.address().port;
   console.log(`[muestra-mock] proyecto: ${PROJECT}`);
-  console.log(`[muestra-mock] http://localhost:${PORT}  (ws /events, accel ${ACCEL ? "on" : "off"}, demo ${DEMO ? "on" : "off"})`);
+  console.log(`[muestra-mock] http://localhost:${port}  (ws /events, accel ${ACCEL ? "on" : "off"}, demo ${DEMO ? "on" : "off"})`);
   if (DEMO) {
     // Live-update demo: a long stem separation and, later, the "agent"
     // rendering a new version — without touching a terminal.

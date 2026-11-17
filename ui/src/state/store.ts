@@ -175,7 +175,8 @@ export class Store {
   constructor(opts: { client: MuestraClient; engine: PlaybackEngine; WebSocketImpl?: typeof WebSocket | null }) {
     this.client = opts.client;
     this.engine = opts.engine;
-    this.WebSocketImpl = opts.WebSocketImpl ?? (typeof WebSocket !== "undefined" ? WebSocket : null);
+    // explicit null disables the live connection (tests)
+    this.WebSocketImpl = opts.WebSocketImpl !== undefined ? opts.WebSocketImpl : typeof WebSocket !== "undefined" ? WebSocket : null;
     const prefs = loadPrefs();
     this.state = {
       boot: "loading",

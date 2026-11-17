@@ -96,7 +96,7 @@ export function encodeWav(wav, format = "float32") {
       if (isFloat) {
         buf.writeFloatLE(v, off);
       } else {
-        let n = Math.round(v * 8388608);
+        let n = Math.max(-8388608, Math.min(8388607, Math.round(v * 8388608)));
         if (n < 0) n += 0x1000000;
         buf[off] = n & 0xff;
         buf[off + 1] = (n >> 8) & 0xff;
