@@ -132,7 +132,8 @@ the cache keys include modification time and file size. Peaks are audio amplitud
     friendly Spanish screen asking for the complete link;
     the `/events` websocket closes with 1008;
   - may only call **read-only tools plus `feedback.append` and `chops.choose`** (what the
-    listening UI writes), `GET /project`, `/files`, `/waveform`, `GET /jobs/<id>` and the UI.
+    listening UI writes) and, since WP16, `song.edit` and `song.pieces` (the arrangement
+    editor: no filesystem paths), `GET /project`, `/files`, `/waveform`, `GET /jobs/<id>` and the UI.
     Everything else (render, restore, `source.import`, `library.index`, `plugins.scan`,
     `DELETE /jobs/<id>`, …) is `403 local_only`. No allowed tool takes a filesystem path:
     `project`/`project.open.path` must equal the served project (`project_locked`), and

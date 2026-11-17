@@ -933,3 +933,27 @@ Contract changes, all **additive** (old songs parse and render bit-identically,
 - `render_signature` and file validation include per-hit samples.
 - Editing is not versioning: `song.edit` never commits. "Guardar versión" is `render`
   with `summary = song.state.summary` ("Edición manual: ...").
+
+### 2026-11-17 — WP16 editor: in-flight edits, what the browser mix is, measurements
+
+- **In-flight edit rule (UI).** Edits apply locally at once and are sent in order
+  (whatever is queued goes in one `song.edit` call) with the revision they were made on.
+  The server re-applies them on a newer file when every touched element still holds its
+  `expect` (the agent edited something else: the edit lands on top, toast "quedó
+  encima"); otherwise nothing is written, the editor reloads the file and says "el agente
+  cambió eso mismo: no pisé su cambio". With nothing in flight, an external change just
+  reloads (selection kept if it still exists). Undo entries survive external changes and
+  are replayed with the same rule.
+- **Editing is not versioning.** Only "Guardar versión" (`render` with
+  `summary = song.state.summary`, `agent = muestra-editor`) creates a version.
+  "Descartar" = `song.edit {op: revert_to, version}` (undoable).
+- **Browser mix.** A track plays its wet stem when `wetFingerprint` (UI mirror of
+  `editor.pieces.wet_song`) matches; measured equal to the render's stem to -145 dB
+  (float precision) on every track of a real project. A just-edited track plays its dry
+  events (exact content, instant) with highpass/lowpass (same Butterworth design),
+  gain fx and an event-triggered sidechain approximation until its wet arrives
+  (measured: sample track level +0.04 dB / residual -13 dB; drums +2.1 dB because the
+  compressor is not approximated). Instruments keep their previous render until the new
+  one arrives. Not reproduced at all: the master chain (fx, `target_lufs` loop, safety
+  limiter); the mix goes through the stem-bus limiter and is level-matched to the last
+  render's stems/mix ratio. `F` plays a draft render of the current state.
