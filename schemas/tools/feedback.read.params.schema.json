@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "since": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "ISO-8601 timestamp; only events with ts > since are returned. Omit to read everything.",
+      "title": "Since"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "FeedbackReadParams",
+  "type": "object"
+}

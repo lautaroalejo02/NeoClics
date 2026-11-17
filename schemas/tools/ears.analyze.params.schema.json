@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "version": {
+      "description": "Render version to analyze, e.g. 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "version"
+  ],
+  "title": "EarsAnalyzeParams",
+  "type": "object"
+}

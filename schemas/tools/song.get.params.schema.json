@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "SongGetParams",
+  "type": "object"
+}

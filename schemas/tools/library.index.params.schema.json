@@ -1,0 +1,22 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "description": "Directory to index (added to muestra.toml library).",
+      "title": "Path",
+      "type": "string"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "path"
+  ],
+  "title": "LibraryIndexParams",
+  "type": "object"
+}

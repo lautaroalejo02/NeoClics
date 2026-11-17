@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "restored_from": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Restored From",
+      "type": "string"
+    },
+    "version": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "restored_from"
+  ],
+  "title": "VersionsRestoreResult",
+  "type": "object"
+}

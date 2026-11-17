@@ -1,0 +1,67 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bpm": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bpm"
+    },
+    "key": {
+      "anyOf": [
+        {
+          "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Key"
+    },
+    "limit": {
+      "default": 20,
+      "maximum": 200,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "query": {
+      "default": "",
+      "description": "Free-text query; empty lists all.",
+      "title": "Query",
+      "type": "string"
+    },
+    "type": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Type"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "LibrarySearchParams",
+  "type": "object"
+}

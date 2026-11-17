@@ -1,0 +1,585 @@
+{
+  "$defs": {
+    "Alarm": {
+      "additionalProperties": false,
+      "description": "A computed heads-up for the agent (\"metrics are alarms\").",
+      "properties": {
+        "at_s": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At S"
+        },
+        "code": {
+          "description": "Stable machine code, e.g. 'clipping'.",
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warn",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "Alarm",
+      "type": "object"
+    },
+    "AlignmentReport": {
+      "additionalProperties": false,
+      "properties": {
+        "max_abs_offset_ms": {
+          "minimum": 0.0,
+          "title": "Max Abs Offset Ms",
+          "type": "number"
+        },
+        "tracks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/TrackAlignment"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "max_abs_offset_ms"
+      ],
+      "title": "AlignmentReport",
+      "type": "object"
+    },
+    "ClickEvent": {
+      "additionalProperties": false,
+      "description": "A suspected click/discontinuity at a chop or clip edge.",
+      "properties": {
+        "at_s": {
+          "minimum": 0.0,
+          "title": "At S",
+          "type": "number"
+        },
+        "severity": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Severity",
+          "type": "number"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track"
+        }
+      },
+      "required": [
+        "at_s",
+        "severity"
+      ],
+      "title": "ClickEvent",
+      "type": "object"
+    },
+    "ClickReport": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/ClickEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "count"
+      ],
+      "title": "ClickReport",
+      "type": "object"
+    },
+    "KeyEstimate": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "major",
+            "minor"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "tonic": {
+          "description": "Tonic note, e.g. 'A', 'F#', 'Bb'.",
+          "pattern": "^[A-G](#|b)?$",
+          "title": "Tonic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tonic",
+        "mode",
+        "confidence"
+      ],
+      "title": "KeyEstimate",
+      "type": "object"
+    },
+    "Loudness": {
+      "additionalProperties": false,
+      "properties": {
+        "clipped_samples": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Clipped Samples",
+          "type": "integer"
+        },
+        "clipping": {
+          "title": "Clipping",
+          "type": "boolean"
+        },
+        "integrated_lufs": {
+          "title": "Integrated Lufs",
+          "type": "number"
+        },
+        "true_peak_dbtp": {
+          "title": "True Peak Dbtp",
+          "type": "number"
+        }
+      },
+      "required": [
+        "integrated_lufs",
+        "true_peak_dbtp",
+        "clipping"
+      ],
+      "title": "Loudness",
+      "type": "object"
+    },
+    "LowEndMasking": {
+      "additionalProperties": false,
+      "description": "Who owns the low end (the \"el bombo se come al sample\" alarm).\n\n``energy_db`` maps each track id to its mean energy (dB) inside\n``band_hz``; ``dominant_track`` is the loudest there. Track roles\n(kick/bass/sample) are identified by track id/name.",
+      "properties": {
+        "band_hz": {
+          "default": [
+            40.0,
+            150.0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Band Hz",
+          "type": "array"
+        },
+        "dominant_track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dominant Track"
+        },
+        "energy_db": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "type": "number"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Energy Db",
+          "type": "object"
+        }
+      },
+      "title": "LowEndMasking",
+      "type": "object"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "alarms": {
+          "items": {
+            "$ref": "#/$defs/Alarm"
+          },
+          "title": "Alarms",
+          "type": "array"
+        },
+        "alignment": {
+          "$ref": "#/$defs/AlignmentReport"
+        },
+        "clicks": {
+          "$ref": "#/$defs/ClickReport"
+        },
+        "loudness": {
+          "$ref": "#/$defs/Loudness"
+        },
+        "low_end_masking": {
+          "$ref": "#/$defs/LowEndMasking"
+        },
+        "schema_version": {
+          "const": 0,
+          "default": 0,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "spectral": {
+          "$ref": "#/$defs/SpectralReport"
+        },
+        "style_similarity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StyleSimilarity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tonal": {
+          "$ref": "#/$defs/TonalReport"
+        },
+        "version": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "loudness",
+        "spectral",
+        "low_end_masking",
+        "alignment",
+        "tonal",
+        "clicks"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "SpectralBalance": {
+      "additionalProperties": false,
+      "description": "Mean band energy in dB for the fixed bands (see BAND_EDGES_HZ).",
+      "properties": {
+        "high_db": {
+          "description": "4000-20000 Hz",
+          "title": "High Db",
+          "type": "number"
+        },
+        "low_db": {
+          "description": "20-250 Hz",
+          "title": "Low Db",
+          "type": "number"
+        },
+        "mid_db": {
+          "description": "250-4000 Hz",
+          "title": "Mid Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "low_db",
+        "mid_db",
+        "high_db"
+      ],
+      "title": "SpectralBalance",
+      "type": "object"
+    },
+    "SpectralReport": {
+      "additionalProperties": false,
+      "properties": {
+        "bands_hz": {
+          "additionalProperties": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Bands Hz",
+          "type": "object"
+        },
+        "mix": {
+          "$ref": "#/$defs/SpectralBalance"
+        },
+        "tracks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/SpectralBalance"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "mix"
+      ],
+      "title": "SpectralReport",
+      "type": "object"
+    },
+    "StyleScore": {
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "description": "Reference identifier, e.g. a path or name.",
+          "title": "Reference",
+          "type": "string"
+        },
+        "score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "reference",
+        "score"
+      ],
+      "title": "StyleScore",
+      "type": "object"
+    },
+    "StyleSimilarity": {
+      "additionalProperties": false,
+      "description": "Optional (spec 10): CLAP/MERT similarity against reference tracks.",
+      "properties": {
+        "mean_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Score"
+        },
+        "model": {
+          "description": "e.g. 'laion-clap', 'mert'.",
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "references": {
+          "items": {
+            "$ref": "#/$defs/StyleScore"
+          },
+          "title": "References",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "StyleSimilarity",
+      "type": "object"
+    },
+    "TonalReport": {
+      "additionalProperties": false,
+      "properties": {
+        "estimated": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeyEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "in_key": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True iff estimated tonic and mode both match target_key.",
+          "title": "In Key"
+        },
+        "mode_match": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode Match"
+        },
+        "target_key": {
+          "anyOf": [
+            {
+              "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "meta.key from song.yaml, normalized.",
+          "title": "Target Key"
+        },
+        "tonic_match": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tonic Match"
+        }
+      },
+      "title": "TonalReport",
+      "type": "object"
+    },
+    "TrackAlignment": {
+      "additionalProperties": false,
+      "description": "How far this track's transients sit off the project grid.",
+      "properties": {
+        "max_abs_offset_ms": {
+          "minimum": 0.0,
+          "title": "Max Abs Offset Ms",
+          "type": "number"
+        },
+        "mean_offset_ms": {
+          "title": "Mean Offset Ms",
+          "type": "number"
+        },
+        "n_transients": {
+          "minimum": 0,
+          "title": "N Transients",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mean_offset_ms",
+        "max_abs_offset_ms",
+        "n_transients"
+      ],
+      "title": "TrackAlignment",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "metrics": {
+      "$ref": "#/$defs/Metrics"
+    },
+    "metrics_path": {
+      "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+      "title": "Metrics Path",
+      "type": "string"
+    },
+    "version": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "metrics",
+    "metrics_path"
+  ],
+  "title": "EarsAnalyzeResult",
+  "type": "object"
+}

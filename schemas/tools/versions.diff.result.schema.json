@@ -1,0 +1,76 @@
+{
+  "$defs": {
+    "DiffEntry": {
+      "additionalProperties": false,
+      "description": "One changed value in the musical diff between versions.\n\n``path`` uses dotted/bracketed song.yaml addressing, e.g.\n``chops[0].warp.pitch_semitones`` or ``tracks[1].fx[2].cutoff_hz``.\n``from_`` serializes as ``from``.",
+      "properties": {
+        "from": {
+          "default": null,
+          "title": "From"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "to": {
+          "default": null,
+          "title": "To"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "DiffEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "a": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "A",
+      "type": "string"
+    },
+    "b": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "B",
+      "type": "string"
+    },
+    "diff": {
+      "description": "Changed fields, song.yaml addressing.",
+      "items": {
+        "$ref": "#/$defs/DiffEntry"
+      },
+      "title": "Diff",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "musical_summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Human-readable musical diff (WP5).",
+      "title": "Musical Summary"
+    }
+  },
+  "required": [
+    "a",
+    "b"
+  ],
+  "title": "VersionsDiffResult",
+  "type": "object"
+}

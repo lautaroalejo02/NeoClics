@@ -1,0 +1,1314 @@
+{
+  "$defs": {
+    "Automation": {
+      "additionalProperties": false,
+      "description": "Parameter automation over time.\n\n``points`` are ``[bar, value]`` pairs; bars are 1-indexed, fractional\nallowed, in [1, length_bars + 1] (length_bars + 1 = end of song).\nValue units are the target parameter's own units. ``curve``: ``lin``\nlinear, ``exp`` exponential (values must be non-zero and same-sign),\n``step`` holds the previous value.",
+      "properties": {
+        "curve": {
+          "default": "lin",
+          "enum": [
+            "lin",
+            "exp",
+            "step"
+          ],
+          "title": "Curve",
+          "type": "string"
+        },
+        "points": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "minItems": 2,
+          "title": "Points",
+          "type": "array"
+        },
+        "target": {
+          "description": "tracks.<track_id>.gain_db | tracks.<track_id>.pan | tracks.<track_id>.fx.<fx_id>.<param> | master.gain_db | master.fx.<fx_id>.<param>",
+          "title": "Target",
+          "type": "string"
+        }
+      },
+      "required": [
+        "target",
+        "points"
+      ],
+      "title": "Automation",
+      "type": "object"
+    },
+    "Chop": {
+      "additionalProperties": false,
+      "description": "A loop cut from a source stem, aligned to the source's real grid.",
+      "properties": {
+        "fade_ms": {
+          "default": 5.0,
+          "maximum": 1000.0,
+          "minimum": 0.0,
+          "title": "Fade Ms",
+          "type": "number"
+        },
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0,
+          "maximum": 128,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "source": {
+          "description": "id of a sources[] entry.",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "start_downbeat": {
+          "description": "1-based index into analysis.json downbeats_s.",
+          "minimum": 1,
+          "title": "Start Downbeat",
+          "type": "integer"
+        },
+        "stem": {
+          "default": "other",
+          "enum": [
+            "drums",
+            "bass",
+            "vocals",
+            "other",
+            "mix"
+          ],
+          "title": "Stem",
+          "type": "string"
+        },
+        "warp": {
+          "$ref": "#/$defs/Warp"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "start_downbeat",
+        "length_beats"
+      ],
+      "title": "Chop",
+      "type": "object"
+    },
+    "ChorusFx": {
+      "additionalProperties": false,
+      "properties": {
+        "centre_delay_ms": {
+          "default": 7.0,
+          "maximum": 100.0,
+          "minimum": 0.0,
+          "title": "Centre Delay Ms",
+          "type": "number"
+        },
+        "depth": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Depth",
+          "type": "number"
+        },
+        "feedback": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Feedback",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "mix": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Mix",
+          "type": "number"
+        },
+        "rate_hz": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 20.0,
+          "title": "Rate Hz",
+          "type": "number"
+        },
+        "type": {
+          "const": "chorus",
+          "default": "chorus",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "ChorusFx",
+      "type": "object"
+    },
+    "Clip": {
+      "additionalProperties": false,
+      "description": "Places a chop or a library sample on a track's grid.\n\nExactly one of ``chop`` / ``sample`` must be set. ``sample`` clips\nneed ``length_beats`` (grid occupancy; audio is truncated at the\nboundary, never looped \u2014 use ``repeat`` to tile) and may carry their\nown ``warp``; the renderer resolves the source BPM from the library\nindex.",
+      "properties": {
+        "at_bar": {
+          "description": "1-indexed bar where the clip starts.",
+          "minimum": 1,
+          "title": "At Bar",
+          "type": "integer"
+        },
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "length_beats": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 4096,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Beats"
+        },
+        "offset_beats": {
+          "default": 0.0,
+          "description": "Beat offset added to at_bar; may be negative or fractional.",
+          "title": "Offset Beats",
+          "type": "number"
+        },
+        "repeat": {
+          "default": 1,
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Repeat",
+          "type": "integer"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path or 'library://<path>' URI.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "warp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Warp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "at_bar"
+      ],
+      "title": "Clip",
+      "type": "object"
+    },
+    "CompressorFx": {
+      "additionalProperties": false,
+      "properties": {
+        "attack_ms": {
+          "default": 10.0,
+          "maximum": 1000.0,
+          "minimum": 0.0,
+          "title": "Attack Ms",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "knee_db": {
+          "default": 6.0,
+          "maximum": 24.0,
+          "minimum": 0.0,
+          "title": "Knee Db",
+          "type": "number"
+        },
+        "makeup_gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Makeup Gain Db",
+          "type": "number"
+        },
+        "ratio": {
+          "maximum": 40.0,
+          "minimum": 1.0,
+          "title": "Ratio",
+          "type": "number"
+        },
+        "release_ms": {
+          "default": 100.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 5000.0,
+          "title": "Release Ms",
+          "type": "number"
+        },
+        "threshold_db": {
+          "maximum": 0.0,
+          "minimum": -90.0,
+          "title": "Threshold Db",
+          "type": "number"
+        },
+        "type": {
+          "const": "compressor",
+          "default": "compressor",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "threshold_db",
+        "ratio"
+      ],
+      "title": "CompressorFx",
+      "type": "object"
+    },
+    "DelayFx": {
+      "additionalProperties": false,
+      "properties": {
+        "feedback": {
+          "default": 0.35,
+          "exclusiveMaximum": 1.0,
+          "minimum": 0.0,
+          "title": "Feedback",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "mix": {
+          "default": 0.3,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Mix",
+          "type": "number"
+        },
+        "time_beats": {
+          "description": "Delay time in project beats.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 64.0,
+          "title": "Time Beats",
+          "type": "number"
+        },
+        "type": {
+          "const": "delay",
+          "default": "delay",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "time_beats"
+      ],
+      "title": "DelayFx",
+      "type": "object"
+    },
+    "GainFx": {
+      "additionalProperties": false,
+      "properties": {
+        "gain_db": {
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "type": {
+          "const": "gain",
+          "default": "gain",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gain_db"
+      ],
+      "title": "GainFx",
+      "type": "object"
+    },
+    "HighpassFx": {
+      "additionalProperties": false,
+      "properties": {
+        "cutoff_hz": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 22000.0,
+          "title": "Cutoff Hz",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "order": {
+          "default": 4,
+          "enum": [
+            2,
+            4,
+            6,
+            8
+          ],
+          "title": "Order",
+          "type": "integer"
+        },
+        "type": {
+          "const": "highpass",
+          "default": "highpass",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cutoff_hz"
+      ],
+      "title": "HighpassFx",
+      "type": "object"
+    },
+    "Instrument": {
+      "additionalProperties": false,
+      "description": "A plugin instrument (VST3/AU or built-in) fed by a MIDI file.",
+      "properties": {
+        "params": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Params",
+          "type": "object"
+        },
+        "plugin": {
+          "description": "Plugin name or path.",
+          "minLength": 1,
+          "title": "Plugin",
+          "type": "string"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Preset reference (project path or plugin-internal name); not file-checked.",
+          "title": "Preset"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "Instrument",
+      "type": "object"
+    },
+    "LimiterFx": {
+      "additionalProperties": false,
+      "properties": {
+        "ceiling_db": {
+          "default": -1.0,
+          "maximum": 0.0,
+          "minimum": -30.0,
+          "title": "Ceiling Db",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "release_ms": {
+          "default": 50.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1000.0,
+          "title": "Release Ms",
+          "type": "number"
+        },
+        "type": {
+          "const": "limiter",
+          "default": "limiter",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "LimiterFx",
+      "type": "object"
+    },
+    "LowpassFx": {
+      "additionalProperties": false,
+      "properties": {
+        "cutoff_hz": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 22000.0,
+          "title": "Cutoff Hz",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "order": {
+          "default": 4,
+          "enum": [
+            2,
+            4,
+            6,
+            8
+          ],
+          "title": "Order",
+          "type": "integer"
+        },
+        "type": {
+          "const": "lowpass",
+          "default": "lowpass",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "cutoff_hz"
+      ],
+      "title": "LowpassFx",
+      "type": "object"
+    },
+    "Master": {
+      "additionalProperties": false,
+      "properties": {
+        "fx": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chorus": "#/$defs/ChorusFx",
+                "compressor": "#/$defs/CompressorFx",
+                "delay": "#/$defs/DelayFx",
+                "gain": "#/$defs/GainFx",
+                "highpass": "#/$defs/HighpassFx",
+                "limiter": "#/$defs/LimiterFx",
+                "lowpass": "#/$defs/LowpassFx",
+                "phaser": "#/$defs/PhaserFx",
+                "plugin": "#/$defs/PluginFx",
+                "reverb": "#/$defs/ReverbFx",
+                "saturation": "#/$defs/SaturationFx",
+                "sidechain": "#/$defs/SidechainFx"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/HighpassFx"
+              },
+              {
+                "$ref": "#/$defs/LowpassFx"
+              },
+              {
+                "$ref": "#/$defs/SidechainFx"
+              },
+              {
+                "$ref": "#/$defs/CompressorFx"
+              },
+              {
+                "$ref": "#/$defs/LimiterFx"
+              },
+              {
+                "$ref": "#/$defs/GainFx"
+              },
+              {
+                "$ref": "#/$defs/ReverbFx"
+              },
+              {
+                "$ref": "#/$defs/DelayFx"
+              },
+              {
+                "$ref": "#/$defs/ChorusFx"
+              },
+              {
+                "$ref": "#/$defs/PhaserFx"
+              },
+              {
+                "$ref": "#/$defs/SaturationFx"
+              },
+              {
+                "$ref": "#/$defs/PluginFx"
+              }
+            ]
+          },
+          "title": "Fx",
+          "type": "array"
+        },
+        "gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "target_lufs": {
+          "anyOf": [
+            {
+              "maximum": 0.0,
+              "minimum": -60.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Target Lufs"
+        }
+      },
+      "title": "Master",
+      "type": "object"
+    },
+    "Pattern": {
+      "additionalProperties": false,
+      "description": "Step-sequenced drum pattern, tiled across the song.\n\nEach lane's ``steps`` string must be exactly\n``steps_per_bar * bars`` characters (ignoring spaces).",
+      "properties": {
+        "bars": {
+          "default": 1,
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Bars",
+          "type": "integer"
+        },
+        "lanes": {
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/PatternLane"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Lanes",
+          "type": "object"
+        },
+        "steps_per_bar": {
+          "default": 16,
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Steps Per Bar",
+          "type": "integer"
+        },
+        "swing": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Swing",
+          "type": "number"
+        }
+      },
+      "required": [
+        "lanes"
+      ],
+      "title": "Pattern",
+      "type": "object"
+    },
+    "PatternLane": {
+      "additionalProperties": false,
+      "description": "One instrument lane of a drum pattern.",
+      "properties": {
+        "gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "pan": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "sample": {
+          "description": "Project-relative POSIX path or 'library://<path>' URI.",
+          "title": "Sample",
+          "type": "string"
+        },
+        "steps": {
+          "title": "Steps",
+          "type": "string"
+        }
+      },
+      "required": [
+        "sample",
+        "steps"
+      ],
+      "title": "PatternLane",
+      "type": "object"
+    },
+    "PhaserFx": {
+      "additionalProperties": false,
+      "properties": {
+        "centre_frequency_hz": {
+          "default": 1300.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 20000.0,
+          "title": "Centre Frequency Hz",
+          "type": "number"
+        },
+        "depth": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Depth",
+          "type": "number"
+        },
+        "feedback": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Feedback",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "mix": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Mix",
+          "type": "number"
+        },
+        "rate_hz": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 20.0,
+          "title": "Rate Hz",
+          "type": "number"
+        },
+        "type": {
+          "const": "phaser",
+          "default": "phaser",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "PhaserFx",
+      "type": "object"
+    },
+    "PluginFx": {
+      "additionalProperties": false,
+      "description": "Generic hosted plugin (VST3/AU). ``params`` maps the plugin's own\nparameter names to values in that parameter's native range.",
+      "properties": {
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "params": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "title": "Params",
+          "type": "object"
+        },
+        "plugin": {
+          "minLength": 1,
+          "title": "Plugin",
+          "type": "string"
+        },
+        "preset": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Preset"
+        },
+        "type": {
+          "const": "plugin",
+          "default": "plugin",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "plugin"
+      ],
+      "title": "PluginFx",
+      "type": "object"
+    },
+    "ReverbFx": {
+      "additionalProperties": false,
+      "description": "Serial-insert reverb; wet adds on top of dry (pedalboard names).",
+      "properties": {
+        "damping": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Damping",
+          "type": "number"
+        },
+        "dry_level": {
+          "default": 0.4,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Dry Level",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "room_size": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Room Size",
+          "type": "number"
+        },
+        "type": {
+          "const": "reverb",
+          "default": "reverb",
+          "title": "Type",
+          "type": "string"
+        },
+        "wet_level": {
+          "default": 0.33,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Wet Level",
+          "type": "number"
+        },
+        "width": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Width",
+          "type": "number"
+        }
+      },
+      "title": "ReverbFx",
+      "type": "object"
+    },
+    "SaturationFx": {
+      "additionalProperties": false,
+      "properties": {
+        "drive_db": {
+          "default": 6.0,
+          "maximum": 60.0,
+          "minimum": 0.0,
+          "title": "Drive Db",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "type": {
+          "const": "saturation",
+          "default": "saturation",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "title": "SaturationFx",
+      "type": "object"
+    },
+    "SidechainFx": {
+      "additionalProperties": false,
+      "description": "Ducks this track when ``key_track`` is playing.\n\n``depth`` is the fraction of gain removed: the key envelope scales the\ntrack by ``1 - depth`` (0 = off, 1 = full duck to silence).",
+      "properties": {
+        "attack_ms": {
+          "default": 5.0,
+          "maximum": 500.0,
+          "minimum": 0.0,
+          "title": "Attack Ms",
+          "type": "number"
+        },
+        "depth": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Depth",
+          "type": "number"
+        },
+        "id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Id"
+        },
+        "key_track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Key Track",
+          "type": "string"
+        },
+        "release_ms": {
+          "default": 120.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 5000.0,
+          "title": "Release Ms",
+          "type": "number"
+        },
+        "type": {
+          "const": "sidechain",
+          "default": "sidechain",
+          "title": "Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "key_track",
+        "depth"
+      ],
+      "title": "SidechainFx",
+      "type": "object"
+    },
+    "SongMeta": {
+      "additionalProperties": false,
+      "description": "Global song settings. ``seed`` feeds every random decision.",
+      "properties": {
+        "bpm": {
+          "exclusiveMaximum": 400,
+          "exclusiveMinimum": 0,
+          "title": "Bpm",
+          "type": "number"
+        },
+        "key": {
+          "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+          "title": "Key",
+          "type": "string"
+        },
+        "length_bars": {
+          "maximum": 4096,
+          "minimum": 1,
+          "title": "Length Bars",
+          "type": "integer"
+        },
+        "seed": {
+          "default": 0,
+          "title": "Seed",
+          "type": "integer"
+        },
+        "time_signature": {
+          "const": "4/4",
+          "default": "4/4",
+          "title": "Time Signature",
+          "type": "string"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "bpm",
+        "key",
+        "length_bars"
+      ],
+      "title": "SongMeta",
+      "type": "object"
+    },
+    "Source": {
+      "additionalProperties": false,
+      "description": "An imported audio file. ``id`` is allocated as src1, src2, ...",
+      "properties": {
+        "file": {
+          "description": "Project-relative path or library:// URI.",
+          "title": "File",
+          "type": "string"
+        },
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "file"
+      ],
+      "title": "Source",
+      "type": "object"
+    },
+    "Track": {
+      "additionalProperties": false,
+      "description": "One mixer track. Exactly one kind of content:\n\n* ``clips`` \u2014 placed chops / library samples, or\n* ``pattern`` \u2014 a step-sequenced drum pattern, or\n* ``instrument`` + ``midi`` \u2014 a plugin instrument playing a .mid file.",
+      "properties": {
+        "clips": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/Clip"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clips"
+        },
+        "fx": {
+          "items": {
+            "discriminator": {
+              "mapping": {
+                "chorus": "#/$defs/ChorusFx",
+                "compressor": "#/$defs/CompressorFx",
+                "delay": "#/$defs/DelayFx",
+                "gain": "#/$defs/GainFx",
+                "highpass": "#/$defs/HighpassFx",
+                "limiter": "#/$defs/LimiterFx",
+                "lowpass": "#/$defs/LowpassFx",
+                "phaser": "#/$defs/PhaserFx",
+                "plugin": "#/$defs/PluginFx",
+                "reverb": "#/$defs/ReverbFx",
+                "saturation": "#/$defs/SaturationFx",
+                "sidechain": "#/$defs/SidechainFx"
+              },
+              "propertyName": "type"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/$defs/HighpassFx"
+              },
+              {
+                "$ref": "#/$defs/LowpassFx"
+              },
+              {
+                "$ref": "#/$defs/SidechainFx"
+              },
+              {
+                "$ref": "#/$defs/CompressorFx"
+              },
+              {
+                "$ref": "#/$defs/LimiterFx"
+              },
+              {
+                "$ref": "#/$defs/GainFx"
+              },
+              {
+                "$ref": "#/$defs/ReverbFx"
+              },
+              {
+                "$ref": "#/$defs/DelayFx"
+              },
+              {
+                "$ref": "#/$defs/ChorusFx"
+              },
+              {
+                "$ref": "#/$defs/PhaserFx"
+              },
+              {
+                "$ref": "#/$defs/SaturationFx"
+              },
+              {
+                "$ref": "#/$defs/PluginFx"
+              }
+            ]
+          },
+          "title": "Fx",
+          "type": "array"
+        },
+        "gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "instrument": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Instrument"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "midi": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path or 'library://<path>' URI.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Midi"
+        },
+        "mute": {
+          "default": false,
+          "title": "Mute",
+          "type": "boolean"
+        },
+        "pan": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Pattern"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "id"
+      ],
+      "title": "Track",
+      "type": "object"
+    },
+    "Warp": {
+      "additionalProperties": false,
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: vinyl-style playback-rate change; pitch rises with\n  tempo. ``pitch_semitones`` multiplies into the rate, so it also\n  changes the sounding duration (audio is truncated or padded to the\n  clip's grid span).\n* ``stretch``: high-quality time-stretch preserving pitch\n  (Rubber Band), then a separate pitch shift of ``pitch_semitones``.",
+      "properties": {
+        "mode": {
+          "default": "resample",
+          "enum": [
+            "resample",
+            "stretch"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        }
+      },
+      "title": "Warp",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Root of song.yaml.",
+  "properties": {
+    "automation": {
+      "items": {
+        "$ref": "#/$defs/Automation"
+      },
+      "title": "Automation",
+      "type": "array"
+    },
+    "chops": {
+      "items": {
+        "$ref": "#/$defs/Chop"
+      },
+      "title": "Chops",
+      "type": "array"
+    },
+    "master": {
+      "$ref": "#/$defs/Master"
+    },
+    "meta": {
+      "$ref": "#/$defs/SongMeta"
+    },
+    "schema_version": {
+      "const": 0,
+      "default": 0,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "sources": {
+      "items": {
+        "$ref": "#/$defs/Source"
+      },
+      "title": "Sources",
+      "type": "array"
+    },
+    "tracks": {
+      "items": {
+        "$ref": "#/$defs/Track"
+      },
+      "title": "Tracks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "meta"
+  ],
+  "title": "Song",
+  "type": "object"
+}

@@ -1,0 +1,59 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "cached": {
+      "description": "True when the cache was reused.",
+      "title": "Cached",
+      "type": "boolean"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Model"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "stems": {
+      "additionalProperties": {
+        "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+        "type": "string"
+      },
+      "description": "stem name -> project-relative wav path.",
+      "propertyNames": {
+        "enum": [
+          "drums",
+          "bass",
+          "vocals",
+          "other",
+          "mix"
+        ]
+      },
+      "title": "Stems",
+      "type": "object"
+    }
+  },
+  "required": [
+    "source_id",
+    "cached"
+  ],
+  "title": "SourceSeparateResult",
+  "type": "object"
+}

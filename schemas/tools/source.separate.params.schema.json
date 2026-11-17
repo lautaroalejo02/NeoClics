@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "model": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Separation model override (default: muestra.toml).",
+      "title": "Model"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "source_id"
+  ],
+  "title": "SourceSeparateParams",
+  "type": "object"
+}

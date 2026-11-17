@@ -1,0 +1,77 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "length_beats": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Loop length in beats (default: 8).",
+      "title": "Length Beats"
+    },
+    "n": {
+      "default": 3,
+      "description": "Number of candidates to propose.",
+      "minimum": 1,
+      "title": "N",
+      "type": "integer"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "section": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Section label from analysis.json to chop from.",
+      "title": "Section"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "stem": {
+      "anyOf": [
+        {
+          "enum": [
+            "drums",
+            "bass",
+            "vocals",
+            "other",
+            "mix"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Stem to chop (default: 'other').",
+      "title": "Stem"
+    }
+  },
+  "required": [
+    "project",
+    "source_id"
+  ],
+  "title": "SourceFindChopsParams",
+  "type": "object"
+}

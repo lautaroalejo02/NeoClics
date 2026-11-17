@@ -1,0 +1,22 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "check_files": {
+      "default": true,
+      "description": "Also verify referenced files exist and chops fit the analyzed grid. Set false to validate a song without its audio.",
+      "title": "Check Files",
+      "type": "boolean"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "SongValidateParams",
+  "type": "object"
+}

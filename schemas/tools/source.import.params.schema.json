@@ -1,0 +1,37 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "description": "Path to a local audio file (wav/flac/mp3/m4a).",
+      "title": "Path",
+      "type": "string"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "source_id": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Force a source id; default allocates src1, src2, ...",
+      "title": "Source Id"
+    }
+  },
+  "required": [
+    "project",
+    "path"
+  ],
+  "title": "SourceImportParams",
+  "type": "object"
+}

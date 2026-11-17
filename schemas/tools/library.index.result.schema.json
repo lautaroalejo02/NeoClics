@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "index_path": {
+      "description": "Project-relative path of the index file.",
+      "title": "Index Path",
+      "type": "string"
+    },
+    "indexed": {
+      "minimum": 0,
+      "title": "Indexed",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "indexed",
+    "index_path"
+  ],
+  "title": "LibraryIndexResult",
+  "type": "object"
+}

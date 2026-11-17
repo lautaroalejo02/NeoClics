@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "source_id"
+  ],
+  "title": "SourceAnalyzeParams",
+  "type": "object"
+}

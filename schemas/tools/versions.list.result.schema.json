@@ -1,0 +1,91 @@
+{
+  "$defs": {
+    "VersionInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Created At"
+        },
+        "liked": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest rating for this version, if any.",
+          "title": "Liked"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "description": "Render version id like 'v001'.",
+              "pattern": "^v\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Parent"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "version": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "VersionInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "versions": {
+      "items": {
+        "$ref": "#/$defs/VersionInfo"
+      },
+      "title": "Versions",
+      "type": "array"
+    }
+  },
+  "title": "VersionsListResult",
+  "type": "object"
+}

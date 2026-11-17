@@ -1,0 +1,89 @@
+{
+  "$defs": {
+    "LibraryHit": {
+      "additionalProperties": false,
+      "properties": {
+        "bpm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bpm"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "path": {
+          "description": "Path relative to its library dir.",
+          "title": "Path",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. kick/snare/clap/hat/loop/oneshot.",
+          "title": "Type"
+        },
+        "uri": {
+          "description": "library:// URI usable in song.yaml.",
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "uri",
+        "path"
+      ],
+      "title": "LibraryHit",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "results": {
+      "items": {
+        "$ref": "#/$defs/LibraryHit"
+      },
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "title": "LibrarySearchResult",
+  "type": "object"
+}

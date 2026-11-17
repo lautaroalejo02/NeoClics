@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "preview_path": {
+      "description": "cache/previews/... audio path.",
+      "title": "Preview Path",
+      "type": "string"
+    },
+    "target": {
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "target",
+    "preview_path"
+  ],
+  "title": "PreviewResult",
+  "type": "object"
+}

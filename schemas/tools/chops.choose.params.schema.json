@@ -1,0 +1,64 @@
+{
+  "$defs": {
+    "ChopAdjust": {
+      "additionalProperties": false,
+      "description": "Beat deltas applied by ``chops.choose`` (may be negative).",
+      "properties": {
+        "length_beats": {
+          "default": 0.0,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "start_beats": {
+          "default": 0.0,
+          "title": "Start Beats",
+          "type": "number"
+        }
+      },
+      "title": "ChopAdjust",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "adjust": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ChopAdjust"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Beat deltas to start/length (mode manual)."
+    },
+    "candidate_id": {
+      "description": "Global candidate id '<set_id>/<local_id>', e.g. 'cs001/cand2'.",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "mode": {
+      "default": "manual",
+      "description": "'auto' = agent pick, 'manual' = human override (logged to feedback.jsonl as a chop_choice event).",
+      "enum": [
+        "auto",
+        "manual"
+      ],
+      "title": "Mode",
+      "type": "string"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "candidate_id"
+  ],
+  "title": "ChopsChooseParams",
+  "type": "object"
+}

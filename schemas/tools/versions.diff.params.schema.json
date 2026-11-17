@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "a": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "A",
+      "type": "string"
+    },
+    "b": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "B",
+      "type": "string"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "a",
+    "b"
+  ],
+  "title": "VersionsDiffParams",
+  "type": "object"
+}

@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "bars": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Max length in bars (default: whole target).",
+      "title": "Bars"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "target": {
+      "description": "What to preview: 'mix', 'chop:<id>', 'track:<id>', or 'clip:<track_id>:<index>'.",
+      "title": "Target",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "target"
+  ],
+  "title": "PreviewParams",
+  "type": "object"
+}

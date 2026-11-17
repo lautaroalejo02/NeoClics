@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "file": {
+      "description": "Project-relative path under sources/.",
+      "title": "File",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "file"
+  ],
+  "title": "SourceImportResult",
+  "type": "object"
+}

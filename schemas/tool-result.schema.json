@@ -1,0 +1,112 @@
+{
+  "$defs": {
+    "Issue": {
+      "additionalProperties": false,
+      "description": "One machine-readable problem. Agents consume these to fix files.\n\nAttributes:\n    path: Dotted/bracketed location inside the offending file, e.g.\n        ``tracks[1].fx[2].cutoff_hz``. Empty string means the problem\n        is about the file (or project) as a whole.\n    code: Stable machine-readable code, e.g. ``unknown_field``,\n        ``ref_not_found``, ``file_not_found``.\n    message: Human-readable description of what is wrong.\n    hint: Short actionable fix suggestion, when one is known.\n    value: ``repr()`` of the offending value, if there is one.",
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hint"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "default": "",
+          "title": "Path",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "code",
+        "message"
+      ],
+      "title": "Issue",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "JSON envelope every section-8 tool call produces (spec section 8).\n\n``files`` are project-relative POSIX paths of files the tool created\nor updated (copied from the result model's ``files`` field).\n``hint`` is a short message for the agent when something is off.",
+  "properties": {
+    "data": {
+      "anyOf": [
+        {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Data"
+    },
+    "errors": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/Issue"
+      },
+      "title": "Errors",
+      "type": "array"
+    },
+    "files": {
+      "default": [],
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    },
+    "tool": {
+      "title": "Tool",
+      "type": "string"
+    }
+  },
+  "required": [
+    "tool",
+    "ok"
+  ],
+  "title": "ToolResult",
+  "type": "object"
+}

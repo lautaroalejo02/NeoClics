@@ -1,0 +1,22 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dir": {
+      "default": ".",
+      "description": "Parent directory for the new project (default: cwd).",
+      "title": "Dir",
+      "type": "string"
+    },
+    "name": {
+      "description": "Name of the project directory to create.",
+      "minLength": 1,
+      "title": "Name",
+      "type": "string"
+    }
+  },
+  "required": [
+    "name"
+  ],
+  "title": "ProjectCreateParams",
+  "type": "object"
+}

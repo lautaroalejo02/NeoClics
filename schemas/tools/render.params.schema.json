@@ -1,0 +1,45 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "range_bars": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "[start_bar, end_bar] to render (1-indexed); default: whole song.",
+      "title": "Range Bars"
+    },
+    "stems": {
+      "default": true,
+      "description": "Also render per-track stems.",
+      "title": "Stems",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "RenderParams",
+  "type": "object"
+}

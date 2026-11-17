@@ -1,0 +1,117 @@
+{
+  "$defs": {
+    "Chop": {
+      "additionalProperties": false,
+      "description": "A loop cut from a source stem, aligned to the source's real grid.",
+      "properties": {
+        "fade_ms": {
+          "default": 5.0,
+          "maximum": 1000.0,
+          "minimum": 0.0,
+          "title": "Fade Ms",
+          "type": "number"
+        },
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0,
+          "maximum": 128,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "source": {
+          "description": "id of a sources[] entry.",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "start_downbeat": {
+          "description": "1-based index into analysis.json downbeats_s.",
+          "minimum": 1,
+          "title": "Start Downbeat",
+          "type": "integer"
+        },
+        "stem": {
+          "default": "other",
+          "enum": [
+            "drums",
+            "bass",
+            "vocals",
+            "other",
+            "mix"
+          ],
+          "title": "Stem",
+          "type": "string"
+        },
+        "warp": {
+          "$ref": "#/$defs/Warp"
+        }
+      },
+      "required": [
+        "id",
+        "source",
+        "start_downbeat",
+        "length_beats"
+      ],
+      "title": "Chop",
+      "type": "object"
+    },
+    "Warp": {
+      "additionalProperties": false,
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: vinyl-style playback-rate change; pitch rises with\n  tempo. ``pitch_semitones`` multiplies into the rate, so it also\n  changes the sounding duration (audio is truncated or padded to the\n  clip's grid span).\n* ``stretch``: high-quality time-stretch preserving pitch\n  (Rubber Band), then a separate pitch shift of ``pitch_semitones``.",
+      "properties": {
+        "mode": {
+          "default": "resample",
+          "enum": [
+            "resample",
+            "stretch"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        }
+      },
+      "title": "Warp",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidate_id": {
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "chop": {
+      "$ref": "#/$defs/Chop",
+      "description": "The resulting chop to write into song.yaml."
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "set_id": {
+      "title": "Set Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "set_id",
+    "candidate_id",
+    "chop"
+  ],
+  "title": "ChopsChooseResult",
+  "type": "object"
+}

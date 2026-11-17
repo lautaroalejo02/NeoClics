@@ -1,0 +1,70 @@
+{
+  "$defs": {
+    "SeparationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "backend": {
+          "default": "audio-separator",
+          "description": "Separation backend name, e.g. 'audio-separator'.",
+          "minLength": 1,
+          "title": "Backend",
+          "type": "string"
+        },
+        "model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Model name/version understood by the backend.",
+          "title": "Model"
+        }
+      },
+      "title": "SeparationConfig",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "export_bit_depth": {
+      "default": 24,
+      "enum": [
+        16,
+        24,
+        32
+      ],
+      "title": "Export Bit Depth",
+      "type": "integer"
+    },
+    "library": {
+      "description": "Library directories searched by 'library://' URIs, in order. Relative paths resolve against the project dir ('..' allowed); absolute paths are allowed.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Library",
+      "type": "array"
+    },
+    "sample_rate": {
+      "default": 48000,
+      "description": "Internal render sample rate (Hz).",
+      "exclusiveMinimum": 0,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": 0,
+      "default": 0,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "separation": {
+      "$ref": "#/$defs/SeparationConfig"
+    }
+  },
+  "title": "ProjectConfig",
+  "type": "object"
+}

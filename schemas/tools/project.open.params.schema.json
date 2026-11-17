@@ -1,0 +1,16 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "path": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "path"
+  ],
+  "title": "ProjectOpenParams",
+  "type": "object"
+}

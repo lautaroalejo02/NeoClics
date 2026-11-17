@@ -1,0 +1,145 @@
+{
+  "$defs": {
+    "DiffEntry": {
+      "additionalProperties": false,
+      "description": "One changed value in the musical diff between versions.\n\n``path`` uses dotted/bracketed song.yaml addressing, e.g.\n``chops[0].warp.pitch_semitones`` or ``tracks[1].fx[2].cutoff_hz``.\n``from_`` serializes as ``from``.",
+      "properties": {
+        "from": {
+          "default": null,
+          "title": "From"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        },
+        "to": {
+          "default": null,
+          "title": "To"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "DiffEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "agent": {
+      "description": "Agent/tool that rendered, e.g. 'claude-code'.",
+      "minLength": 1,
+      "title": "Agent",
+      "type": "string"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "diff": {
+      "items": {
+        "$ref": "#/$defs/DiffEntry"
+      },
+      "title": "Diff",
+      "type": "array"
+    },
+    "duration_s": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Duration S"
+    },
+    "git_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Git Commit"
+    },
+    "parent": {
+      "anyOf": [
+        {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Parent"
+    },
+    "render_time_s": {
+      "anyOf": [
+        {
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Render Time S"
+    },
+    "request": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The natural-language request that produced this version.",
+      "title": "Request"
+    },
+    "schema_version": {
+      "const": 0,
+      "default": 0,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Musical (not technical) description of what changed.",
+      "title": "Summary"
+    },
+    "version": {
+      "description": "Render version id like 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "version",
+    "created_at",
+    "agent"
+  ],
+  "title": "RenderMeta",
+  "type": "object"
+}

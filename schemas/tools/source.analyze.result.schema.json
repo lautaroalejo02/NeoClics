@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "Analysis": {
+      "additionalProperties": false,
+      "properties": {
+        "beats_s": {
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "title": "Beats S",
+          "type": "array"
+        },
+        "bpm_global": {
+          "exclusiveMaximum": 400.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Bpm Global",
+          "type": "number"
+        },
+        "downbeats_s": {
+          "items": {
+            "type": "number"
+          },
+          "minItems": 1,
+          "title": "Downbeats S",
+          "type": "array"
+        },
+        "duration_s": {
+          "exclusiveMinimum": 0.0,
+          "title": "Duration S",
+          "type": "number"
+        },
+        "file": {
+          "description": "Project-relative path of the source audio.",
+          "title": "File",
+          "type": "string"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeyEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "loudness_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loudness Lufs"
+        },
+        "sample_rate": {
+          "exclusiveMinimum": 0,
+          "title": "Sample Rate",
+          "type": "integer"
+        },
+        "schema_version": {
+          "const": 0,
+          "default": 0,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "sections": {
+          "items": {
+            "$ref": "#/$defs/Section"
+          },
+          "title": "Sections",
+          "type": "array"
+        },
+        "separation_model": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Separation Model"
+        },
+        "source_id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "stems": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Stems"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tempo_variable": {
+          "default": false,
+          "title": "Tempo Variable",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "source_id",
+        "file",
+        "duration_s",
+        "sample_rate",
+        "bpm_global",
+        "beats_s",
+        "downbeats_s"
+      ],
+      "title": "Analysis",
+      "type": "object"
+    },
+    "KeyEstimate": {
+      "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "major",
+            "minor"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "tonic": {
+          "description": "Tonic note, e.g. 'A', 'F#', 'Bb'.",
+          "pattern": "^[A-G](#|b)?$",
+          "title": "Tonic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tonic",
+        "mode",
+        "confidence"
+      ],
+      "title": "KeyEstimate",
+      "type": "object"
+    },
+    "Section": {
+      "additionalProperties": false,
+      "properties": {
+        "end_s": {
+          "minimum": 0.0,
+          "title": "End S",
+          "type": "number"
+        },
+        "label": {
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "start_s": {
+          "minimum": 0.0,
+          "title": "Start S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "label",
+        "start_s",
+        "end_s"
+      ],
+      "title": "Section",
+      "type": "object"
+    },
+    "Stems": {
+      "additionalProperties": false,
+      "description": "Relative paths to separated stem files under cache/stems/<source_id>/.\n\nAt least one stem must be present; a 2-stem separation may only have\nsome of them. The full mix is the source file itself, so there is no\n'mix' field here ('mix' exists only as a chop stem choice).",
+      "properties": {
+        "bass": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bass"
+        },
+        "drums": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Drums"
+        },
+        "other": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Other"
+        },
+        "vocals": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Vocals"
+        }
+      },
+      "title": "Stems",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "analysis": {
+      "$ref": "#/$defs/Analysis"
+    },
+    "analysis_path": {
+      "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+      "title": "Analysis Path",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "analysis_path",
+    "analysis"
+  ],
+  "title": "SourceAnalyzeResult",
+  "type": "object"
+}

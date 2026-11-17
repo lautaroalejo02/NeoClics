@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "created": {
+      "description": "Top-level files/dirs created (project-relative).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Created",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "project_path": {
+      "title": "Project Path",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project_path"
+  ],
+  "title": "ProjectCreateResult",
+  "type": "object"
+}

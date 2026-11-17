@@ -1,0 +1,326 @@
+{
+  "$defs": {
+    "AgentPick": {
+      "additionalProperties": false,
+      "description": "The candidate the agent chose in mode 'auto', with its reason.",
+      "properties": {
+        "candidate_id": {
+          "description": "Local candidate id, e.g. 'cand2'.",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "justification": {
+          "minLength": 1,
+          "title": "Justification",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "justification"
+      ],
+      "title": "AgentPick",
+      "type": "object"
+    },
+    "CandidateScore": {
+      "additionalProperties": false,
+      "properties": {
+        "reasons": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "value": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "value"
+      ],
+      "title": "CandidateScore",
+      "type": "object"
+    },
+    "ChopAdjust": {
+      "additionalProperties": false,
+      "description": "Beat deltas applied by ``chops.choose`` (may be negative).",
+      "properties": {
+        "length_beats": {
+          "default": 0.0,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "start_beats": {
+          "default": 0.0,
+          "title": "Start Beats",
+          "type": "number"
+        }
+      },
+      "title": "ChopAdjust",
+      "type": "object"
+    },
+    "ChopCandidate": {
+      "additionalProperties": false,
+      "description": "One proposed loop, aligned to a real downbeat of the source.",
+      "properties": {
+        "end_s": {
+          "description": "Resolved end time in the source audio.",
+          "exclusiveMinimum": 0.0,
+          "title": "End S",
+          "type": "number"
+        },
+        "id": {
+          "description": "Local id inside the set: 'cand1', 'cand2', ...",
+          "pattern": "^cand\\d+$",
+          "title": "Id",
+          "type": "string"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0.0,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "local_bpm": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source tempo over the chop: 60 * length_beats / (end_s - start_s).",
+          "title": "Local Bpm"
+        },
+        "preview": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Project-relative path to the rendered preview audio.",
+          "title": "Preview"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CandidateScore"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "start_downbeat": {
+          "description": "1-based index into downbeats_s.",
+          "minimum": 1,
+          "title": "Start Downbeat",
+          "type": "integer"
+        },
+        "start_s": {
+          "description": "Resolved start time in the source audio.",
+          "minimum": 0.0,
+          "title": "Start S",
+          "type": "number"
+        },
+        "stem": {
+          "enum": [
+            "drums",
+            "bass",
+            "vocals",
+            "other",
+            "mix"
+          ],
+          "title": "Stem",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "source_id",
+        "stem",
+        "start_downbeat",
+        "start_s",
+        "length_beats",
+        "end_s"
+      ],
+      "title": "ChopCandidate",
+      "type": "object"
+    },
+    "ChopQuery": {
+      "additionalProperties": false,
+      "description": "Echo of the ``source.find_chops`` request that produced the set.",
+      "properties": {
+        "length_beats": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Beats"
+        },
+        "n": {
+          "default": 3,
+          "minimum": 1,
+          "title": "N",
+          "type": "integer"
+        },
+        "section": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Section"
+        },
+        "stem": {
+          "anyOf": [
+            {
+              "enum": [
+                "drums",
+                "bass",
+                "vocals",
+                "other",
+                "mix"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Stem"
+        }
+      },
+      "title": "ChopQuery",
+      "type": "object"
+    },
+    "ChosenRecord": {
+      "additionalProperties": false,
+      "description": "Written by ``chops.choose`` back onto the set it came from.",
+      "properties": {
+        "adjust": {
+          "$ref": "#/$defs/ChopAdjust"
+        },
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "candidate_id": {
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "mode": {
+          "enum": [
+            "auto",
+            "manual"
+          ],
+          "title": "Mode",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "mode",
+        "at"
+      ],
+      "title": "ChosenRecord",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "candidates": {
+      "items": {
+        "$ref": "#/$defs/ChopCandidate"
+      },
+      "title": "Candidates",
+      "type": "array"
+    },
+    "chosen": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ChosenRecord"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "pick": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/AgentPick"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "query": {
+      "$ref": "#/$defs/ChopQuery"
+    },
+    "schema_version": {
+      "const": 0,
+      "default": 0,
+      "title": "Schema Version",
+      "type": "integer"
+    },
+    "set_id": {
+      "description": "Allocated id: 'cs001', ...",
+      "pattern": "^cs\\d{3,}$",
+      "title": "Set Id",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "set_id",
+    "source_id",
+    "created_at",
+    "query"
+  ],
+  "title": "ChopCandidateSet",
+  "type": "object"
+}
