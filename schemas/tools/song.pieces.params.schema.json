@@ -1,0 +1,59 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dry": {
+      "default": true,
+      "description": "Materials, one-shots and instrument dry stems.",
+      "title": "Dry",
+      "type": "boolean"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Expected song.state revision; a different current file is 'stale_revision'.",
+      "title": "Revision"
+    },
+    "tracks": {
+      "anyOf": [
+        {
+          "items": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only these tracks (default: all).",
+      "title": "Tracks"
+    },
+    "wet": {
+      "default": false,
+      "description": "Per-track renders with fx (seconds).",
+      "title": "Wet",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "SongPiecesParams",
+  "type": "object"
+}

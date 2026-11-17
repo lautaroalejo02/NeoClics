@@ -128,7 +128,8 @@ def test_pass_gain_reverse_and_pitch(project, song):
     bpm = song.meta.bpm
     f = lambda beat: beat_frame(beat, bpm, SR)  # noqa: E731
     mid = slice(f(8) + 2000, f(16) - 2000)
-    assert np.max(np.abs(b[mid])) == pytest.approx(np.max(np.abs(a[mid])) * 10 ** (-6 / 20), rel=1e-3)
+    expected = np.max(np.abs(a[mid])) * 10 ** (-6 / 20)
+    assert np.max(np.abs(b[mid])) == pytest.approx(expected, rel=1e-3)
     rev = slice(f(24) + 2000, f(32) - 2000)
     lo, hi = f(24), f(32)
     assert np.allclose(b[rev], a[lo:hi][::-1][2000:-2000], atol=1e-6)
@@ -143,7 +144,9 @@ def test_pass_gain_reverse_and_pitch(project, song):
 
 def test_trim_plays_a_sub_range_of_the_chop(project, song):
     def edit(t):
-        t["clips"] = [{"chop": "c1", "at_bar": 1, "repeat": 4, "trim_start_beats": 2, "length_beats": 4}]
+        t["clips"] = [
+            {"chop": "c1", "at_bar": 1, "repeat": 4, "trim_start_beats": 2, "length_beats": 4}
+        ]
 
     base = _song(song)
     edited = _song(song, sample=edit)

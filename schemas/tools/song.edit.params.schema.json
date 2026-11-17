@@ -1,0 +1,46 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "base_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "song.state revision the ops were built against; if the file changed since, ops are re-applied when every 'expect' still holds (rebased) else edit_conflict.",
+      "title": "Base Revision"
+    },
+    "dry_run": {
+      "default": false,
+      "description": "Validate and describe without writing.",
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "ops": {
+      "description": "Edit operations applied atomically, in order. Primitive: {op:set,path,value,expect?} {op:unset,path} {op:insert,path,index?,value} {op:remove,path,expect?} {op:move,path,to}. Semantic: {op:hit,track,lane,bar,step,velocity|null} {op:add_hits,track,hits:[{beat,lane,velocity?,sample?}],quantize?} {op:split_clip,track,clip,at_beat} {op:duplicate_clip,track,clip,at_bar?} {op:add_point,target,bar,value,curve?} {op:revert_to,version}. Paths are id-based like versions.diff: tracks.drums.pattern.lanes.kick.overrides.7, tracks.sample.clips[0].instances.3.mute (indices 0-based).",
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "minItems": 1,
+      "title": "Ops",
+      "type": "array"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "ops"
+  ],
+  "title": "SongEditParams",
+  "type": "object"
+}
