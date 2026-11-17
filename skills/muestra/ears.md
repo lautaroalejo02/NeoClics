@@ -14,6 +14,13 @@ Cada alarma (`metrics.alarms[]`) trae `severity` (`error` = problema, `warn` = a
 concreto en `song.yaml`). `metrics.skipped` dice qué no se pudo medir y por qué: si algo
 está ahí, **no** está verificado.
 
+El resumen incluye los checks omitidos y sus motivos. En instrumentos el chequeo de
+sidechain necesita una referencia seca del instrumento, no un stem de chop inexistente.
+`sample_detuned` con señal débil/solo predicción es `info`, expone `confidence`, no ofrece
+un arreglo automático: confirmalo de oído. `tonal.detune[].confidence` expone la fuerza
+de la medición (heurística). Una cuarta/quinta posiblemente intencional tampoco ofrece
+una transposición destructiva como fix.
+
 Comparar dos versiones: `ears.compare(version_a, version_b)` → `lufs_delta`, `brightness`
 (brighter/darker), `low_end` (heavier/lighter), `track_level_delta_db`, `alarms_fixed`,
 `alarms_introduced`, `alarms_kept`, `notes`. Usalo después de cada iteración: un cambio

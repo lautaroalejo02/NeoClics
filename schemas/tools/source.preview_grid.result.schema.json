@@ -21,8 +21,15 @@
           "type": "integer"
         },
         "bpm": {
-          "title": "Bpm",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bpm"
         },
         "downbeat_shift_beats": {
           "title": "Downbeat Shift Beats",

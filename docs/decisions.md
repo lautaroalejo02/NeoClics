@@ -812,3 +812,70 @@ that field)**; schemas regenerated (`uv run python -m muestra.schemas.export`).
     of non-reversible colouring on instruments/drums (0.3–0.6 dB without).
     `CACHE_ABI` → `render-5`. Pitch-shifted non-vocal chops in existing songs
     sound slightly different after this change.
+
+## 2026-11-17 — WP15: partial grid reliability and mix-first analysis
+
+- Meter inconsistency no longer rejects a recording. `Analysis.reliability`
+  adds per-bar evidence, contiguous time regions, an overall reliable-bar
+  fraction (heuristic, not musical beat accuracy), and an actionable `hint`.
+  Native irregular downbeats are preserved. Rebuilt half/double grids require
+  support in raw tracker bars; local intervals may vary by at most a factor
+  of 1.4 within a reliable bar. Intro/outro fragments remain unverified.
+- `source.find_chops(allow_unreliable=false)` filters the whole candidate,
+  including with `at_s`. Without stems the default is `mix`. Time-window
+  operations reuse the full analysis. Standalone imported files have no
+  inferred parent; use `window_s`/`at_s` on the original instead of cutting
+  and retracking an excerpt.
+- `source.preview_grid(window_s=[start,end])` auditions an exact window.
+  `chops.choose` and `song.validate` return nonblocking reliability warnings.
+  Choice adds `requested_chop_id`, `rescaled`, `recorded`, and `notes` for UI
+  compatibility alongside the WP13 fields.
+- Analyze the unseparated mix first. Separation attaches stems to that cached
+  analysis without changing its grid or needing another inference pass.
+
+### WP15 — drafts and transport reconciliation
+
+`render(draft=true)` uses the same staged renderer and a random `d-<12 hex>`
+render id, but never allocates a version or commits/tags. Its `version` result
+is null; `draft_id` identifies the audio and snapshot. Ears is opt-in for drafts
+(`analyze=true`, or later `ears.analyze(version=<draft_id>)`). Existing version
+renders retain automatic ears. Metadata/metrics accept either id; history
+contracts remain version-only. `/project` lists drafts and ordinary previews;
+disk watching emits `draft.created`/`drafts.changed`, including deletions.
+Public static UI assets and Bearer-header acceptance reconcile the WP14 client
+with LAN authentication. API/audio/write restrictions remain authenticated.
+Heavy render/ears imports are lazy again; shared MCP conventions appear once
+in initialization instructions, and tool descriptions contain specific purposes.
+
+### WP15 — no-pulse audio and honest metrics
+
+Valid decoded audio whose tracker yields no usable grid still produces analysis
+descriptors: `bpm_global=null`, empty beat/downbeat arrays, `grid=null` in the
+tool result, zero reliability. This relaxes the old nonempty grid contract;
+readers must handle absent pulse. No timestamps are invented. A window preview
+then plays explicitly labelled audio without clicks. Summary reliability omits
+the per-bar array; the complete map remains in `analysis.json`.
+
+`DetuneCheck.confidence` and optional `Alarm.confidence` expose tuning strength
+(heuristic, not a probability). Weak/predicted detune becomes `info` with no
+automatic fix. Possibly intentional fourth/fifth transpositions also omit a
+destructive fix. Ears summary lists skipped checks/reasons; instrument ducking
+reports the lack of a dry instrument reference. Relative file references now
+accept backslashes and normalize to `/`; traversal/absolute-path checks apply
+after normalization. UTF-8 input errors include the byte offset. CLI doctor
+retains its documented `{ok,checks}` diagnostic exception. Generated help escapes
+percent signs. Drum sample swaps precede configured-gain notes, which explicitly
+do not claim an isolated audible level change.
+
+### WP15 — inherited prune reproduction gap found on real demo
+
+An old demo render (v003, created before subsequent engine/grid changes) was
+prunable under WP13's curated-alias test but regenerated with different PCM.
+`RenderMeta.render_signature` now fingerprints renderer ABI/dependency versions,
+song, effective source grids and referenced audio/MIDI/explicit preset content.
+Pruning keeps absent/mismatched provenance as well as existing protections;
+older versions are protected conservatively. A current render can be pruned and
+regenerated with matching PCM. The renderer also passes the version snapshot's
+seed to SFZ hosting (optional Python keyword), rather than reading the live
+song's seed during re-render. Candidate fingerprints ignore reporting/history
+changes, so no-op regrids leave retained candidates choosable.

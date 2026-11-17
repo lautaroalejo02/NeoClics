@@ -67,6 +67,9 @@ class ProjectWatcher:
             self.root / "song.yaml",
             *(self.root / "renders").glob("v*/meta.json"),
             *(self.root / "renders").glob("v*/metrics.json"),
+            *(self.root / "renders").glob("d-*/meta.json"),
+            *(self.root / "renders").glob("d-*/metrics.json"),
+            *(self.root / "cache/previews").glob("*.preview.json"),
             *(p for p in (self.root / "cache/chops").glob("*/*.json") if _live_set(p)),
             *(
                 p
@@ -96,7 +99,15 @@ class ProjectWatcher:
     def scan(self) -> list[tuple[str, dict]]:
         events = []
         now = time.monotonic()
-        for path in self._files():
+        files = self._files()
+        removed = set(self.observed) - set(files)
+        for path in removed:
+            self.observed.pop(path, None)
+            self.delivered.pop(path, None)
+            self.pending.pop(path, None)
+        if removed:
+            events.append(("drafts.changed", {}))  # UI refresh includes missing version audio
+        for path in files:
             stamp = _stamp(path)
             if stamp is None:
                 continue
@@ -115,12 +126,19 @@ class ProjectWatcher:
                     continue
                 # Re-announced (upsert) when metrics.json lands after meta.json.
                 metrics = read_model(path.with_name("metrics.json"), Metrics)
-                events.append(
-                    (
-                        "version.created",
-                        {"version": meta["version"], "meta": meta, "metrics": metrics},
+                if meta["version"].startswith("d-"):
+                    from ..render.drafts import draft_info
+
+                    events.append(("draft.created", draft_info(meta)))
+                else:
+                    events.append(
+                        (
+                            "version.created",
+                            {"version": meta["version"], "meta": meta, "metrics": metrics},
+                        )
                     )
-                )
+            elif relative.endswith(".preview.json"):
+                events.append(("drafts.changed", {}))
             elif relative.startswith("cache/analysis/") or relative.endswith("/grid/index.json"):
                 # source.regrid / source.preview_grid (WP12): the grid or its
                 # click previews changed; stale candidate sets were retired.

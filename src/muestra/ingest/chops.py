@@ -51,7 +51,20 @@ def read_set(path: Path) -> ChopCandidateSet:
 
 def fingerprint(project: Project, source_id: str, analysis) -> str:
     _, source = source_file(project, source_id)
-    return hashlib.sha256((digest(source) + analysis.model_dump_json()).encode()).hexdigest()
+    # Reporting/history updates do not move the audio or the effective grid.
+    # In particular, an idempotent regrid must leave its retained sets usable.
+    content = analysis.model_dump_json(
+        include={
+            "file",
+            "duration_s",
+            "sample_rate",
+            "beats_s",
+            "downbeats_s",
+            "stems",
+            "separation_model",
+        }
+    )
+    return hashlib.sha256((digest(source) + content).encode()).hexdigest()
 
 
 def stem_path(project: Project, analysis, stem: str) -> Path:
@@ -152,9 +165,18 @@ def mmss(seconds: float) -> str:
 
 
 def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandidateSet, Path]:
+    from .reliability import reliable_window
+
     analysis = load_analysis(project, source_id)
+    if len(analysis.beats_s) < 2 or not analysis.downbeats_s:
+        raise MuestraError.one(
+            "no_candidates",
+            "No beat grid was detected in this source.",
+            hint="Listen with source.preview_grid(window_s=[start, end]); "
+            "import a rhythmic source with source.import then source.analyze.",
+        )
     original_fingerprint = fingerprint(project, source_id, analysis)
-    stem = query.stem or "other"
+    stem = query.stem or ("other" if analysis.stems and analysis.stems.other else "mix")
     audio, sr = decode(stem_path(project, analysis, stem))
     vocal = None
     if stem == "other" and analysis.stems and analysis.stems.vocals:
@@ -170,7 +192,7 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
         raise MuestraError.one(
             "ref_not_found",
             f"Unknown section {query.section}.",
-            hint="Use a label from source.analyze.sections.",
+            hint="Use a section label returned by source.analyze.",
         )
     lengths = [query.length_beats] if query.length_beats else [4.0, 8.0, 16.0, 32.0]
     if any(length > 128 for length in lengths):
@@ -197,7 +219,9 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
         if timing is None:
             return None
         start, end = timing
-        if strict and not regular(index, length):
+        if not query.allow_unreliable and not reliable_window(analysis, start, end):
+            return None
+        if strict and not query.allow_unreliable and not regular(index, length):
             return None
         if window and not (start >= window[0] - slack and end <= window[1] + slack):
             return None
@@ -247,7 +271,8 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
             "no_candidates",
             f"No audible loops fit the section, time window and beat grid{where}.",
             hint="Try a shorter length_beats, a wider window_s, another section, "
-            "at_s for an exact spot, or stem='mix'.",
+            "at_s for an exact spot, stem='mix', or allow_unreliable=true after "
+            "checking source.preview_grid(window_s=[start, end]).",
         )
     with project_lock(project):
         if (
@@ -514,4 +539,11 @@ def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust:
             "message": message,
             "agent_todo": agent_todo,
         }
+        from .reliability import chop_warning
+
+        timing = chop_times(
+            analysis, chop.start_downbeat, chop.length_beats, chop.start_offset_beats
+        )
+        warning = chop_warning(analysis, *timing)
+        outcome["warnings"] = [warning] if warning else []
         return candidate_set, chop, path, outcome

@@ -549,7 +549,10 @@ def search(
         label = root_label(project, root)
         loaded = loaded_index(root)
         if loaded is None:
-            unindexed.append(label)
+            # The scaffold's empty local folder should not drown out a usable
+            # global index. Nonempty unindexed roots still deserve a hint.
+            if root.exists() and any(root.iterdir()):
+                unindexed.append(label)
             continue
         searched.append(label)
         pool.append((root, label, loaded))

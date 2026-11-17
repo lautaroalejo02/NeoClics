@@ -114,6 +114,29 @@
       "default": null,
       "description": "Audition this correction WITHOUT applying it (see regrid).",
       "title": "Tempo Factor"
+    },
+    "window_s": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Exact source time window [start, end]; uses the full-file grid.",
+      "title": "Window S"
     }
   },
   "required": [

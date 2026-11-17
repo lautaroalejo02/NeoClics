@@ -31,7 +31,7 @@ from typing import Any, Literal
 from pydantic import AwareDatetime, ConfigDict, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from ._base import ContractModel, IdStr, KeyStr, LaneName, RelPath, VersionStr
+from ._base import ContractModel, IdStr, KeyStr, LaneName, RelPath, RenderIdStr, VersionStr
 
 __all__ = ["RenderMeta", "DiffEntry", "RenderTrackMeta", "StemLaneRef"]
 
@@ -84,7 +84,11 @@ class RenderTrackMeta(ContractModel):
 
 class RenderMeta(ContractModel):
     schema_version: Literal[0] = 0
-    version: VersionStr
+    version: RenderIdStr
+    render_signature: str | None = Field(
+        default=None,
+        description="Renderer ABI, song, grids and input-content provenance for safe pruning.",
+    )
     parent: VersionStr | None = None
     git_commit: str | None = Field(
         default=None,

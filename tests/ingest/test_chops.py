@@ -59,7 +59,7 @@ def test_real_renderer_seam_and_auto_no_feedback(rhythmic_project, monkeypatch):
 def test_unknown_section_missing_stem_and_invalid_adjust(rhythmic_project):
     project, source_id, _ = rhythmic_project
     with pytest.raises(MuestraError, match="No other stem"):
-        find(project, source_id, ChopQuery())
+        find(project, source_id, ChopQuery(stem="other"))
     with pytest.raises(MuestraError, match="Unknown section"):
         find(project, source_id, ChopQuery(stem="mix", section="chorus"))
     result, _ = find(project, source_id, ChopQuery(stem="mix", n=1, length_beats=4))
@@ -67,6 +67,17 @@ def test_unknown_section_missing_stem_and_invalid_adjust(rhythmic_project):
     with pytest.raises(MuestraError):
         choose(project, result.pick.candidate_id, "loop", "manual", ChopAdjust(length_beats=-10))
     assert project.song_path.read_bytes() == before
+
+
+def test_noop_regrid_keeps_retained_candidates_choosable(rhythmic_project):
+    from muestra.ingest.regrid import regrid
+
+    project, source_id, _ = rhythmic_project
+    found, _ = find(project, source_id, ChopQuery(stem="mix", length_beats=4, n=1))
+    report = regrid(project, source_id, tempo_factor=1)
+    assert not report.stale_sets
+    chosen, _, _, _ = choose(project, found.candidates[0].id, "kept", "manual", None)
+    assert chosen.chosen.chop_id == "kept"
 
 
 def test_stale_grid_cannot_be_chosen(rhythmic_project):

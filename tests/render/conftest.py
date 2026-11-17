@@ -36,7 +36,7 @@ def song(project):
     return load_song(project)
 
 
-def fixture_instrument(project, instrument, notes, sample_rate, n_frames, *, bpm):
+def fixture_instrument(project, instrument, notes, sample_rate, n_frames, *, bpm, seed=None):
     """Test-only host fake using fixture bass AUDIO, never a product fallback."""
     audio, sr = sf.read(project.path("cache/stems/src1/bass.wav"), dtype="float32", always_2d=True)
     from scipy.signal import resample_poly

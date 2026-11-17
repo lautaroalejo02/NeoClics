@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
 from datetime import UTC, datetime, timedelta
@@ -70,6 +71,22 @@ def test_cache_gc_drops_entries_the_newest_render_did_not_use(repo):  # noqa: F8
     result = run_tool("versions.prune", {"project": str(project.root), "dry_run": False})
     assert result.data["cache_files"] == 2 and not stale.exists()
     assert all(p.exists() for p in used)
+
+
+def test_prune_protects_legacy_audio_and_changed_renderer_provenance(repo, monkeypatch):  # noqa: F811
+    from muestra.render import audio
+
+    versions = _render(repo, 3)
+    path = repo.path(f"renders/{versions[0]}/meta.json")
+    meta = json.loads(path.read_text("utf-8"))
+    meta.pop("render_signature")
+    path.write_text(json.dumps(meta), encoding="utf-8")
+    monkeypatch.setattr(audio, "CACHE_ABI", "changed-renderer")
+    dry = run_tool("versions.prune", {"project": str(repo.root), "keep_latest": 0})
+    assert dry.ok and not dry.data["remove"]
+    kept = {item["version"]: item["reasons"] for item in dry.data["keep"]}
+    assert "older renderer" in " ".join(kept[versions[0]])
+    assert "changed" in " ".join(kept[versions[1]])
 
 
 def test_project_summary_reports_disk(repo):  # noqa: F811

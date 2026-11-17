@@ -47,6 +47,18 @@ def test_semitone_up():
     ]
 
 
+def test_sample_swap_explains_configured_gain_without_claiming_audible_delta():
+    def swap(d):
+        lane = track(d, "drums")["pattern"]["lanes"]["kick"]
+        lane.update(sample="library://kits/another/kick.wav", gain_db=5)
+
+    text = say(None, swap)
+    sample = next(i for i, s in enumerate(text) if "Cambié el sample" in s)
+    gain = next(i for i, s in enumerate(text) if "ganancia configurada" in s)
+    assert sample < gain
+    assert "no mide el cambio de nivel audible" in text[gain]
+
+
 def test_automated_lowpass_added_is_one_sentence():
     assert say(lp_removed, None) == [
         "Agregué un filtro pasa-bajos automatizado de 800 Hz a 18 kHz "

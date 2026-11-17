@@ -207,6 +207,8 @@ def _grid_on_cache_hit(
     from . import grid as g
 
     current = analysis.grid
+    if len(analysis.beats_s) < 2 or not analysis.downbeats_s or analysis.bpm_global is None:
+        return analysis
     if current is None:
         # Written before WP12: the effective grid IS the tracker grid. Apply the
         # automatic octave only when no song chop depends on this grid.
@@ -257,6 +259,9 @@ def analyze(
             analysis.stems = Stems(**separated["stems"]) if separated else None
             analysis.separation_model = separated.get("model")
             analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range)
+            from .reliability import assess_reliability
+
+            analysis.reliability = assess_reliability(analysis)
             write_json(cache, analysis.model_dump(mode="json"))
             report(progress, 1, "Analysis ready (cache)")
             return analysis
@@ -266,17 +271,32 @@ def analyze(
         if np.max(abs(audio)) < 1e-7:
             raise MuestraError.one("grid_mismatch", "Silent audio has no reliable beat grid.")
         report(progress, 0.15, "Tracking beats and downbeats with Beat This! final0")
-        beats, downbeats = validate_grid(*(tracker or neural_beats)(audio, sr), duration)
-        consistency = meter_consistency(beats, downbeats)
-        if consistency is not None and consistency < 0.75:
-            raise MuestraError.one(
-                "grid_mismatch",
-                f"Only {consistency:.0%} of inferred bars contain four beats; "
-                "the recording's meter or downbeat grid is uncertain.",
-                hint="Muestra v0 requires 4/4. Audition the click overlay with "
-                "muestra.ingest.validation; use a verified 4/4 excerpt. "
-                "No speculative grid was cached.",
+        tracked = (tracker or neural_beats)(audio, sr)
+        try:
+            beats, downbeats = validate_grid(*tracked, duration)
+        except MuestraError:
+            # Valid audio can lack a rhythmic pulse. Cache descriptors and an
+            # explicitly unavailable grid; never fabricate a constant-BPM grid.
+            times, spectrum, chroma = spectral_features(audio, sr)
+            analysis = Analysis(
+                source_id=source_id,
+                file=rel,
+                duration_s=duration,
+                sample_rate=sr,
+                key=estimate_key(chroma),
+                loudness_lufs=integrated_loudness(audio, sr),
+                sections=[Section(label="intro", start_s=0, end_s=duration)],
+                stems=Stems(**separated["stems"]) if separated else None,
+                separation_model=separated.get("model"),
             )
+            from .reliability import assess_reliability
+
+            analysis.reliability = assess_reliability(analysis)
+            write_json(cache, analysis.model_dump(mode="json"))
+            write_json(meta, {"identity": identity, "method": ANALYSIS_METHOD})
+            report(progress, 1, "Audio analyzed; no reliable grid detected")
+            return analysis
+        consistency = meter_consistency(beats, downbeats)
         intervals = np.diff(beats)
         bpm = float(60 / np.median(intervals))
         if not 0 < bpm < 400:
@@ -304,6 +324,9 @@ def analyze(
         # Tempo octave inside the plausible range (the tracker often counts eighths
         # on old records); sections are snapped to the CORRECTED downbeats.
         analysis = g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE)
+        from .reliability import assess_reliability
+
+        analysis.reliability = assess_reliability(analysis)
         analysis.sections = detect_sections(
             times, spectrum, chroma, np.asarray(analysis.downbeats_s), duration
         )

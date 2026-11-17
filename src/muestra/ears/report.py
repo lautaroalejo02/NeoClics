@@ -38,7 +38,11 @@ def summarize(m: Metrics) -> str:
     if counts["error"] or counts["warn"]:
         head += f" | {counts['error']} problema(s), {counts['warn']} aviso(s)"
     else:
-        head += " | sin problemas detectados"
+        head += (
+            " | sin problemas en las comprobaciones realizadas"
+            if m.skipped
+            else " | sin problemas detectados"
+        )
     lines = [head]
     shown = [a for a in sort_alarms(m.alarms) if a.severity != "info"][:MAX_ALARM_LINES]
     if len(shown) < MAX_ALARM_LINES:
@@ -52,6 +56,8 @@ def summarize(m: Metrics) -> str:
     rest = len(m.alarms) - len(shown)
     if rest > 0:
         lines.append(f"(+{rest} más en metrics.json)")
+    if m.skipped:
+        lines.append("Sin comprobar: " + "; ".join(m.skipped))
     return "\n".join(lines)
 
 

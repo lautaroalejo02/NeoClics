@@ -1,5 +1,46 @@
 # Muestra contracts (as implemented, WP0.1)
 
+WP15 drafts: `render(draft=true, range_bars?, analyze?)` publishes under
+`renders/d-<12 hex>/` without a commit, tag or version allocation. Result
+`version` is null and `draft_id` is the identifier. `analyze` defaults to false
+for drafts, true for versions; `ears.analyze(version=<draft_id>)` computes
+metrics later. `RenderMeta.version` and `Metrics.version` accept either id;
+history and version tools still accept only `vNNN`. `draft` with `version`
+is an error. Render result order is summary/hint/ids/paths then large metadata.
+`GET /project` always has `drafts[]` and `previews[]`: entries carry
+`id,path,kind,label,created_at,duration_s,range_bars?`. `preview` registers its
+output too. New events: `draft.created` (one entry, upsert), `drafts.changed`
+(`{}`, reload project, also emitted after audio/history files disappear).
+LAN accepts Bearer, X-Muestra-Token, query and cookie tokens; `/` and
+`/assets/*` are public so the UI can read the link and render its auth screen.
+
+WP15 safe pruning: `RenderMeta.render_signature?` fingerprints the renderer
+ABI/dependency versions, normalized song, effective source grids and referenced
+audio/MIDI/explicit preset file contents. `versions.prune` keeps missing/mismatched
+signatures, in addition to WP13 protections. Legacy audio is never silently
+claimed bit-exact after engine/grid changes. Instrument hosting accepts optional
+`seed`; renderer passes the snapshot's seed, including on re-render.
+
+WP15 additions: `Analysis.reliability` contains
+`confidence` (fraction of complete bars with consistent meter, not a probability),
+`bars[{start_downbeat,start_s,end_s,beat_count,reliable,reason}]`, contiguous
+`regions[{start_s,end_s,reliable,reason}]` including unverified intro/outro,
+and `hint`. Missing maps in old caches are derived when needed.
+`AnalysisSummary.reliability` omits `bars` (the detailed map stays on disk).
+For valid audio without a detected pulse, `bpm_global` and the tool result's
+`grid` are null, beat/downbeat arrays are empty and confidence is zero. This
+is a reader-visible relaxation: consumers must handle no detected grid;
+there is no fabricated fallback. `source.preview_grid` returns an explicitly
+labelled audio-only audition in this case (`bpm=null`, `bars=0`).
+`source.find_chops(allow_unreliable=false)` requires the entire candidate to
+lie in reliable regions, including with `at_s`; override is explicit. The
+default stem is `other` when available, else `mix`. Result adds `hint`.
+`source.preview_grid(window_s=[start,end])` uses the full-file grid for that
+exact window, without retracking. `chops.choose` and `song.validate` gain
+nonblocking `warnings[]`; choice also adds `requested_chop_id`, `recorded`,
+`rescaled` (boolean) and `notes[]` (agent follow-up). Analysis on the mix
+requires no separation; separating later attaches stems without moving beats.
+
 This is the authoritative reference for the data contracts in spec
 section 7 and the tool interface in section 8, **as actually
 implemented**. The pydantic models under `src/muestra/schemas/` are the
@@ -234,7 +275,7 @@ input (`F#`/`Gb` kept as given, `A#`→`Bb`, `Db`→`C#`, …).
 - `start_downbeat`: **1-based index** into `analysis.downbeats_s`;
   `start_s` is the entry of `beats_s` *nearest* that downbeat (one grid,
   not two).
-- `start_offset_beats` (default 0, −64..64): counted along `beats_s`
+- `start_offset_beats` (default 0, −4096..4096): counted along `beats_s`
   from the downbeat; may be negative or fractional (linear
   interpolation; extrapolates up to one grid step before the first
   beat, but `start_s` must stay ≥ 0).

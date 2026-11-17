@@ -41,6 +41,9 @@ otra carpeta: variable `MUESTRA_LIBRARY` o `[library] roots` en
 `muestra.toml`). Después de agregar samples, indexala una vez:
 `uv run muestra library index --project <...>/mi-tema`.
 
+En Windows, preferí rutas con `/` (`C:/Musica/disco.mp3`): todos los tools
+aceptan ambos separadores. Guardá `song.yaml` como UTF-8.
+
 ## `muestra doctor`
 
 Revisa todo sin bajar nada ni abrir plugins, y para cada cosa que falta dice
@@ -84,7 +87,7 @@ corta (`muestra_guide`).
 
 - **Claude Code.** Abrí `claude` en la carpeta donde escribió `.mcp.json`,
   aprobá el servidor `muestra` y mirá `/mcp`. Separar un disco entero tarda
-  minutos (unos 4-5 en una notebook con CPU): el servidor manda progreso, y si
+  minutos (4–6,5 para un tema de 3–4 min en esta laptop): el servidor manda progreso, y si
   tu Claude Code corta herramientas largas, subí su límite con la variable
   `MCP_TOOL_TIMEOUT` (milisegundos, por ejemplo `1800000`) antes de abrirlo.
 - **Codex.** Usá el bloque `[mcp_servers.muestra]` que imprime
@@ -125,15 +128,22 @@ con las alarmas que el agente va a leer.
 Así se ve desde tu lado (el detalle de lo que hace el agente está en la skill):
 
 1. Poné tu disco en cualquier carpeta y decile al agente:
-   *"Importá `C:\Música\nos-siguen-pegando-abajo.wav` en mi-tema, separalo y analizalo"*.
-   Llama a `source.import`, `source.separate` (minutos la primera vez, después
-   queda en caché) y `source.analyze` (tempo, compases, tonalidad, secciones).
+   *"Importá `C:/Musica/nos-siguen-pegando-abajo.wav` en mi-tema y chequeá la grilla"*.
+   Llama a `source.import` y **primero `source.analyze` sobre el mix** (~20–30 s,
+   sin separar). Informa regiones fiables y dudosas; un intro libre o un compás
+   irregular no bloquea el disco. Escuchá los clicks de `source.preview_grid`
+   en la región elegida y confirmá el uno; `source.regrid` permite corregirlo.
+   Después `source.separate` si hacen falta stems (minutos, luego caché);
+   la grilla sigue válida sin otro análisis.
 2. *"Armame un loop future funk de 16 compases con el riff del inicio"*. El
    agente busca candidatos de chop (`source.find_chops`: cada uno con un
    preview al tempo del tema, en la pestaña Chops), elige uno y explica por
    qué (podés elegir otro vos), escribe `song.yaml` (chop con filtros y
    sidechain al bombo, batería de un kit de la librería con `library.kits`,
    un bajo de `plugins.list`), lo valida y renderiza **v001**.
+   *"El riff del 0:15"* es una llamada: `source.find_chops(at_s="0:15",
+   length_beats=8)`. Usa el análisis completo y regiones fiables por defecto.
+   Las líneas repetidas de bajo se escriben como `phrases`.
 3. Escuchá. Comentá en el segundo justo (`M`), marcá me gusta / no me gusta.
 4. *"Más filtrado en la intro, el bajo más gordo y el sample medio tono más arriba"*.
    El agente lee tu feedback, edita, renderiza **v002** y te cuenta el diff
@@ -146,6 +156,12 @@ Todo vive en la carpeta del tema: `song.yaml` (la canción), `renders/vNNN/`
 git con una versión = un commit. Borrar `renders/` no pierde nada:
 `muestra render --version v001` la vuelve a generar igual.
 
+Para probar una zona: `muestra render --project <tema> --draft --range-bars '[5,9]'`.
+El borrador aparece y se reproduce en la UI, sin versión, commit ni tag.
+`--analyze` agrega ears; también podés pedir `ears.analyze(version=<draft_id>)`
+después. `versions.prune` propone una limpieza sin borrar; `--no-dry-run`
+la ejecuta conservando la historia y las versiones protegidas.
+
 Hay un tema de ejemplo armado de punta a punta (un loop sobre "Tiger Rag",
 grabación de 1928 de dominio público) en
 `Documentos/MuestraProjects/demo-e2e`: abrilo con
@@ -155,7 +171,7 @@ grabación de 1928 de dominio público) en
 
 | paso | tiempo |
 |---|---|
-| separar un tema de 3:14 (htdemucs) | ~4-5 min la primera vez; instantáneo después (caché) |
+| separar un tema de 3–4 min (htdemucs) | ~4–6,5 min en las sesiones recientes; instantáneo después (caché) |
 | analizar (tempo, compases, secciones) | ~20-30 s |
 | buscar candidatos de chop + previews | ~5 s |
 | re-render de 16 compases (validar + commit + audio + metadatos + oídos) | ~6.5 s por MCP; ~11 s con `muestra render` desde la terminal (incluye arrancar Python) |

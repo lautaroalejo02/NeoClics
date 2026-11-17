@@ -14,10 +14,19 @@
       "type": "string"
     },
     "version": {
-      "description": "Render version to analyze, e.g. 'v001'.",
-      "pattern": "^v\\d{3,}$",
-      "title": "Version",
-      "type": "string"
+      "anyOf": [
+        {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "type": "string"
+        },
+        {
+          "pattern": "^d-[0-9a-f]{12}$",
+          "type": "string"
+        }
+      ],
+      "description": "Version ('v001') or draft_id ('d-\u2026') to analyze.",
+      "title": "Version"
     }
   },
   "required": [

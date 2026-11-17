@@ -21,7 +21,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ._base import ContractModel, IdStr, KeyStr, VersionStr
+from ._base import ContractModel, IdStr, KeyStr, RenderIdStr, VersionStr
 from .analysis import KeyEstimate
 
 __all__ = [
@@ -368,6 +368,12 @@ class DetuneCheck(ContractModel):
     """
 
     track: IdStr
+    confidence: float | None = Field(
+        default=None,
+        ge=0,
+        le=1,
+        description="Tuning signal strength; heuristic, not a probability.",
+    )
     chop: IdStr
     mode: Literal["resample", "stretch"]
     local_bpm: float | None = None
@@ -521,6 +527,7 @@ class Alarm(ContractModel):
     """
 
     code: str = Field(min_length=1, description="Stable machine code, e.g. 'clipping'.")
+    confidence: float | None = Field(default=None, ge=0, le=1)
     severity: Severity
     message: str = Field(min_length=1)
     track: IdStr | None = None
@@ -543,7 +550,7 @@ class Alarm(ContractModel):
 
 class Metrics(ContractModel):
     schema_version: Literal[0] = 0
-    version: VersionStr
+    version: RenderIdStr
     loudness: Loudness
     spectral: SpectralReport
     low_end_masking: LowEndMasking

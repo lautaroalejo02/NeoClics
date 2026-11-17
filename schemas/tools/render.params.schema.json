@@ -14,6 +14,25 @@
       "description": "Agent/tool identity (commit trailer Muestra-Agent).",
       "title": "Agent"
     },
+    "analyze": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Run ears now (default true for versions, false for drafts).",
+      "title": "Analyze"
+    },
+    "draft": {
+      "default": false,
+      "description": "Render a listenable draft without a version, git commit or tag.",
+      "title": "Draft",
+      "type": "boolean"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,

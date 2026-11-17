@@ -210,7 +210,6 @@ def test_summary_audio_ranges_waveform_and_ui(client, tmp_project):
         "/etc/passwd",
         "C:/Windows/win.ini",
         "C:relative.wav",
-        "renders\\v001\\mix.wav",
         "renders/../sources/private.wav",
         "renders/nul.wav",
         "renders/CON",
@@ -235,6 +234,11 @@ def test_traversal_and_portable_path_rejection(client, path):
     assert client.get("/waveform", params={"path": path}).status_code == 403
     response = client.get("/files/" + quote(path, safe="/"))
     assert response.status_code in (403, 404)
+
+
+def test_windows_backslash_audio_paths_are_normalized(client):
+    assert client.get("/waveform", params={"path": "renders\\v001\\mix.wav"}).status_code == 200
+    assert client.get("/waveform", params={"path": "renders\\..\\song.yaml"}).status_code == 403
 
 
 def test_audio_symlink_escape(client, tmp_project, tmp_path):

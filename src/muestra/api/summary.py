@@ -36,6 +36,8 @@ def feedback_aggregate(events: list[dict]) -> dict:
 
 
 def project_summary(runtime: Runtime) -> dict:
+    from ..render.drafts import list_drafts, list_previews
+
     root = runtime.project
     project = open_project(root)
     song = runtime.call(REGISTRY["song.get"])
@@ -107,6 +109,8 @@ def project_summary(runtime: Runtime) -> dict:
         "analyses": analyses,
         # source.preview_grid click previews per source (WP12): the Chops tab plays them.
         "grid_previews": grid_previews,
+        "drafts": list_drafts(root),
+        "previews": list_previews(root),
         "feedback": feedback_aggregate(events),
         "feedback_cursor": (feedback.data or {}).get("next_cursor", 0),
         "issues": [

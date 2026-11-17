@@ -1,6 +1,7 @@
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
+import os from "node:os";
 import { fileURLToPath } from "node:url";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
@@ -145,4 +146,70 @@ test("real API: with renders/ gone every version is still listed, greyed out, wi
   } finally {
     fs.renameSync(hidden, renders);
   }
+});
+
+test("real LAN: public shell, Spanish missing-token screen, token link and route restrictions", async ({ page, request, baseURL }, info) => {
+  test.skip(info.project.name !== "desktop-chromium", "one real LAN session");
+  const address = Object.values(os.networkInterfaces()).flat().find((n) => n?.family === "IPv4" && !n.internal)?.address;
+  test.skip(!address, "no non-loopback network interface available");
+  const lan = new URL(baseURL!);
+  lan.hostname = address!;
+  await page.goto(lan.href);
+  await expect(page.getByTestId("unauthorized")).toBeVisible();
+  await page.goto(`${lan.href}?token=e2e-lan-token`);
+  await expect(page.getByTestId("now-version")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.body.textContent?.includes("Sin conexión"))).toBe(false);
+  expect(page.url()).not.toContain("token=");
+  const denied = await request.post(`${lan.origin}/tools/render`, { headers: { "Authorization": "Bearer e2e-lan-token" }, data: {} });
+  expect(denied.status()).toBe(403);
+  const allowed = await request.get(`${lan.origin}/project`, { headers: { "Authorization": "Bearer e2e-lan-token" } });
+  expect(allowed.status()).toBe(200);
+  const wsStatus = await page.evaluate(() => new Promise<number>((resolve) => {
+    const ws = new WebSocket(`ws://${location.host}/events?token=e2e-lan-token`);
+    ws.onopen = () => { ws.close(); resolve(101); };
+    ws.onerror = () => resolve(0);
+  }));
+  expect(wsStatus).toBe(101);
+});
+
+test("real API: longer manual chop is recorded and preserves clip span", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "desktop-chromium", "one manual edit");
+  const project = await projectPath(request);
+  const songFile = path.join(project, "song.yaml");
+  const original = fs.readFileSync(songFile);
+  try {
+    await page.goto("/");
+    await page.getByTestId("tab-chops").click();
+    await page.getByTestId("cand-cand2").click();
+    for (let n = 0; n < 8; n++) await page.getByRole("button", { name: "Largo de cand2: un beat más", exact: true }).click();
+    await page.getByTestId("confirm-chop").click();
+    await expect(page.getByTestId("chop-outcome")).toHaveAttribute("data-status", "ok");
+    await expect(page.getByTestId("chop-outcome")).toContainText("repetici");
+    const song = (await (await request.post("/tools/song_get", { data: {} })).json()).data.song;
+    expect(song.chops.find((c: { id: string }) => c.id === "c1").length_beats).toBe(16);
+    expect(song.tracks.find((t: { id: string }) => t.id === "sample").clips[0].repeat).toBe(4);
+    expect(fs.readFileSync(path.join(project, "feedback.jsonl"), "utf8")).toContain('"type": "chop_choice"');
+  } finally {
+    fs.writeFileSync(songFile, original);
+  }
+});
+
+test("real API: CLI draft appears live and plays without a version", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "desktop-chromium", "one CLI draft");
+  const project = await projectPath(request);
+  await page.goto("/");
+  await expect(page.getByTestId("now-version")).toBeVisible();
+  const before = (await (await request.get("/tools/versions_list")).json()).data.versions.length;
+  const result = await new Promise<{ code: number | null; out: string }>((resolve) => {
+    const proc = spawn(UV, ["run", "--directory", REPO, "muestra", "--json", "render", "--project", project, "--draft", "--range-bars", "[1,3]", "--summary", "Borrador desde CLI"], { env: { ...process.env, PYTHONUTF8: "1", MUESTRA_LIBRARY: "none" } });
+    let out = "";
+    proc.stdout.on("data", (d) => { out += String(d); });
+    proc.on("close", (code) => resolve({ code, out }));
+  });
+  expect(result.code, result.out).toBe(0);
+  const draft = JSON.parse(result.out).data.draft_id as string;
+  await expect(page.getByTestId(`draft-${draft}`)).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId(`play-draft-${draft}`).click();
+  await expect(page.getByTestId(`play-draft-${draft}`)).toHaveAttribute("aria-pressed", "true");
+  expect((await (await request.get("/tools/versions_list")).json()).data.versions.length).toBe(before);
 });

@@ -211,6 +211,11 @@
       "additionalProperties": false,
       "description": "Echo of the ``source.find_chops`` request that produced the set.",
       "properties": {
+        "allow_unreliable": {
+          "default": false,
+          "title": "Allow Unreliable",
+          "type": "boolean"
+        },
         "at_s": {
           "anyOf": [
             {

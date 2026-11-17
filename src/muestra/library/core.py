@@ -154,6 +154,7 @@ def build_hit(project: Project, root: Path, rel: str) -> LibraryHit | None:
 
 def lookup(project: Project, uri: str) -> LibraryHit | None:
     """Index info for a ``library://`` URI; None when no root holds the file."""
+    uri = uri.replace("\\", "/")
     if not uri.startswith(LIBRARY_SCHEME):
         return None
     rel = uri[len(LIBRARY_SCHEME) :]

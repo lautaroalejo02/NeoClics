@@ -76,7 +76,7 @@ export function GridPanel() {
   const analyses = useApp((s) => s.analyses);
   const previews = useApp((s) => s.gridPreviews);
   const ids = [...new Set([...Object.keys(analyses), ...Object.keys(previews)])].sort();
-  const shown = ids.filter((id) => analyses[id]?.grid || previews[id]?.previews?.length);
+  const shown = ids.filter((id) => analyses[id]?.grid || analyses[id]?.reliability || previews[id]?.previews?.length);
   if (shown.length === 0) return null;
   return (
     <div data-testid="grid-panel" style={{ marginBottom: 14 }}>
@@ -111,6 +111,14 @@ function SourceGrid({ sourceId }: { sourceId: string }) {
           )}
         </div>
         {grid?.reason && <div className="hint">{grid.reason}</div>}
+        {analysis?.reliability && (
+          <div className="hint">
+            Grilla consistente en {fmtPct(analysis.reliability.confidence)} de los compases. Confirmá el uno de oído.
+            {" "}{analysis.reliability.regions.some((r) => r.reliable)
+              ? `Zonas estables: ${analysis.reliability.regions.filter((r) => r.reliable).map((r) => `${formatClock(r.start_s)}–${formatClock(r.end_s)}`).join(", ")}.`
+              : "No se detectaron zonas estables."}
+          </div>
+        )}
         {index?.previews?.length ? (
           <div className="fb-compose-row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
             <span className="hint">Escuchar la grilla (click suave en cada negra, agudo en el uno):</span>
@@ -319,7 +327,7 @@ function SourceStrip({ set, analysis, sel, onSelect }: { set: ChopCandidateSet; 
       </div>
       <div className="fb-compose-row hint">
         <span>0:00</span>
-        <span>{analysis ? `${set.source_id} · ${formatClock(dur)} · ${fmtBpm(analysis.bpm_global)} BPM${analysis.tempo_variable ? " (tempo variable)" : ""}` : "Sin análisis de la fuente: muestro solo los candidatos."}</span>
+        <span>{analysis ? `${set.source_id} · ${formatClock(dur)} · ${analysis.bpm_global == null ? "sin pulso detectado" : `${fmtBpm(analysis.bpm_global)} BPM`}${analysis.tempo_variable ? " (tempo variable)" : ""}` : "Sin análisis de la fuente: muestro solo los candidatos."}</span>
         <span>{formatClock(dur)}</span>
       </div>
     </div>

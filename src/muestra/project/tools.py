@@ -86,7 +86,11 @@ def project_open(p: ProjectOpenParams) -> ProjectOpenResult:
     """Open an existing project: loads muestra.toml and lists state."""
     project = open_project(p.path)
     versions = (
-        sorted(x.name for x in project.renders_dir.iterdir() if x.is_dir())
+        sorted(
+            x.name
+            for x in project.renders_dir.iterdir()
+            if x.is_dir() and x.name.startswith("v") and len(x.name) >= 4 and x.name[1:].isdigit()
+        )
         if project.renders_dir.is_dir()
         else []
     )
@@ -135,6 +139,7 @@ class SongValidateParams(ProjectScoped):
 class SongValidateResult(ToolOutput):
     valid: bool
     issues: list[Issue] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
 
 
 def song_validate(p: SongValidateParams) -> SongValidateResult:
@@ -144,7 +149,19 @@ def song_validate(p: SongValidateParams) -> SongValidateResult:
     (check_plugins) that instruments and plugin presets are available."""
     project = open_project(p.project)
     issues = validate_song(project, check_files=p.check_files, check_plugins=p.check_plugins)
-    return SongValidateResult(valid=not issues, issues=issues)
+    warnings = []
+    if p.check_files and not issues:
+        from ..ingest.reliability import chop_warning
+        from .validate import chop_times, load_analysis
+
+        for chop in load_song(project).chops:
+            analysis = load_analysis(project, chop.source)
+            timing = chop_times(
+                analysis, chop.start_downbeat, chop.length_beats, chop.start_offset_beats
+            )
+            if timing and (warning := chop_warning(analysis, *timing)):
+                warnings.append(f"{chop.id}: {warning}")
+    return SongValidateResult(valid=not issues, issues=issues, warnings=warnings)
 
 
 #: tools exported by this subpackage (collected by muestra.registry).

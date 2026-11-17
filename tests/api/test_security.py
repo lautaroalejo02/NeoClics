@@ -22,12 +22,16 @@ def test_remote_client_needs_the_token_then_gets_a_cookie(lan):
     phone, _ = lan
     denied = phone.get("/tools/song_get")
     assert denied.status_code == 401 and denied.json()["errors"][0]["code"] == "unauthorized"
-    assert phone.get("/").status_code == 401  # a helpful page, not the UI
+    assert phone.get("/").status_code == 200  # public UI shell renders the friendly auth screen
     first = phone.get(f"/project?token={TOKEN}")
     assert first.status_code == 200 and phone.cookies.get("muestra_token") == TOKEN
     assert phone.get("/tools/song_get").status_code == 200  # cookie from now on
     phone.cookies.clear()
     assert phone.get("/tools/song_get", headers={"X-Muestra-Token": TOKEN}).status_code == 200
+    assert (
+        phone.get("/tools/song_get", headers={"Authorization": f"Bearer {TOKEN}"}).status_code
+        == 200
+    )
     assert phone.get("/tools/song_get?token=wrong").status_code == 401
     phone.cookies.clear()
     assert phone.get(f"/tools/song_get?token={TOKEN}").json()["ok"]  # not a tool param

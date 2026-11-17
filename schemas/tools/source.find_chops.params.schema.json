@@ -1,6 +1,12 @@
 {
   "additionalProperties": false,
   "properties": {
+    "allow_unreliable": {
+      "default": false,
+      "description": "Include doubtful grid regions; confirm with source.preview_grid.",
+      "title": "Allow Unreliable",
+      "type": "boolean"
+    },
     "at_s": {
       "anyOf": [
         {

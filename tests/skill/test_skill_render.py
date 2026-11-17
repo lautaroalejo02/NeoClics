@@ -52,8 +52,11 @@ def project(tmp_path_factory):
     assert _ok(run_tool("source.import", {"project": proj, "path": str(audio)}))["source_id"] == (
         "src1"
     )
-    _ok(run_tool("source.separate", {"project": proj, "source_id": "src1"}))
     _ok(run_tool("source.analyze", {"project": proj, "source_id": "src1"}))
+    analysis_file = Path(proj) / "cache/analysis/src1.json"
+    grid_before = json.loads(analysis_file.read_text("utf-8"))["beats_s"]
+    _ok(run_tool("source.separate", {"project": proj, "source_id": "src1"}))
+    assert json.loads(analysis_file.read_text("utf-8"))["beats_s"] == grid_before
     return Path(proj)
 
 

@@ -78,6 +78,20 @@
           "title": "Code",
           "type": "string"
         },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence"
+        },
         "count": {
           "anyOf": [
             {
@@ -588,6 +602,21 @@
           "pattern": "^[a-z][a-z0-9_-]{0,63}$",
           "title": "Chop",
           "type": "string"
+        },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Tuning signal strength; heuristic, not a probability.",
+          "title": "Confidence"
         },
         "expected_detune_cents": {
           "anyOf": [
@@ -1131,10 +1160,18 @@
           "$ref": "#/$defs/TonalReport"
         },
         "version": {
-          "description": "Render version id like 'v001'.",
-          "pattern": "^v\\d{3,}$",
-          "title": "Version",
-          "type": "string"
+          "anyOf": [
+            {
+              "description": "Render version id like 'v001'.",
+              "pattern": "^v\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^d-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          ],
+          "title": "Version"
         }
       },
       "required": [
@@ -1248,6 +1285,19 @@
           "title": "Range Bars",
           "type": "array"
         },
+        "render_signature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Renderer ABI, song, grids and input-content provenance for safe pruning.",
+          "title": "Render Signature"
+        },
         "render_time_s": {
           "anyOf": [
             {
@@ -1308,10 +1358,18 @@
           "type": "array"
         },
         "version": {
-          "description": "Render version id like 'v001'.",
-          "pattern": "^v\\d{3,}$",
-          "title": "Version",
-          "type": "string"
+          "anyOf": [
+            {
+              "description": "Render version id like 'v001'.",
+              "pattern": "^v\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^d-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          ],
+          "title": "Version"
         }
       },
       "required": [

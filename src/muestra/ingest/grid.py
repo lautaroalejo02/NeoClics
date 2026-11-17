@@ -140,9 +140,14 @@ def derive_grid(
             "The corrected grid has fewer than two beats.",
             hint="Use a longer source or keep tempo_factor 1.",
         )
-    idx = derive_downbeat_indices(
-        beats, raw_downbeats, shift=downbeat_shift_beats, beats_per_bar=beats_per_bar
-    )
+    if tempo_factor == 1.0 and beats_per_bar == 4:
+        # Preserve local meter breaks; rebuilding would hide unreliable regions.
+        idx = _anchors(beats, raw_downbeats) + downbeat_shift_beats
+        idx = idx[(idx >= 0) & (idx < len(beats))]
+    else:
+        idx = derive_downbeat_indices(
+            beats, raw_downbeats, shift=downbeat_shift_beats, beats_per_bar=beats_per_bar
+        )
     if not len(idx):
         raise MuestraError.one(
             "grid_mismatch",
@@ -355,6 +360,13 @@ def apply_correction(analysis: Analysis, correction: GridCorrection) -> Analysis
 
 
 def raw_of(analysis: Analysis) -> RawGrid:
+    if analysis.bpm_global is None or len(analysis.beats_s) < 2 or not analysis.downbeats_s:
+        raise MuestraError.one(
+            "grid_unavailable",
+            "This source has no detected beat grid.",
+            hint="Use source.preview_grid with window_s to listen; "
+            "choose a rhythmic source with source.import and source.analyze.",
+        )
     if analysis.grid is not None:
         return analysis.grid.raw
     return RawGrid(

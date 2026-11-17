@@ -19,7 +19,9 @@
         "candidates.created",
         "feedback.appended",
         "song.changed",
-        "grid.changed"
+        "grid.changed",
+        "draft.created",
+        "drafts.changed"
       ],
       "title": "Type",
       "type": "string"

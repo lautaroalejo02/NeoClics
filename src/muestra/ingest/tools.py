@@ -131,7 +131,9 @@ class SourceAnalyzeResult(ToolOutput):
     analysis: AnalysisSummary = Field(
         description="analysis.json without the beat lists (read the file for those)."
     )
-    grid: GridReport = Field(description="How the beat grid was read and corrected (WP12).")
+    grid: GridReport | None = Field(
+        description="How the grid was read; null when no pulse was detected."
+    )
     hint: str | None = Field(
         default=None, description="Agent-facing note, e.g. confirm the grid by ear."
     )
@@ -153,10 +155,10 @@ def source_analyze(p: SourceAnalyzeParams, progress: Progress | None = None) -> 
         open_project(Path(p.project)), p.source_id, progress=progress, tempo_range=tempo_range
     )
     rel = f"cache/analysis/{p.source_id}.json"
-    report = GridReport.of(analysis)
-    hint = None
-    if report.ask_human or report.corrected:
-        hint = report.reason
+    report = GridReport.of(analysis) if analysis.bpm_global is not None else None
+    hint = analysis.reliability.hint if analysis.reliability else None
+    if report is not None and (report.ask_human or report.corrected):
+        hint = (hint + " " if hint else "") + report.reason
         if report.ask_human:
             hint += (
                 " Usá source.preview_grid (alternatives=true) y preguntale al humano si los "
@@ -174,6 +176,10 @@ def source_analyze(p: SourceAnalyzeParams, progress: Progress | None = None) -> 
 
 class SourceFindChopsParams(ProjectScoped):
     source_id: IdStr
+    allow_unreliable: bool = Field(
+        default=False,
+        description="Include doubtful grid regions; confirm with source.preview_grid.",
+    )
     section: str | None = Field(
         default=None, description="Section label from analysis.json to chop from."
     )
@@ -217,6 +223,7 @@ class SourceFindChopsParams(ProjectScoped):
 
 
 class SourceFindChopsResult(ToolOutput):
+    hint: str | None = None
     set_id: str = Field(description="Candidate set id, e.g. 'cs001'.")
     set: ChopCandidateSet
     set_path: RelPath = Field(description="cache/chops/<source_id>/<set_id>.json")
@@ -248,6 +255,7 @@ def source_find_chops(p: SourceFindChopsParams) -> SourceFindChopsResult:
         n=p.n,
         window_s=p.window_s,
         at_s=p.at_s,
+        allow_unreliable=p.allow_unreliable,
     )
     candidate_set, path = find(project, p.source_id, query)
     rel = path.relative_to(project.root).as_posix()
@@ -260,6 +268,10 @@ def source_find_chops(p: SourceFindChopsParams) -> SourceFindChopsResult:
         previews=previews,
         files=[rel, *previews],
         downbeats_s=downbeats,
+        hint="Incluye regiones dudosas; confirmá con source.preview_grid."
+        if p.allow_unreliable
+        else "Solo regiones fiables del análisis completo; "
+        "allow_unreliable=true permite explorar otras.",
     )
 
 
@@ -286,6 +298,11 @@ class RepeatChange(ContractModel):
 
 
 class ChopsChooseResult(ToolOutput):
+    requested_chop_id: IdStr | None = None
+    rescaled: bool = False
+    recorded: bool = False
+    notes: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
     set_id: str
     candidate_id: CandidateIdStr
     chop: Chop = Field(description="The chop written into song.yaml.")
@@ -328,6 +345,11 @@ def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
         repeat_changes=outcome["repeat_changes"],
         message=outcome["message"],
         agent_todo=outcome["agent_todo"],
+        requested_chop_id=p.chop_id,
+        rescaled=bool(outcome["repeat_changes"]),
+        recorded=p.mode == "manual",
+        notes=[outcome["agent_todo"]] if outcome["agent_todo"] else [],
+        warnings=outcome["warnings"],
     )
 
 

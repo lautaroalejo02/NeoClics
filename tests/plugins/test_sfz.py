@@ -78,6 +78,26 @@ def test_velocity_zones_and_global_group_inheritance(tmp_path):
     assert all(r["lokey"] == 69 and r["ampeg_release"] == ".02" for r in parse_sfz(path))
 
 
+def test_explicit_snapshot_seed_is_independent_of_live_song(project):
+    from muestra.project import load_song, save_song
+
+    path = sample_map(project.root)
+    path.write_text(
+        "<group> key=69\n<region> sample=tone with spaces.wav lorand=0 hirand=.5\n"
+        "<region> sample=tone with spaces.wav lorand=.5 hirand=1 volume=-20\n"
+    )
+    instrument = Instrument(plugin="sfz", preset=str(path))
+    notes = [MidiNote(beat=i + 1, pitch=69, length_beats=0.5) for i in range(8)]
+    before = render_instrument(project, instrument, notes, 24000, 96000, bpm=120, seed=42)
+    live = load_song(project)
+    live.meta.seed = 73
+    save_song(project, live)
+    after = render_instrument(project, instrument, notes, 24000, 96000, bpm=120, seed=42)
+    live_seed = render_instrument(project, instrument, notes, 24000, 96000, bpm=120)
+    assert np.array_equal(before, after)
+    assert not np.array_equal(before, live_seed)
+
+
 @pytest.mark.parametrize("mode", ["loop_continuous", "loop_sustain"])
 def test_loop_points_and_release(tmp_path, mode):
     path = sample_map(tmp_path, f"loop_mode={mode} loop_start=12000 loop_end=14399")

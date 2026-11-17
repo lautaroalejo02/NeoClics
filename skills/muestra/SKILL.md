@@ -17,6 +17,11 @@ Todas devuelven `{tool, ok, data, files, errors, hint}`; si `ok` es false, leé 
 `errors[].path/code/hint` y corregí eso. Por MCP podés omitir `project`; por CLI pasá
 `--project <ruta absoluta>`. Si solo tenés MCP sin esta carpeta, `muestra_guide` resume esto.
 
+Excepción: `muestra doctor` es un diagnóstico CLI y devuelve `{ok, checks}`
+cuando se redirige; en terminal imprime una tabla. No es una herramienta MCP.
+En Windows preferí `/` (`C:/Musica/disco.mp3`); los tools aceptan ambos
+separadores. Guardá `song.yaml` como UTF-8.
+
 ## Arranque de sesión (siempre, antes de tocar nada)
 
 1. `muestra doctor --project <p>` (o `project.open`): proyecto, librería indexada, plugins, ffmpeg.
@@ -28,10 +33,12 @@ Que el humano tenga la UI abierta: `muestra serve --project <p> --open` en otra 
 
 ## El ciclo
 
-import → separate → analyze → **confirmar la grilla** (si `grid.ask_human`, el humano
-escucha `source.preview_grid`; se corrige con `source.regrid`) → find_chops (auto,
-explicando; respetá la elección manual) → armar `song.yaml` → `song.validate` → `render` →
-leer ears → **corregir lo obvio y re-renderizar antes de mostrar** → decirle al humano qué
+import → **analyze sobre el mix, antes de separar** → **confirmar la grilla** (si `grid.ask_human`, el humano
+escucha `source.preview_grid(window_s=[inicio,fin])`; se corrige con `source.regrid`) →
+separate si hacen falta stems (la grilla sigue válida) → find_chops (auto,
+explicando; respetá la elección manual) → armar `song.yaml` → `song.validate` →
+`render(draft=true, analyze=true)` → leer ears → **corregir lo obvio en borradores** →
+`render` para guardar la versión → decirle al humano qué
 cambió y qué escuchar → leer su feedback → cambiar pocas cosas → repetir. Detalle y tiempos:
 [workflow.md](workflow.md).
 
@@ -53,6 +60,15 @@ cambió y qué escuchar → leer su feedback → cambiar pocas cosas → repetir
 - Nunca digas que "suena bien". Decí qué mediste y qué tiene que juzgar él con el oído.
 - Nunca compres, suscribas ni te registres en nada ([paid-tools.md](paid-tools.md)).
 - Una elección manual del humano (chop, versión) pisa la tuya.
+- `reliability.regions` marca dónde la grilla es consistente, no si el uno es musicalmente
+  correcto. `source.find_chops(at_s="0:15", length_beats=8)` resuelve "el riff del 0:15"
+  en una llamada; `window_s` limita una zona del archivo completo. Por defecto solo propone
+  regiones fiables; `allow_unreliable=true` es explícito y necesita confirmación humana.
+- No recortes e importes un extracto para recuperar su grilla: el tracker pierde contexto.
+  Usá las ventanas sobre la fuente completa. Los archivos importados no infieren parentesco.
+- `versions.prune` primero es dry-run; `dry_run=false` limpia audio/cache preservando historia.
+- Para el celular: `muestra serve --host 0.0.0.0 --project <p>` y el link completo con
+  `?token=...` que imprime. Permite escuchar, comentar y elegir chops.
 
 ## Qué leer y cuándo
 

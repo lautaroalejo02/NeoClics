@@ -199,7 +199,8 @@ def _soften_transpositions(report: TonalReport, alarms: list[Alarm]) -> None:
                 else "una cuarta/quinta suele ser un pedal de dominante, no un error"
             )
             head = alarm.message.split(": ", 1)[0]  # "`bass` suena 5 semitonos abajo de C"
-            alarm.message = f"{head}: probablemente a propósito ({reason}); si no lo es, ver fix."
+            alarm.message = f"{head}: probablemente a propósito ({reason}); confirmar de oído."
+            alarm.fix = None
 
 
 def _reference_tuning(
@@ -256,6 +257,7 @@ def _detune(ctx: RenderContext, tunings, alarms: list[Alarm]) -> list[DetuneChec
             weak_rel = _wrap_cents(measured - ref) if weak else None
             out.append(
                 DetuneCheck(
+                    confidence=float(np.clip(strength, 0, 1)),
                     track=track.id,
                     chop=cid,
                     mode=chop.warp.mode,
@@ -286,6 +288,9 @@ def _detune(ctx: RenderContext, tunings, alarms: list[Alarm]) -> list[DetuneChec
             if heard is None or abs(heard) <= th.detune_warn_cents:
                 continue
             sev = "error" if abs(heard) > th.detune_error_cents and rel is not None else "warn"
+            uncertain = not ok
+            if uncertain:
+                sev = "info"
             new_ps = round(ps - heard / 100.0, 2)
             fix = f"poné `chops.{cid}.warp.pitch_semitones: {new_ps:g}` (hoy {ps:g})"
             if (
@@ -310,14 +315,21 @@ def _detune(ctx: RenderContext, tunings, alarms: list[Alarm]) -> list[DetuneChec
                     tl,
                     "sample_detuned",
                     sev,
-                    f"`{track.id}` está desafinado {heard:+.0f} cents respecto del resto ({basis})"
-                    f"{expl}: el bajo y el sample van a batir.",
+                    (
+                        f"`{track.id}`: indicio de {heard:+.0f} cents ({basis}, confianza baja); "
+                        "confirmar de oído, no corregir automáticamente."
+                        if uncertain
+                        else f"`{track.id}` está desafinado {heard:+.0f} cents "
+                        f"respecto del resto ({basis})"
+                        f"{expl}: el bajo y el sample van a batir."
+                    ),
                     track=track.id,
                     chop=cid,
                     value=heard,
                     threshold=th.detune_warn_cents,
                     unit="cents",
-                    fix=fix + ".",
+                    fix=None if uncertain else fix + ".",
+                    confidence=float(np.clip(strength, 0, 1)) if measured is not None else 0,
                 )
             )
             break  # one detune alarm per track: the stem's tuning is one number

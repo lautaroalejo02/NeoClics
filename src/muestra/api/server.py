@@ -73,6 +73,11 @@ def _supplied_token(request) -> str:
     return (
         request.query_params.get("token")
         or request.headers.get("x-muestra-token")
+        or (
+            request.headers.get("authorization", "")[7:]
+            if request.headers.get("authorization", "").lower().startswith("bearer ")
+            else ""
+        )
         or request.cookies.get(TOKEN_COOKIE)
         or ""
     )
@@ -143,7 +148,7 @@ def create_app(
         CORSMiddleware,
         allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
         allow_methods=["GET", "HEAD", "POST", "DELETE"],
-        allow_headers=["Content-Type", "Range"],
+        allow_headers=["Content-Type", "Range", "Authorization", "X-Muestra-Token"],
         expose_headers=["Content-Range", "Accept-Ranges", "X-Muestra-Project"],
     )
 
@@ -159,6 +164,13 @@ def create_app(
         if token is None or is_loopback(client):
             return await call_next(request)
         supplied = _supplied_token(request)
+        path = request.url.path
+        # Public shell lets the UI read ?token= and show its Spanish auth screen.
+        if request.method in ("GET", "HEAD") and (path == "/" or path.startswith("/assets/")):
+            response = await call_next(request)
+            if secrets.compare_digest(supplied.encode(), token.encode()):
+                response.set_cookie(TOKEN_COOKIE, token, httponly=True, samesite="strict")
+            return response
         if not secrets.compare_digest(supplied.encode(), token.encode()):
             if request.method == "GET" and not request.url.path.startswith(
                 ("/tools", "/files", "/waveform", "/project", "/jobs")

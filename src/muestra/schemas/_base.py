@@ -96,6 +96,9 @@ VersionStr = Annotated[
     Field(pattern=r"^v\d{3,}$", description="Render version id like 'v001'."),
 ]
 
+DraftIdStr = Annotated[str, Field(pattern=r"^d-[0-9a-f]{12}$")]
+RenderIdStr = VersionStr | DraftIdStr
+
 #: global chop-candidate id: '<set_id>/<candidate>', e.g. 'cs001/cand2'.
 CandidateIdStr = Annotated[
     str,
@@ -211,17 +214,12 @@ def _check_library_uri(v: str) -> str:
 
 
 def _check_rel_path(v: str) -> str:
+    v = v.replace("\\", "/")
     if not v or v.strip() != v:
         raise PydanticCustomError(
             "invalid_path",
             "Invalid path {v}.",
             {"v": v, "hint": "Use a project-relative POSIX path."},
-        )
-    if "\\" in v:
-        raise PydanticCustomError(
-            "invalid_path",
-            "Invalid path {v}: use '/' separators, not '\\\\'.",
-            {"v": v, "hint": "Use POSIX separators so the song is portable."},
         )
     if v.startswith("/"):
         raise PydanticCustomError(
@@ -253,6 +251,7 @@ RelPath = Annotated[
 
 
 def _check_file_ref(v: str) -> str:
+    v = v.replace("\\", "/")
     if is_library_uri(v):
         return _check_library_uri(v)
     return _check_rel_path(v)

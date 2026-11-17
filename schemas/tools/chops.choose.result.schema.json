@@ -199,6 +199,18 @@
       "description": "Spanish, shown to the human.",
       "title": "Message"
     },
+    "notes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Notes",
+      "type": "array"
+    },
+    "recorded": {
+      "default": false,
+      "title": "Recorded",
+      "type": "boolean"
+    },
     "repeat_changes": {
       "description": "Clip repeats rescaled so each clip keeps its span in beats.",
       "items": {
@@ -207,9 +219,35 @@
       "title": "Repeat Changes",
       "type": "array"
     },
+    "requested_chop_id": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Requested Chop Id"
+    },
+    "rescaled": {
+      "default": false,
+      "title": "Rescaled",
+      "type": "boolean"
+    },
     "set_id": {
       "title": "Set Id",
       "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
     }
   },
   "required": [

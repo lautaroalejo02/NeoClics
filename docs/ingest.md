@@ -7,8 +7,9 @@ subscriptions, paid APIs, cloud execution or commercial music downloads.
 
 ## Install and use
 
-1. `uv sync --extra ingest` installs the optional WP1 stack. Plain `uv sync`
-   installs the light core and fast tests; actual inference needs the extra.
+1. `uv sync` includes beat tracking, analysis, renderer, server and MCP.
+   `uv sync --extra separation` adds separation (`ingest` is its legacy alias).
+   Run `source.analyze` on the mix before deciding to separate.
 2. Install ffmpeg (`winget install Gyan.FFmpeg` / `brew install ffmpeg`).
    Decoding checks `shutil.which("ffmpeg")`; `MUESTRA_FFMPEG` overrides it with
    a full executable path. Restart the terminal after installing. On this
@@ -270,12 +271,26 @@ beats, ears median 4.0 ms, p90 15.9 ms, pulse share 1.0, with ordinary 16-step
 patterns. Nobody listened: whether 125 and that "one" are musically right is
 the human's call via `source.preview_grid`.
 
-Because v0 only supports 4/4, analysis rejects an inferred grid when fewer
-than 75% of bar intervals contain four beats. Chop discovery additionally
-requires each traversed complete bar to have four beats and a detected
-downbeat. These checks catch obvious meter/tracking failures, not a
-consistent wrong bar phase or half/double tempo. A silence or unusable
-grid gives an actionable error, never fabricated timestamps.
+WP15 removes the global 75% rejection gate. Analysis writes
+`reliability.bars` and contiguous `reliability.regions`, with reliable-bar
+fraction `confidence` and `hint`. A reliable complete bar has the expected
+beat count, local max/min interval ratio ≤1.4, and compatible raw-tracker
+bar support (correction cannot manufacture confidence). Intro/outro fragments
+are unverified. The compact tool summary includes regions, not every bar.
+Chop discovery requires the whole candidate to be reliable by default;
+`allow_unreliable=true` overrides this, including with `at_s`. Choice and
+validation warn without rejecting doubtful chops. This is consistency,
+not musical beat accuracy: confirm the one with the human.
+
+Analyze the unseparated mix first (~20–30 s in recent sessions). Separation
+attaches stems without moving the grid or requiring another inference pass.
+`source.preview_grid(window_s=[a,b])`, `source.find_chops(window_s=[a,b])`
+and `at_s` all use that full-file grid. Do not export/reimport excerpts to
+"verify" them: tracking loses context. Imported standalone files have no
+inferred parent; time windows are the supported excerpt-selection workflow.
+Valid nonrhythmic audio produces descriptors and an unavailable grid
+(`bpm_global=null`, empty arrays, zero confidence); preview plays explicitly
+labelled audio without clicks. Silence and undecodable audio remain errors.
 
 Independent synthesized ground truth: 64 drum beats drift gradually from
 0.48 to 0.56 seconds per beat. With 70 ms one-to-one matching, the interior
@@ -297,8 +312,8 @@ carry Public Domain Mark. Full-recording model measurements:
 | The Syncopated Walk (1915) | 176.40 | 46.93 | 413 / 108 | 176.47 | 72.90% | 92.98% |
 | A Friend of Mine (1907) | 117.63 | 30.30 | 212 / 72 | 125.00 | 45.07% | 88.68% |
 
-The last three fail the new 4/4 consistency gate. Measurements above expose
-raw tracker diagnostics, not accepted production analyses. Onset agreement
+The last three failed the former 4/4 gate (removed in WP15). These historic
+measurements expose raw tracker diagnostics. Onset agreement
 is computed independently from RMS rises, but dense onsets can agree with
 a wrong subdivision: **it is not beat/downbeat accuracy**. No human
 annotations or auditory beat-accuracy assessment were available for these
@@ -356,8 +371,9 @@ minutes (an "intro" of 0–108 s on a real 4-minute record), so
 `source.find_chops` also takes `window_s: [a, b]` (every candidate lies
 inside it, 0.25 s slack; combines with `section`) and `at_s` (seconds or
 `"m:ss"`): candidate 1 starts on the downbeat nearest that time (best
-scoring of the requested/default lengths there; the grid-regularity and
-section filters are skipped for this exact request), then the other
+scoring of the requested/default lengths there; the section filter is
+skipped, but WP15 still requires reliable regions unless
+`allow_unreliable=true`), then the other
 lengths at that start, then neighbouring bars. Every candidate carries
 `bar` (= `start_downbeat`, bar of the record), `start_s`, `start_mmss`
 (`"0:15.2"`) and `length_s`; the result adds `downbeats_s`, the record's

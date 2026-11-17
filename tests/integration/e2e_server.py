@@ -93,9 +93,9 @@ def main() -> None:
 
     from muestra.api.server import create_app
 
-    app = create_app(project)
+    app = create_app(project, token="e2e-lan-token")
     print(f"READY http://127.0.0.1:{args.port} {project}", flush=True)
-    uvicorn.run(app, host="127.0.0.1", port=args.port, log_level="warning")
+    uvicorn.run(app, host="0.0.0.0", port=args.port, log_level="warning")
 
 
 if __name__ == "__main__":
