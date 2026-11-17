@@ -33,7 +33,7 @@ git, ffmpeg y Node.js 20 o más nuevo.
 6. **Chequeo.** `uv run muestra doctor --project <carpeta-de-tus-temas>/mi-tema`
    (ver abajo).
 7. **Conectar tu agente.** `uv run muestra agent-setup --project <...>/mi-tema --write <carpeta-donde-corre-tu-agente>`
-   (ver "Conectar un agente").
+   y sumale la skill de Muestra a esa carpeta (ver "Conectar un agente").
 8. **Abrir el estudio.** `uv run muestra serve --project <...>/mi-tema --open`.
 
 La librería de samples vive en `Documentos/MuestraLibrary` (se detecta sola;
@@ -48,17 +48,21 @@ Revisa todo sin bajar nada ni abrir plugins, y para cada cosa que falta dice
 
 ```text
 OK       git: C:\Program Files\Git\cmd\git.exe
-OPTIONAL ffmpeg: ffmpeg está instalado en ...\ffmpeg.exe pero no está en el PATH de esta terminal ...
+OPTIONAL ffmpeg: ffmpeg is installed at ...\ffmpeg.exe but is not on this terminal's PATH (the PATH
+         changed after the terminal started). Needed for m4a/aac imports; aiff/flac/mp3/ogg/wav decode without it.
          Fix: Open a new terminal, or set MUESTRA_FFMPEG="...\ffmpeg.exe".
 OK       python-core: Core packages installed (server, MCP, effects, beat tracking).
-OPTIONAL python-separation: Stem separation is not installed ...
-         Fix: uv sync --extra separation   (run in the Muestra checkout: ...)
+OPTIONAL python-separation: Stem separation is not installed (source.separate will fail; everything else works). ...
+         Fix: uv sync --extra separation   (run in the Muestra checkout: cd "...\Muestra")
 OK       model:htdemucs: C:\Users\vos\.cache\demucs-infer\955717e8-8726e21a.th
 MISSING  ui: The listening UI is not built.
-         Fix: cd "...\Muestra\ui" && npm ci && npm run build
+         Fix: cd "...\Muestra\ui" && npm ci && npm run build   (needs Node.js 20+)
 OK       library:C:\Users\vos\Documents\MuestraLibrary: ... (indexed)
-OK       plugin:slap-bass: ...\Surge XT.vst3
+OK       plugin:slap-bass: ...\Surge XT.vst3\Contents\x86_64-win\Surge XT.vst3
+OK       plugin:rhodes: ...\MuestraLibrary\instruments\jrhodes\muestra-rhodes.sfz
 ```
+
+(Los mensajes de `doctor` están en inglés; los arreglos son comandos para copiar y pegar.)
 
 `MISSING` = algo central no anda; `OPTIONAL` = una parte opcional (por
 ejemplo, sin separación de stems todo lo demás funciona). Sale con código 1 si
@@ -71,6 +75,12 @@ para tu máquina (rutas absolutas, el `uv` que corresponde). Con
 `--write <carpeta>` además deja escritos `.mcp.json` (Claude Code) y
 `.codex/config.toml` (Codex) **en esa carpeta**, sin tocar tu configuración
 global. Detalle en [docs/agents.md](docs/agents.md).
+
+**La skill.** Lo que el agente tiene que saber (el flujo, la receta future funk, cómo
+escribir `song.yaml`, cómo leer los "oídos", cómo traducir lo que decís) está en la skill
+[`skills/muestra/`](skills/muestra/SKILL.md); cómo instalarla en Claude Code, Codex u otro
+agente: [docs/skill.md](docs/skill.md). Sin skill, el servidor MCP igual le pasa una guía
+corta (`muestra_guide`).
 
 - **Claude Code.** Abrí `claude` en la carpeta donde escribió `.mcp.json`,
   aprobá el servidor `muestra` y mirá `/mcp`. Separar un disco entero tarda
@@ -108,6 +118,8 @@ misma posición, `M` para comentar en el punto que suena, mute/solo por pista
 con las alarmas que el agente va a leer.
 
 ## Primera sesión
+
+Así se ve desde tu lado (el detalle de lo que hace el agente está en la skill):
 
 1. Poné tu disco en cualquier carpeta y decile al agente:
    *"Importá `C:\Música\nos-siguen-pegando-abajo.wav` en mi-tema, separalo y analizalo"*.

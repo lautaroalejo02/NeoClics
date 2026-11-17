@@ -255,7 +255,7 @@ def _project_checks(opened, check) -> None:
             if track.instrument:
                 instrument = track.instrument
                 required.setdefault(
-                    instrument.plugin, lambda i=instrument: instrument_spec(opened, i)[0]
+                    instrument.plugin, lambda i=instrument: _located(instrument_spec(opened, i))
                 )
             for fx in track.fx:
                 if fx.type == "plugin":
@@ -284,3 +284,9 @@ def _project_checks(opened, check) -> None:
             )
     if not required:
         check("plugins", True, "No external plugins required by this song.")
+
+
+def _located(spec) -> object:
+    """instrument_spec -> (plugin path | 'sfz', preset path, curated): show the file."""
+    plugin, preset, _curated = spec
+    return preset if plugin == "sfz" else plugin

@@ -668,3 +668,9 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
     clicks (`click_onset_rise_db = 12`); the `loudness_off_target` fix
     names the safety-limiter cause; sample `grid_offset` on dense live
     records is documented as unreliable (thresholds unchanged).
+11. **Skill findings 1-3 (ears, after merging WP9)**: `loudness_off_target` no longer
+    suggests `master.gain_db` (normalised away); a weak tuning measurement overrides the
+    A440 prediction of `sample_detuned` (never creates one); `track_transposed` at ±5/±7 or
+    contradicted by a fitting bass/sample pair is `info`. The skill's `ears.md`/`workflow.md`
+    were updated to the new behaviour and to `render` returning `metrics_summary`.
+    Thresholds unchanged. Details: docs/ears.md.

@@ -412,6 +412,30 @@ modelled "dance" reference (the bass enters at bar 5 and the kick is a
 a problem is exactly what the reference model cannot know (see
 "Spectral balance").
 
+### Skill run findings (WP9 → fixed in WP11)
+
+`docs/skill-findings.md` 1-3, regression tests in `tests/ears/test_skill_findings.py`:
+
+1. **`loudness_off_target` never suggests `master.gain_db`.** With `target_lufs` the
+   renderer normalises after `master.gain_db`, so it cancels out (measured on the demo
+   loop: `master.gain_db +6` → -12.96 LUFS, unchanged). The fix now names the drum track(s)
+   to lower (drums -6 dB → -11.34), raising the quiet tracks (sample +6 / bass +3 →
+   -12.05), or a realistic target (-13 → -14.39); the "louder than target" branch points
+   at `master.fx` / the target instead.
+2. **A measurement beats the A440 prediction.** Below `tuning_min_strength` the render's
+   tuning used to be ignored and the prediction (which assumes the record is at A440)
+   alarmed with a fix that re-detuned a compensated record. Now a weak measurement
+   overrides a predicted alarm (silences it when the render measures in tune; otherwise it
+   sets the value and the fix, basis "medido, señal débil"). A weak measurement never
+   creates an alarm the prediction does not have, so noisy material cannot add false
+   alarms. Test: a record at -30 cents compensated by a +30-cent resample, measurement
+   forced weak → no alarm (the prediction alone says +30).
+3. **Fourths/fifths are not transpositions.** Key profiles cannot tell a tonic from its
+   dominant: `track_transposed` at ±5/±7 semitones, or for a track whose bass/sample pair
+   fits (`best_shift_semitones` 0, fit ≥ 0.5), is now `info` ("probablemente a
+   propósito"). Test: the corpus (F#m) with `meta.key: Bm` → two `track_transposed` at -5,
+   both info.
+
 ## Calibration corpus
 
 `muestra.ears.corpus.generate(CorpusSpec(...), root)` writes a complete
