@@ -18,7 +18,8 @@ def pytest_configure(config):
 def project(tmp_path):
     (tmp_path / "muestra.toml").write_text("schema_version = 0\n", encoding="utf-8")
     (tmp_path / "song.yaml").write_text(
-        "schema_version: 0\nmeta: {title: test, key: Am, bpm: 120, length_bars: 16, seed: 42}\ntracks: []\n",
+        "schema_version: 0\n"
+        "meta: {title: test, key: Am, bpm: 120, length_bars: 16, seed: 42}\ntracks: []\n",
         encoding="utf-8",
     )
     return Project(tmp_path, ProjectConfig())

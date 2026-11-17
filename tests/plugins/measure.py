@@ -10,7 +10,7 @@ import numpy as np
 from muestra.plugins.core import midi_events
 from muestra.plugins.discovery import resolve_plugin
 from muestra.plugins.host import PluginHost
-from muestra.plugins.presets import CURATED, instrument_root, resolve_preset
+from muestra.plugins.presets import CURATED, CURATED_PARAMS, instrument_root, resolve_preset
 from muestra.plugins.sfz import render_sfz
 from muestra.project.core import Project
 from muestra.schemas.config import ProjectConfig
@@ -84,7 +84,10 @@ def native_measurements(path):
             deterministic = alias != "init-sine"
             for host in [first, second]:
                 host.info = host.request(
-                    op="preset", preset=str(preset), params={}, deterministic=deterministic
+                    op="preset",
+                    preset=str(preset),
+                    params=CURATED_PARAMS[alias] if deterministic else {},
+                    deterministic=deterministic,
                 )
             a = first.render(events, 48000, 960000)
             b = first.render(events, 48000, 960000)

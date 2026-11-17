@@ -136,3 +136,18 @@ def test_empty_notes_and_explicit_tempo(project):
     assert empty.shape == (123, 2) and not np.any(empty)
     with pytest.raises(MuestraError):
         render_instrument(project, Instrument(plugin="missing"), [], 48000, 123, bpm=0)
+
+
+def test_high_quality_resampling_rejects_aliasing(tmp_path):
+    path = sample_map(tmp_path)
+    # Shift an 8 kHz recorded sine up an octave at 24 kHz output: it must
+    # be filtered away, not fold back to an audible 8 kHz alias.
+    t = np.arange(48000) / 24000
+    sf.write(
+        tmp_path / "tone with spaces.wav",
+        0.2 * np.sin(2 * np.pi * 8000 * t),
+        24000,
+        subtype="FLOAT",
+    )
+    audio = render_sfz(path, [MidiNote(beat=1, pitch=81, length_beats=2)], 24000, 24000, bpm=120)
+    assert np.sqrt(np.mean(audio[2400:18000] ** 2)) < 1e-6

@@ -12,7 +12,7 @@ from pathlib import Path
 
 import numpy as np
 import soundfile as sf
-from scipy.signal import resample_poly
+from scipy.signal import firwin, resample_poly
 
 from ..errors import MuestraError
 from ..music import parse_note_name
@@ -68,6 +68,15 @@ def key(value):
 
 
 def parse_sfz(path: Path) -> list[dict]:
+    try:
+        return _parse_sfz(path)
+    except MuestraError:
+        raise
+    except (OSError, ValueError, TypeError, OverflowError) as e:
+        raise fail(str(e)) from e
+
+
+def _parse_sfz(path: Path) -> list[dict]:
     try:
         text = path.read_text(encoding="utf-8-sig")
     except OSError as e:
@@ -192,6 +201,7 @@ def render_sfz(path, notes, sample_rate, n_frames, *, bpm, seed=0, params=None):
         cycles = {}
         samples = {}
         pitched = {}
+        filters = {}
         for note in sorted(notes, key=lambda n: n.beat):
             start = round((note.beat - 1) * 60 / bpm * sample_rate)
             gate = max(1, round(note.length_beats * 60 / bpm * sample_rate))
@@ -279,12 +289,19 @@ def render_sfz(path, notes, sample_rate, n_frames, *, bpm, seed=0, params=None):
                         extended[valid] = source[looped[valid]]
                         source = extended
                     fraction = Fraction(sample_rate / (source_rate * ratio)).limit_denominator(4096)
+                    if fraction not in filters:
+                        rate = max(fraction.numerator, fraction.denominator)
+                        filters[fraction] = (
+                            firwin(64 * rate + 1, 1 / rate, window=("kaiser", 12.0))
+                            if rate > 1
+                            else np.ones(1)
+                        )
                     pitched[cachekey] = resample_poly(
                         source,
                         fraction.numerator,
                         fraction.denominator,
                         axis=0,
-                        window=("kaiser", 12.0),
+                        window=filters[fraction],
                     )
                 voice = pitched[cachekey][:frames].astype(np.float64)
                 if voice.shape[1] == 1:

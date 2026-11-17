@@ -15,7 +15,7 @@ from ..toolbase import ProjectScoped, ToolOutput
 from .core import instrument_spec
 from .discovery import default_search_dirs, discover, resolve_plugin
 from .host import PluginHost
-from .presets import CURATED, instrument_root, surge_presets
+from .presets import CURATED, instrument_root, surge_presets, vst_presets
 from .sfz import parse_sfz
 
 
@@ -39,6 +39,8 @@ class PresetEntry(ContractModel):
     name: str
     path: str
     plugin: str
+    supported: bool | None = None
+    errors: list[Issue] = Field(default_factory=list)
 
 
 class AliasEntry(ContractModel):
@@ -95,13 +97,22 @@ def plugins_list(params: PluginsListParams) -> PluginsListResult:
         PresetEntry(name=f"{p.parent.name}/{p.stem}", path=str(p), plugin="surge-xt")
         for p in surge_presets()
     ]
+    presets += [PresetEntry(name=p.stem, path=str(p), plugin=p.parent.name) for p in vst_presets()]
     sample_dirs = [instrument_root(), *project.library_dirs()]
-    presets += [
-        PresetEntry(name=p.stem, path=str(p), plugin="sfz")
-        for root in sample_dirs
-        if root.exists()
-        for p in sorted(root.rglob("*.sfz"))
-    ]
+    for root in sample_dirs:
+        if not root.exists():
+            continue
+        for p in sorted(root.rglob("*.sfz")):
+            errors = []
+            try:
+                parse_sfz(p)
+            except MuestraError as e:
+                errors = e.issues
+            presets.append(
+                PresetEntry(
+                    name=p.stem, path=str(p), plugin="sfz", supported=not errors, errors=errors
+                )
+            )
     aliases = []
     for alias, (plugin, preset, reason) in CURATED.items():
         errors = []

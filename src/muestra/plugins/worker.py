@@ -22,6 +22,9 @@ def set_parameters(plugin, params):
                 hint="Use plugins.scan to list native parameter names.",
             )
         try:
+            parameter = plugin.parameters[name]
+            if parameter.type is bool and value in (0, 1):
+                value = bool(value)
             setattr(plugin, name, value)
         except (ValueError, TypeError, RuntimeError) as e:
             raise MuestraError.one(
@@ -56,6 +59,24 @@ def main():
                             path="preset",
                             hint="Choose a compatible .vstpreset or Surge XT .fxp file.",
                         ) from e
+                    # Surge applies queued patch state at its first audio callback.
+                    # Flush that callback before params, or the patch overwrites them.
+                    if plugin.is_instrument:
+                        plugin.process(
+                            [],
+                            duration=512 / 48000,
+                            sample_rate=48000,
+                            num_channels=2,
+                            buffer_size=512,
+                            reset=True,
+                        )
+                    else:
+                        plugin.process(
+                            np.zeros((2, 512), dtype=np.float32),
+                            sample_rate=48000,
+                            buffer_size=512,
+                            reset=True,
+                        )
                 plugin.refresh_parameters()
                 set_parameters(plugin, command["params"])
                 response = dict(
@@ -80,6 +101,12 @@ def main():
                     buffer_size=512,
                     reset=command["reset"],
                 )
+                if not np.isfinite(audio).all():
+                    raise MuestraError.one(
+                        "plugin_audio",
+                        "Plugin returned non-finite audio.",
+                        hint="Choose another plugin or reduce unstable parameters.",
+                    )
                 np.save(command["output"], audio.T.astype(np.float32), allow_pickle=False)
                 response = {}
             elif op == "effect":
@@ -96,6 +123,12 @@ def main():
                     reset=command["reset"],
                     buffer_size=command["buffer_size"],
                 )
+                if not np.isfinite(audio).all():
+                    raise MuestraError.one(
+                        "plugin_audio",
+                        "Plugin returned non-finite audio.",
+                        hint="Choose another plugin or reduce unstable parameters.",
+                    )
                 np.save(command["output"], audio, allow_pickle=False)
                 response = {}
             elif op == "parameter_info":

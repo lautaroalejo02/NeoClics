@@ -453,7 +453,7 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `source.import/separate/analyze/find_chops` | `muestra.ingest.tools` | WP1 |
 | `chops.choose`, `chops.list` | `muestra.ingest.tools` | WP1; choose gains `chop_id` (writes that chop into song.yaml via ruamel) |
 | `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version` |
-| plugins hosting | `muestra.plugins` | WP3, no tools in spec 8 |
+| plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py |
 | `library.index/search` | `muestra.library.tools` | WP4 |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5; restore = byte copy of snapshot |
 | `ears.analyze` | `muestra.ears.tools` | WP6 |

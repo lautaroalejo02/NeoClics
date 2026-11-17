@@ -9,7 +9,7 @@ import numpy as np
 from ..errors import MuestraError
 from .discovery import resolve_plugin
 from .host import PluginHost
-from .presets import CURATED, instrument_root, resolve_preset
+from .presets import CURATED, CURATED_PARAMS, instrument_root, resolve_preset
 from .sfz import render_sfz
 
 if TYPE_CHECKING:
@@ -21,7 +21,7 @@ __all__ = ["resolve_plugin", "render_instrument", "build_plugin_fx"]
 
 def instrument_spec(project, instrument):
     name, reference = instrument.plugin, instrument.preset
-    curated = name in CURATED
+    curated = name in CURATED and name not in project.config.plugins.aliases
     if curated:
         name, default, _ = CURATED[name]
         reference = reference or default
@@ -94,7 +94,12 @@ def render_instrument(
             preset, notes, sample_rate, n_frames, bpm=bpm, seed=seed, params=instrument.params
         )
     else:
-        with PluginHost(path, preset, instrument.params, deterministic=curated) as host:
+        params = (
+            {**CURATED_PARAMS[instrument.plugin], **instrument.params}
+            if curated
+            else instrument.params
+        )
+        with PluginHost(path, preset, params, deterministic=curated) as host:
             audio = host.render(
                 midi_events(notes, sample_rate, n_frames, bpm), sample_rate, n_frames
             )
