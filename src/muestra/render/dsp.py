@@ -7,7 +7,9 @@ from functools import lru_cache
 
 import numpy as np
 import pedalboard as pb
-from scipy.signal import lfilter, resample_poly, sosfilt
+from scipy.signal import resample_poly
+from scipy.signal._sigtools import _linear_filter
+from scipy.signal._sosfilt import _sosfilt
 
 from ..errors import MuestraError
 from ..plugins import core as plugins
@@ -58,7 +60,15 @@ def _follower(signal, sr, attack, release):
         ms = np.asarray(attack if rising else release)
         ms = float(ms if ms.ndim == 0 else ms[start])
         c = math.exp(-1 / (sr * ms / 1000)) if ms > 0 else 0.0
-        out[start:end], z = lfilter([1 - c], [1, -c], signal[start:end], zi=[c * state])
+        # Same C kernel as scipy.signal.lfilter, with our known float64
+        # layouts; avoid its repeated array-API/axis validation per 32 frames.
+        out[start:end], _ = _linear_filter(
+            np.array([1 - c]),
+            np.array([1.0, -c]),
+            signal[start:end],
+            0,
+            np.array([c * state]),
+        )
         state = out[end - 1]
     return out
 
@@ -84,7 +94,7 @@ def sidechain_envelope(events, frames, sr, attack, release, key=None):
     return env
 
 
-def _native(fx, bpm, project):
+def _native(fx, bpm, project, path):
     values = fx.model_dump(exclude={"id", "type"})
     if fx.type == "plugin":
         try:
@@ -93,7 +103,7 @@ def _native(fx, bpm, project):
             raise MuestraError.one(
                 "plugin_unavailable",
                 "Plugin hosting is unavailable.",
-                path=f"fx.{fx.id or 'plugin'}.plugin",
+                path=f"{path}.plugin",
                 value=fx.plugin,
                 hint="Install/configure the plugin and complete the WP3 plugin host.",
             ) from exc
@@ -165,7 +175,7 @@ def apply_fx(audio, effects: list[Fx], sr, bpm, auto: Automation, prefix, projec
             # Butterworth SOS implements the declared order; pb's native filters
             # are first-order. All banks retain state when order is automated.
             orders = [2, 4, 6, 8] if auto.has(path + ".order") else [fx.order]
-            states = {order: np.zeros((order // 2, 2, 2)) for order in orders}
+            states = {order: np.zeros((2, order // 2, 2)) for order in orders}
             size = BLOCK if auto.has(path) else len(audio)
             cutoffs = np.broadcast_to(
                 values("cutoff_hz", np.arange(0, len(audio), size)), (math.ceil(len(audio) / size),)
@@ -179,8 +189,11 @@ def apply_fx(audio, effects: list[Fx], sr, bpm, auto: Automation, prefix, projec
                 outputs = []
                 for order in orders:
                     sos = banks[order][index]
-                    filtered, states[order] = sosfilt(sos, chunk, axis=0, zi=states[order])
-                    outputs.append(filtered)
+                    # Public sosfilt's validated C kernel, retaining state
+                    # in its native (channels, sections, delays) layout.
+                    filtered = np.ascontiguousarray(chunk.T, dtype=np.float64)
+                    _sosfilt(sos, filtered, states[order])
+                    outputs.append(filtered.T)
                 if len(orders) == 1:
                     audio[i : i + len(chunk)] = outputs[0]
                 else:
@@ -206,7 +219,16 @@ def apply_fx(audio, effects: list[Fx], sr, bpm, auto: Automation, prefix, projec
         elif fx.type == "gain":
             audio *= np.expand_dims(np.power(10, values("gain_db") / 20), -1)
         else:
-            effect = _native(fx, bpm, project)
+            try:
+                effect = _native(fx, bpm, project, path)
+            except (ValueError, RuntimeError) as exc:
+                raise MuestraError.one(
+                    "effect_parameter",
+                    str(exc),
+                    path=path,
+                    value=fx.model_dump(),
+                    hint="Use parameter values supported by this installed effect/plugin.",
+                ) from exc
             automated = auto.has(path)
             size = BLOCK if automated else len(audio)
             for i in range(0, len(audio), size):
@@ -232,9 +254,18 @@ def apply_fx(audio, effects: list[Fx], sr, bpm, auto: Automation, prefix, projec
                                 value=value,
                                 hint="Use a writable native plugin parameter and its native range.",
                             ) from exc
-                processed = effect.process(
-                    np.ascontiguousarray(audio[i : i + size].T), sr, reset=(i == 0)
-                )
+                try:
+                    processed = effect.process(
+                        np.ascontiguousarray(audio[i : i + size].T), sr, reset=(i == 0)
+                    )
+                except (ValueError, RuntimeError) as exc:
+                    raise MuestraError.one(
+                        "effect_processing",
+                        str(exc),
+                        path=path,
+                        value=fx.model_dump(),
+                        hint="Check this effect/plugin's parameters and sample-rate support.",
+                    ) from exc
                 audio[i : i + size] = processed.T
     if not np.isfinite(audio).all():
         raise MuestraError.one(

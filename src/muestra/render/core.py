@@ -273,6 +273,7 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
                             _add(lane_audio, sample * velocity, frame, hi)
                             hits.append(frame)
                 lanes[track.id, name] = lane_audio
+                lane_audio[lo:hi] = fade(lane_audio[lo:hi], sr, start=False)
                 events[track.id, name] = [] if track.mute else hits
                 all_events.extend(hits)
                 audio += lane_audio
@@ -282,12 +283,23 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
             # shifting or retriggering an already sustained note at entry.
             notes = read_notes(project, track)
             events[track.id, None] = (
-                [] if track.mute else [beat_frame(n.beat - 1, bpm, sr) for n in notes
-                                       if lo <= beat_frame(n.beat - 1, bpm, sr) < hi]
+                []
+                if track.mute
+                else [
+                    beat_frame(n.beat - 1, bpm, sr)
+                    for n in notes
+                    if lo <= beat_frame(n.beat - 1, bpm, sr) < hi
+                ]
             )
             try:
-                rendered = plugins.render_instrument(
-                    project, track.instrument, notes, sr, n_frames, bpm=bpm
+                rendered = (
+                    np.zeros_like(audio)
+                    if track.mute
+                    else np.asarray(
+                        plugins.render_instrument(
+                            project, track.instrument, notes, sr, n_frames, bpm=bpm
+                        )
+                    )
                 )
             except NotImplementedError as exc:
                 raise MuestraError.one(
@@ -297,7 +309,11 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
                     value=track.instrument.plugin,
                     hint="Configure the instrument plugin and complete the WP3 plugin host.",
                 ) from exc
-            if rendered.shape != audio.shape or not np.isfinite(rendered).all():
+            if (
+                rendered.shape != audio.shape
+                or rendered.dtype != np.float32
+                or not np.isfinite(rendered).all()
+            ):
                 raise MuestraError.one(
                     "invalid_audio",
                     "Instrument returned invalid audio.",
@@ -310,7 +326,7 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
         audio[hi:] = 0
         # Smooth cuts at track windows, including sustained notes/delay input.
         if hi > lo:
-            audio[lo:hi] = fade(audio[lo:hi], sr, start=False)
+            audio[lo:hi] = fade(audio[lo:hi], sr, start=(lo > 0))
     return raw, lanes, events
 
 
@@ -371,7 +387,7 @@ def render_audio(project: Project, song: Song, range_bars: tuple[int, int]):
             )
             audio[:lo] = 0
             audio[hi:] = 0
-            audio[lo:hi] = fade(audio[lo:hi], sr, start=False)
+            audio[lo:hi] = fade(audio[lo:hi], sr, start=(lo > 0))
         processed[track_id] = audio
         return audio
 

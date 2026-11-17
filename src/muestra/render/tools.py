@@ -1,4 +1,4 @@
-"""Tool stubs owned by WP2 (render): preview and render.
+"""Render and preview tools, with git versioning and ears orchestration.
 
 The ``render`` tool orchestrates: validate -> allocate version id
 (max+1) -> ``versions.core.record_version`` (commit + tag) -> render
@@ -14,7 +14,7 @@ import time
 from datetime import UTC, datetime
 
 import soundfile as sf
-from pydantic import Field
+from pydantic import Field, ValidationError
 
 from ..ears import core as ears
 from ..errors import MuestraError
@@ -194,9 +194,19 @@ def render(p: RenderParams) -> RenderResult:
     project = open_project(p.project)
     started = time.perf_counter()
     hints = []
+    prior = None
     if p.version:
         song = versions.song_at(project, p.version)
         raw = versions.song_at_raw(project, p.version).encode("utf-8")
+        snapshot = project.path(f"renders/{p.version}/song.yaml")
+        if snapshot.is_file():
+            raw = snapshot.read_bytes()
+        old_meta = project.path(f"renders/{p.version}/meta.json")
+        if old_meta.is_file():
+            try:
+                prior = RenderMeta.model_validate_json(old_meta.read_bytes())
+            except ValidationError:
+                hints.append("Previous render metadata was invalid; it was regenerated.")
         issues = song.check()
     else:
         issues = validate_song(project, check_files=True)
@@ -214,7 +224,9 @@ def render(p: RenderParams) -> RenderResult:
             hint=f"Use 1 <= start < end <= {song.meta.length_bars + 1}.",
         )
     version = p.version or versions.next_version_id(project)
-    parent, commit, diff = None, None, []
+    parent = prior.parent if prior else None
+    commit = prior.git_commit if prior else None
+    diff = prior.diff if prior else []
     existing = None
     try:
         history = versions_list(VersionsListParams(project=str(project.root))).versions
@@ -260,9 +272,9 @@ def render(p: RenderParams) -> RenderResult:
         parent=parent,
         git_commit=commit,
         created_at=datetime.now(UTC),
-        request=p.request,
-        summary=p.summary or (existing.summary if existing else None),
-        agent=p.agent or "muestra",
+        request=p.request if p.request is not None else (prior.request if prior else None),
+        summary=p.summary or (existing.summary if existing else prior.summary if prior else None),
+        agent=p.agent or (prior.agent if prior else "muestra"),
         diff=diff,
         render_time_s=time.perf_counter() - started,
         duration_s=sf.info(directory / "mix.wav").duration,

@@ -11,6 +11,7 @@ from pathlib import Path
 
 import numpy as np
 import pedalboard
+import scipy
 import soundfile as sf
 from scipy.signal import resample, resample_poly
 
@@ -18,7 +19,10 @@ from ..errors import MuestraError
 from ..project.core import Project
 
 # Bump whenever decoding/warping or its quality settings change.
-CACHE_ABI = f"render-3-pb{pedalboard.__version__}-numpy{np.__version__}"
+CACHE_ABI = (
+    f"render-3-pb{pedalboard.__version__}-numpy{np.__version__}"
+    f"-scipy{scipy.__version__}-sndfile{sf.__libsndfile_version__}"
+)
 
 
 def digest(*values: object) -> str:
