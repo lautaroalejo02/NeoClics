@@ -163,9 +163,12 @@ def clip_audio(project: Project, song: Song, clip: Clip, sr: int, decoded=None):
     ), clip.length_beats
 
 
-def read_notes(project: Project, track: Track) -> list[MidiNote]:
-    if track.notes is not None:
-        return list(track.notes)
+def read_notes(project: Project, track: Track, song: Song | None = None) -> list[MidiNote]:
+    """Song-beat notes: inline ``notes`` + expanded ``phrases`` (needs ``song``), or MIDI."""
+    if track.notes is not None or track.phrases is not None:
+        if song is None:
+            return list(track.notes or [])
+        return song.track_notes(track) or []
     try:
         import mido
     except ImportError:
@@ -281,7 +284,7 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
         else:
             # Notes use absolute song beats; the window gates audio without
             # shifting or retriggering an already sustained note at entry.
-            notes = read_notes(project, track)
+            notes = read_notes(project, track, song)
             events[track.id, None] = (
                 []
                 if track.mute

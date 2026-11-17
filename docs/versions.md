@@ -157,8 +157,8 @@ tracks    /  tracks.<id>.fx   (reorder)
 Written the way a producer would say it, in rioplatense Spanish, first person
 past: "Subí el chop c1 un semitono", "Bajé el bajo 2 dB", "Cambié el preset
 del bajo de slap-bass-01 a slap-bass-02", "Sidechain más profundo (0.6 a 0.8)
-en el track sample", "Agregué un filtro pasa-bajos automatizado de 800 Hz a
-18 kHz en los compases 1 a 4 del track sample", "El bombo pasa de negras a un
+en el sample", "Agregué un filtro pasa-bajos automatizado de 800 Hz a
+18 kHz en los compases 1 a 4 del sample", "El bombo pasa de negras a un
 patrón con síncopa en el compás 4", "El delay de la batería ahora es de
 corcheas (antes negras)".
 

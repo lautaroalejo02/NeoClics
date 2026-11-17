@@ -133,10 +133,10 @@ class Timeline:
         if track is None or track.instrument is None or track.mute:
             return []
         raw: list[tuple[float, int, float, float]] = []  # beat0, pitch, len_beats, vel
-        if track.notes is not None:
+        inline = self.song.track_notes(track)  # notes + looped phrases (WP12)
+        if inline is not None:
             raw = [
-                (n.beat - 1.0, int(n.pitch), n.length_beats, n.velocity / 127.0)
-                for n in track.notes
+                (n.beat - 1.0, int(n.pitch), n.length_beats, n.velocity / 127.0) for n in inline
             ]
         elif track.midi is not None:
             raw = read_midi_notes(self._resolve(track.midi))
