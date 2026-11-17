@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-17 — WP1: candidate ID schema correction
+
+User-authorized correction: `ChopCandidate.id` now uses `CandidateIdStr`,
+matching existing R5 and contracts.md (global `csNNN/candN`). The old local
+`candN` validator and fixture contradicted that ruling. Regenerated affected
+JSON schemas and migrated the example candidate IDs. No new wire format or
+contract change; existing binding R5 is implemented.
+
 Dated log of decisions made where `docs/spec.md` was silent or ambiguous,
 and of deviations from it. Each entry says what was decided and why.
 (Newest last; WPs append their own entries.)

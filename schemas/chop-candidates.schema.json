@@ -75,8 +75,8 @@
           "type": "number"
         },
         "id": {
-          "description": "Local id inside the set: 'cand1', 'cand2', ...",
-          "pattern": "^cand\\d+$",
+          "description": "Global id: 'csNNN/candN'.",
+          "pattern": "^cs\\d{3,}/cand\\d+$",
           "title": "Id",
           "type": "string"
         },
