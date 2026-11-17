@@ -13,7 +13,7 @@ project. Start another HTTP process to listen to a different project.
 
 `/` serves `ui/dist` when built, including SPA navigation. Without a build, `/` explains how
 to build it. Unknown API paths and missing assets return 404. `--host 0.0.0.0` explicitly
-enables LAN access, prints the no-authentication warning, and explains the phone URL.
+enables LAN access and prints the phone URL **with its access token** (WP13, see below).
 
 ## API reference
 
@@ -118,8 +118,29 @@ the cache keys include modification time and file size. Peaks are audio amplitud
 
 ## Security and concurrency
 
-- Localhost binding by default, no accounts, authentication, telemetry or LLM calls.
-- LAN access is explicitly opt-in and grants project-edit access to anyone who can connect.
+- Localhost binding by default, no accounts, telemetry or LLM calls. A loopback bind only
+  answers requests whose `Host` is `127.0.0.1`, `localhost` or `::1` (blocks DNS
+  rebinding: a web page whose name resolves to 127.0.0.1 sends a matching Origin and Host).
+- **LAN mode (WP13).** A non-loopback `--host` (e.g. `0.0.0.0`) generates a random token
+  (`secrets.token_urlsafe(16)`, new at every start) and prints
+  `http://<LAN-IP>:<port>/?token=<token>`. Clients **not on this computer**:
+  - must present the token: `?token=` on any request (the response then sets an
+    HttpOnly, SameSite=Strict cookie `muestra_token`, so the UI's own requests, audio and
+    websocket work unchanged), or the `X-Muestra-Token` header, or that cookie. Without
+    it: `401` (`unauthorized` envelope; a short Spanish page for browser navigation);
+    the `/events` websocket closes with 1008;
+  - may only call **read-only tools plus `feedback.append` and `chops.choose`** (what the
+    listening UI writes), `GET /project`, `/files`, `/waveform`, `GET /jobs/<id>` and the UI.
+    Everything else (render, restore, `source.import`, `library.index`, `plugins.scan`,
+    `DELETE /jobs/<id>`, …) is `403 local_only`. No allowed tool takes a filesystem path:
+    `project`/`project.open.path` must equal the served project (`project_locked`), and
+    `library.search.similar_to` only looks up the index.
+  - Loopback clients (the agent, the laptop's browser) need no token and keep every tool.
+  - `?token=` is stripped from GET tool query parameters (it is not a tool param).
+- `muestra mcp --transport streamable-http` refuses a non-loopback `--host` (exit 2): MCP
+  exposes every tool with no authentication, and agents run on this computer.
+- Before WP13, LAN access granted project-edit access (and arbitrary local file reads via
+  `source.import`, index writes via `library.index`) to anyone who could connect.
 - CORS allows only the Vite development origins `http://localhost:5173` and
   `http://127.0.0.1:5173`. HTTP and websocket requests carrying other cross-site Origins
   are rejected; the listening UI's own origin is accepted.

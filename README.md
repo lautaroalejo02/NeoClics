@@ -107,10 +107,13 @@ corta (`muestra_guide`).
 agente renderiza desde otra terminal, la versión nueva aparece sola.
 
 Para escuchar desde el **celular** en la misma red Wi-Fi:
-`uv run muestra serve --project <tema> --host 0.0.0.0` y en el celular abrí
-`http://<IP-de-tu-compu>:8765` (la IP la ves con `ipconfig` en Windows o en
-Ajustes > Red en macOS; Windows puede pedir permiso en el firewall la primera
-vez). No hay contraseña: hacelo solo en una red de confianza.
+`uv run muestra serve --project <tema> --host 0.0.0.0`. La terminal imprime una
+dirección como `http://192.168.0.23:8765/?token=…`: abrila tal cual en el
+celular (el `token` es la llave; cambia cada vez que arrancás el servidor, y
+el celular la recuerda hasta entonces). Desde el celular podés escuchar,
+comentar, puntuar y elegir chops; renderizar, restaurar o importar se hace
+solo desde la compu. Windows puede pedir permiso en el firewall la primera
+vez. Usalo en una red de confianza (la conexión no va cifrada).
 
 En la página: barra espaciadora para play, `S` para saltar entre A y B en la
 misma posición, `M` para comentar en el punto que suena, mute/solo por pista

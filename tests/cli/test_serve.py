@@ -73,6 +73,7 @@ def test_explicit_lan_warning_and_open_browser(tmp_project, monkeypatch, capsys)
     monkeypatch.setattr(uvicorn.Server, "run", lambda self, *, sockets: None)
     serve(tmp_project.root, host="0.0.0.0", port=0, open_browser=True)
     captured = capsys.readouterr()
-    assert "no authentication" in captured.err
-    assert "LAN-IP" in captured.out
+    # WP13: LAN mode prints the phone URL with its access token
+    assert "need the token" in captured.err
+    assert "/?token=" in captured.out
     assert opened[0].startswith("http://127.0.0.1:")

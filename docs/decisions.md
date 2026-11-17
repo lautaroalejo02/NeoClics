@@ -712,3 +712,11 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
    ("m:ss" accepted); candidates carry `bar`, `start_mmss`, `length_s`;
    the result carries the record's `downbeats_s` bar map. `at_s` skips the
    grid-regularity and section filters: the human asked for that spot.
+6. **LAN mode needs a token and is listen-only.** A non-loopback bind
+   prints a per-start random token in the phone URL; non-loopback clients
+   need it (query once → HttpOnly cookie, or `X-Muestra-Token`) and may
+   only use read-only tools + `feedback.append` + `chops.choose`;
+   loopback clients are unchanged. A loopback bind checks the Host header
+   (DNS rebinding). The UI needs no change (same-origin cookie). Why: any
+   LAN client could render, restore, import any local file and write index
+   files anywhere.
