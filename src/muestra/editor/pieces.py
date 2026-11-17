@@ -32,13 +32,14 @@ from typing import Literal
 
 import numpy as np
 import soundfile as sf
-from pydantic import Field
+from pydantic import Field, model_validator
 
 from ..errors import MuestraError
 from ..project import load_song, open_project
-from ..schemas._base import ContractModel, IdStr
+from ..schemas._base import ContractModel, FileRef, IdStr
 from ..schemas.song import (
     BEATS_PER_BAR,
+    LaneSlice,
     Master,
     Song,
     Track,
@@ -87,6 +88,47 @@ class SongPiecesParams(ProjectScoped):
         "editor's source view (16-bit, project rate).",
     )
     stem: Literal["drums", "bass", "vocals", "other", "mix"] = "mix"
+    sounds: list[SoundSpec] = Field(
+        default_factory=list,
+        description="WP17: extra lane/pad sounds to render (slices, tuned, reversed).",
+    )
+    notes: list[NoteSpec] = Field(
+        default_factory=list, description="WP17: single instrument notes (note pads)."
+    )
+
+
+class SoundSpec(ContractModel):
+    """A lane/pad sound without gain, pan or velocity (WP17): a file or a slice,
+    tuned (sampler-style) and/or reversed. Also the key of a ``Voice``."""
+
+    sample: FileRef | None = None
+    slice: LaneSlice | None = None
+    pitch_semitones: float = Field(default=0.0, ge=-24.0, le=24.0)
+    reverse: bool = False
+
+    @model_validator(mode="after")
+    def _one(self) -> SoundSpec:
+        if (self.sample is None) == (self.slice is None):
+            raise ValueError("a sound needs exactly one of sample / slice")
+        return self
+
+
+class Voice(SoundSpec):
+    """The rendered sound (``render.core.lane_sound``) of a SoundSpec."""
+
+    piece: str
+
+
+class NoteSpec(ContractModel):
+    """One instrument note rendered alone (note pads, WP17)."""
+
+    track: IdStr
+    pitch: int = Field(ge=0, le=127)
+    seconds: float = Field(default=3.0, gt=0, le=12.0)
+
+
+class NoteVoice(NoteSpec):
+    piece: str
 
 
 class Piece(ContractModel):
@@ -135,6 +177,12 @@ class SongPiecesResult(ToolOutput):
     materials: list[Material] = Field(default_factory=list)
     oneshots: dict[str, str] = Field(default_factory=dict)
     source_piece: str | None = Field(default=None, description="Piece id of the exported source.")
+    voices: list[Voice] = Field(
+        default_factory=list,
+        description="WP17: rendered lane/pad sounds: every slice / tuned / reversed lane of "
+        "the song plus the requested `sounds` (plain file lanes stay in `oneshots`).",
+    )
+    note_voices: list[NoteVoice] = Field(default_factory=list)
     tracks: list[TrackPieces] = Field(default_factory=list)
     render_s: float = 0.0
     approximations: list[str] = Field(default_factory=lambda: list(APPROXIMATIONS))
@@ -252,6 +300,7 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
         beat_frame,
         chop_audio,
         clip_audio,
+        lane_sound,
         pass_audio,
         plain_pass,
         render_audio,
@@ -356,7 +405,7 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
                     )
                 )
             if track.pattern is not None:
-                refs = {lane.sample for lane in track.pattern.lanes.values()}
+                refs = {lane.sample for lane in track.pattern.lanes.values() if lane.sample}
                 refs |= {h.sample for h in track.pattern.hits if h.sample}
                 for ref in sorted(refs):
                     if ref in oneshots:
@@ -368,6 +417,77 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
                     )
                     audio = fade(decode(project, path, sr)[0], sr, 1, start=False)
                     oneshots[ref] = add(_write_piece(project, "shot", audio, sr))
+
+    voices: list[Voice] = []
+    wanted_sounds: list[SoundSpec] = []
+    if p.dry:
+        for track in wanted:
+            for lane in (track.pattern.lanes if track.pattern else {}).values():
+                if lane.slice is not None or lane.pitch_semitones or lane.reverse:
+                    wanted_sounds.append(
+                        SoundSpec(
+                            sample=lane.sample,
+                            slice=lane.slice,
+                            pitch_semitones=lane.pitch_semitones,
+                            reverse=lane.reverse,
+                        )
+                    )
+            for hit in track.pattern.hits if track.pattern else []:
+                lane = track.pattern.lanes.get(hit.lane)
+                if hit.sample and lane is not None and (lane.pitch_semitones or lane.reverse):
+                    wanted_sounds.append(
+                        SoundSpec(
+                            sample=hit.sample,
+                            pitch_semitones=lane.pitch_semitones,
+                            reverse=lane.reverse,
+                        )
+                    )
+    wanted_sounds += p.sounds
+    done_sounds: set[str] = set()
+    for spec in wanted_sounds:
+        key = spec.model_dump_json()
+        if key in done_sounds:
+            continue
+        done_sounds.add(key)
+        try:
+            audio = lane_sound(project, song, spec, spec.sample, sr, decoded)
+        except MuestraError:
+            continue
+        voices.append(
+            Voice(**spec.model_dump(), piece=add(_write_piece(project, "voice", audio, sr)))
+        )
+    note_voices: list[NoteVoice] = []
+    for ns in p.notes:
+        track = next((t for t in song.tracks if t.id == ns.track), None)
+        if track is None or track.instrument is None:
+            continue
+        from ..plugins import core as plugins
+        from ..schemas.song import MidiNote
+
+        frames = round(ns.seconds * sr)
+        hold = max(0.05, ns.seconds - 1.0) * bpm / 60  # beats held; 1 s left for release
+        key = hashlib.sha256(
+            json.dumps(
+                [CACHE_ABI, sr, bpm, track.instrument.model_dump(mode="json"), ns.pitch, frames],
+                sort_keys=True,
+            ).encode()
+        ).hexdigest()[:20]
+        piece = _existing(project, "note", key, sr)
+        if piece is None:
+            try:
+                audio = plugins.render_instrument(
+                    project,
+                    track.instrument,
+                    [MidiNote(beat=1, pitch=ns.pitch, length_beats=hold, velocity=100)],
+                    sr,
+                    frames,
+                    bpm=bpm,
+                    seed=song.meta.seed,
+                )
+            except (MuestraError, NotImplementedError):
+                continue
+            piece = _write_piece(project, "note", np.asarray(audio, np.float32), sr, key)
+        note_voices.append(NoteVoice(**ns.model_dump(), piece=add(piece)))
 
     source_piece = None
     if p.source:
@@ -475,6 +595,8 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
         materials=materials,
         oneshots=oneshots,
         source_piece=source_piece,
+        voices=voices,
+        note_voices=note_voices,
         tracks=out_tracks,
         render_s=round(time.perf_counter() - started, 3),
         files=[pc.path for pc in pieces.values()],

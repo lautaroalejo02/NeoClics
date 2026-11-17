@@ -1,0 +1,22 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "take_id": {
+      "pattern": "^t[0-9]{3,}$",
+      "title": "Take Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "take_id"
+  ],
+  "title": "TakeDeleteParams",
+  "type": "object"
+}

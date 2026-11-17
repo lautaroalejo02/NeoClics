@@ -71,6 +71,7 @@ _TOOL_PACKAGES = (
     "feedback",
     "ears",
     "editor",
+    "pads",
 )
 
 

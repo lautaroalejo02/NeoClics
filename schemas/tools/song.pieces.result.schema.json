@@ -1,5 +1,112 @@
 {
   "$defs": {
+    "LaneSlice": {
+      "additionalProperties": false,
+      "description": "A slice of a chop or of a source, played as a drum lane's sound (WP17).\n\nExactly one of ``chop`` (a slice of that chop: ``start_beats`` counts beats\ninto the chop, its stem and warp are the chop's) or ``source`` (with\n``start_downbeat``; ``start_beats`` counts beats along the source's grid\nfrom that downbeat, like a chop's ``start_offset_beats``; ``stem`` and\n``warp`` belong to this form only).\n\n``speed``: ``project`` = warped to the project tempo exactly like a chop of\nthat length (the chop warp path: it fills ``length_beats`` project beats);\n``source`` = the record's own speed and pitch (no warp, its natural length).",
+      "properties": {
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0,
+          "maximum": 64,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "speed": {
+          "default": "project",
+          "enum": [
+            "project",
+            "source"
+          ],
+          "title": "Speed",
+          "type": "string"
+        },
+        "start_beats": {
+          "default": 0.0,
+          "maximum": 4096.0,
+          "minimum": -4096.0,
+          "title": "Start Beats",
+          "type": "number"
+        },
+        "start_downbeat": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only.",
+          "title": "Start Downbeat"
+        },
+        "stem": {
+          "anyOf": [
+            {
+              "enum": [
+                "drums",
+                "bass",
+                "vocals",
+                "other",
+                "mix"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only (default mix); chop slices use the chop's.",
+          "title": "Stem"
+        },
+        "warp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Warp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only (default resample); chops use their own."
+        }
+      },
+      "required": [
+        "length_beats"
+      ],
+      "title": "LaneSlice",
+      "type": "object"
+    },
     "Material": {
       "additionalProperties": false,
       "description": "Audio for clip passes: material beats [start, start + length/stretch) of the\nchop (or sample) rendered over ``length`` grid beats + ``tail_frames``.",
@@ -83,6 +190,41 @@
         "piece"
       ],
       "title": "Material",
+      "type": "object"
+    },
+    "NoteVoice": {
+      "additionalProperties": false,
+      "properties": {
+        "piece": {
+          "title": "Piece",
+          "type": "string"
+        },
+        "pitch": {
+          "maximum": 127,
+          "minimum": 0,
+          "title": "Pitch",
+          "type": "integer"
+        },
+        "seconds": {
+          "default": 3.0,
+          "exclusiveMinimum": 0,
+          "maximum": 12.0,
+          "title": "Seconds",
+          "type": "number"
+        },
+        "track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track",
+        "pitch",
+        "piece"
+      ],
+      "title": "NoteVoice",
       "type": "object"
     },
     "Piece": {
@@ -188,6 +330,94 @@
       ],
       "title": "TrackPieces",
       "type": "object"
+    },
+    "Voice": {
+      "additionalProperties": false,
+      "description": "The rendered sound (``render.core.lane_sound``) of a SoundSpec.",
+      "properties": {
+        "piece": {
+          "title": "Piece",
+          "type": "string"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        },
+        "reverse": {
+          "default": false,
+          "title": "Reverse",
+          "type": "boolean"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path or 'library://<path>' URI.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "slice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaneSlice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "piece"
+      ],
+      "title": "Voice",
+      "type": "object"
+    },
+    "Warp": {
+      "additionalProperties": false,
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
+      "properties": {
+        "formants": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Preserve formants when pitch_semitones != 0. Default: on for stem: vocals only (measured: it colours instruments and drums).",
+          "title": "Formants"
+        },
+        "mode": {
+          "default": "resample",
+          "enum": [
+            "resample",
+            "stretch"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        }
+      },
+      "title": "Warp",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -227,6 +457,13 @@
         "$ref": "#/$defs/Material"
       },
       "title": "Materials",
+      "type": "array"
+    },
+    "note_voices": {
+      "items": {
+        "$ref": "#/$defs/NoteVoice"
+      },
+      "title": "Note Voices",
       "type": "array"
     },
     "oneshots": {
@@ -274,6 +511,14 @@
         "$ref": "#/$defs/TrackPieces"
       },
       "title": "Tracks",
+      "type": "array"
+    },
+    "voices": {
+      "description": "WP17: rendered lane/pad sounds: every slice / tuned / reversed lane of the song plus the requested `sounds` (plain file lanes stay in `oneshots`).",
+      "items": {
+        "$ref": "#/$defs/Voice"
+      },
+      "title": "Voices",
       "type": "array"
     }
   },

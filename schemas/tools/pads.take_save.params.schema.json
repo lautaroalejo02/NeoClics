@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "take": {
+      "additionalProperties": true,
+      "description": "A Take (pads/takes schema). Without 'id' a new take id is allocated; created_at/updated_at default to now.",
+      "title": "Take",
+      "type": "object"
+    }
+  },
+  "required": [
+    "project",
+    "take"
+  ],
+  "title": "TakeSaveParams",
+  "type": "object"
+}

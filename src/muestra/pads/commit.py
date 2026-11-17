@@ -184,9 +184,7 @@ def commit_ops(
         lane_specs: dict[str, dict] = {}
         for key in sorted({e.pad for e in drum_events}):
             pad = take.pads[key]
-            hit_lane = next(
-                (n for n, ln in lanes_now.items() if _same_sound(ln, pad)), None
-            )
+            hit_lane = next((n for n, ln in lanes_now.items() if _same_sound(ln, pad)), None)
             if hit_lane is None:
                 hit_lane = _unique(lane_name(pad), taken)
                 taken.add(hit_lane)
@@ -284,7 +282,7 @@ def commit_ops(
 
 
 def pads_from_track(song: Song, track_id: str, keys: list[str]) -> list[Pad]:
-    """"Armar pads desde este track": one pad per lane of a drum track, in lane
+    """ "Armar pads desde este track": one pad per lane of a drum track, in lane
     order, on ``keys`` (the UI passes its layout's key order)."""
     t = next((x for x in song.tracks if x.id == track_id), None)
     if t is None or t.pattern is None:

@@ -1,0 +1,705 @@
+{
+  "$defs": {
+    "LaneSlice": {
+      "additionalProperties": false,
+      "description": "A slice of a chop or of a source, played as a drum lane's sound (WP17).\n\nExactly one of ``chop`` (a slice of that chop: ``start_beats`` counts beats\ninto the chop, its stem and warp are the chop's) or ``source`` (with\n``start_downbeat``; ``start_beats`` counts beats along the source's grid\nfrom that downbeat, like a chop's ``start_offset_beats``; ``stem`` and\n``warp`` belong to this form only).\n\n``speed``: ``project`` = warped to the project tempo exactly like a chop of\nthat length (the chop warp path: it fills ``length_beats`` project beats);\n``source`` = the record's own speed and pitch (no warp, its natural length).",
+      "properties": {
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0,
+          "maximum": 64,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "speed": {
+          "default": "project",
+          "enum": [
+            "project",
+            "source"
+          ],
+          "title": "Speed",
+          "type": "string"
+        },
+        "start_beats": {
+          "default": 0.0,
+          "maximum": 4096.0,
+          "minimum": -4096.0,
+          "title": "Start Beats",
+          "type": "number"
+        },
+        "start_downbeat": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only.",
+          "title": "Start Downbeat"
+        },
+        "stem": {
+          "anyOf": [
+            {
+              "enum": [
+                "drums",
+                "bass",
+                "vocals",
+                "other",
+                "mix"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only (default mix); chop slices use the chop's.",
+          "title": "Stem"
+        },
+        "warp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Warp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only (default resample); chops use their own."
+        }
+      },
+      "required": [
+        "length_beats"
+      ],
+      "title": "LaneSlice",
+      "type": "object"
+    },
+    "Pad": {
+      "additionalProperties": false,
+      "description": "One pad. The sound is exactly one of ``sample`` (a file), ``slice`` (a\npiece of a chop/source, like a slice lane) or ``note`` (instrument notes).\n\n``mode``: ``oneshot`` plays the whole sound on a press; ``gate`` plays\nwhile the key/finger is held (the release is recorded as the hit's\n``length_beats``). ``velocity`` is the level of a normal press and\n``accent`` the level of an accented one (Shift held); computer keys have\nno velocity. ``choke``: pads of the same group (1-16) cut each other\n(open hat cut by the closed hat; a slice by the next one), 3 ms fade.\n``pitch_semitones`` tunes like a sampler (higher = shorter), ``reverse``\nplays backwards. ``lane`` is the drum-lane name the pad's hits get when the\ntake is committed (default: from ``name``).",
+      "properties": {
+        "accent": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Accent",
+          "type": "number"
+        },
+        "choke": {
+          "anyOf": [
+            {
+              "maximum": 16,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choke"
+        },
+        "color": {
+          "anyOf": [
+            {
+              "pattern": "^#[0-9a-fA-F]{6}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Color"
+        },
+        "gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "key": {
+          "pattern": "^(Key[A-Z]|Digit[0-9]|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|IntlBackslash)$",
+          "title": "Key",
+          "type": "string"
+        },
+        "lane": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lane"
+        },
+        "mode": {
+          "default": "oneshot",
+          "enum": [
+            "oneshot",
+            "gate"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "name": {
+          "maxLength": 40,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PadNote"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "pan": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Pan",
+          "type": "number"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        },
+        "reverse": {
+          "default": false,
+          "title": "Reverse",
+          "type": "boolean"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path or 'library://<path>' URI.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "slice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaneSlice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "velocity": {
+          "default": 0.8,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Velocity",
+          "type": "number"
+        }
+      },
+      "required": [
+        "key",
+        "name"
+      ],
+      "title": "Pad",
+      "type": "object"
+    },
+    "PadNote": {
+      "additionalProperties": false,
+      "description": "A pad that plays notes of an instrument track (one note or a chord).",
+      "properties": {
+        "pitches": {
+          "items": {
+            "ge": 0,
+            "le": 127,
+            "type": "integer"
+          },
+          "maxItems": 8,
+          "minItems": 1,
+          "title": "Pitches",
+          "type": "array"
+        },
+        "track": {
+          "description": "Instrument track whose instrument plays the notes.",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track",
+        "pitches"
+      ],
+      "title": "PadNote",
+      "type": "object"
+    },
+    "Take": {
+      "additionalProperties": false,
+      "description": "``pads/takes/<id>.json``: one recorded performance (WP17).",
+      "properties": {
+        "bank": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bank"
+        },
+        "bpm": {
+          "description": "Song tempo when it was played.",
+          "exclusiveMaximum": 400,
+          "exclusiveMinimum": 0,
+          "title": "Bpm",
+          "type": "number"
+        },
+        "commits": {
+          "items": {
+            "$ref": "#/$defs/TakeCommit"
+          },
+          "title": "Commits",
+          "type": "array"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/TakeEvent"
+          },
+          "maxItems": 20000,
+          "title": "Events",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^t[0-9]{3,}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "latency_ms": {
+          "default": 0.0,
+          "description": "Compensation applied (ms).",
+          "maximum": 2000.0,
+          "minimum": -1000.0,
+          "title": "Latency Ms",
+          "type": "number"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 65536.0,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "loop_beats": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 4096.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cycle length of a loop (overdub) take.",
+          "title": "Loop Beats"
+        },
+        "name": {
+          "maxLength": 80,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "maxLength": 2000,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "origin_beat": {
+          "description": "0-based song beat that take beat 0 was played against.",
+          "minimum": 0.0,
+          "title": "Origin Beat",
+          "type": "number"
+        },
+        "pads": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Pad"
+          },
+          "description": "Snapshot of the pads played, keyed by key code: the take stays playable/committable if the bank changes later.",
+          "title": "Pads",
+          "type": "object"
+        },
+        "quantize": {
+          "$ref": "#/$defs/TakeQuantize"
+        },
+        "schema_version": {
+          "const": 0,
+          "default": 0,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "status": {
+          "default": "done",
+          "enum": [
+            "recording",
+            "done"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "created_at",
+        "updated_at",
+        "bpm",
+        "origin_beat",
+        "length_beats"
+      ],
+      "title": "Take",
+      "type": "object"
+    },
+    "TakeCommit": {
+      "additionalProperties": false,
+      "description": "A record of the take being turned into song material (history only).",
+      "properties": {
+        "at": {
+          "format": "date-time",
+          "title": "At",
+          "type": "string"
+        },
+        "at_bar": {
+          "minimum": 1,
+          "title": "At Bar",
+          "type": "integer"
+        },
+        "hits": {
+          "minimum": 0,
+          "title": "Hits",
+          "type": "integer"
+        },
+        "notes": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Notes",
+          "type": "integer"
+        },
+        "repeat": {
+          "minimum": 1,
+          "title": "Repeat",
+          "type": "integer"
+        },
+        "track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "at",
+        "track",
+        "at_bar",
+        "repeat",
+        "hits"
+      ],
+      "title": "TakeCommit",
+      "type": "object"
+    },
+    "TakeEvent": {
+      "additionalProperties": false,
+      "description": "One press. ``beat`` is 0-based beats from the take origin as HEARD\n(latency compensated), unquantised; inside ``[0, loop_beats)`` for loop\ntakes (a press a hair before the loop start is stored at the end of the\ncycle). ``cycle`` is the 1-based pass of the loop it was played in (the\nunit of \"undo last pass\"); linear takes use 1.",
+      "properties": {
+        "beat": {
+          "maximum": 65536.0,
+          "minimum": -16.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "cycle": {
+          "default": 1,
+          "minimum": 1,
+          "title": "Cycle",
+          "type": "integer"
+        },
+        "length_beats": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 64.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Beats"
+        },
+        "pad": {
+          "pattern": "^(Key[A-Z]|Digit[0-9]|Comma|Period|Slash|Semicolon|Quote|BracketLeft|BracketRight|Backslash|Minus|Equal|IntlBackslash)$",
+          "title": "Pad",
+          "type": "string"
+        },
+        "velocity": {
+          "default": 0.8,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Velocity",
+          "type": "number"
+        }
+      },
+      "required": [
+        "beat",
+        "pad"
+      ],
+      "title": "TakeEvent",
+      "type": "object"
+    },
+    "TakeEventOut": {
+      "additionalProperties": false,
+      "properties": {
+        "beat": {
+          "description": "0-based beats from the take origin, quantised.",
+          "title": "Beat",
+          "type": "number"
+        },
+        "cycle": {
+          "title": "Cycle",
+          "type": "integer"
+        },
+        "length_beats": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Length Beats"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "pad": {
+          "title": "Pad",
+          "type": "string"
+        },
+        "raw_beat": {
+          "title": "Raw Beat",
+          "type": "number"
+        },
+        "song_beat": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Song Beat"
+        },
+        "velocity": {
+          "title": "Velocity",
+          "type": "number"
+        }
+      },
+      "required": [
+        "beat",
+        "raw_beat",
+        "pad",
+        "name",
+        "velocity",
+        "cycle"
+      ],
+      "title": "TakeEventOut",
+      "type": "object"
+    },
+    "TakeQuantize": {
+      "additionalProperties": false,
+      "description": "Non-destructive quantise of a take (applied on read/commit).\n\n``strength`` 0..1 moves each hit that fraction of the way to the nearest\ngrid point; ``swing`` 0..1 delays the odd (off) points of a straight grid\nby ``swing * step / 3`` (the song's pattern swing; 1 = full triplet feel;\ntriplet grids ignore it).",
+      "properties": {
+        "grid": {
+          "default": "off",
+          "enum": [
+            "off",
+            "1/16",
+            "1/8",
+            "1/8t",
+            "1/16t"
+          ],
+          "title": "Grid",
+          "type": "string"
+        },
+        "strength": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Strength",
+          "type": "number"
+        },
+        "swing": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Swing",
+          "type": "number"
+        }
+      },
+      "title": "TakeQuantize",
+      "type": "object"
+    },
+    "Warp": {
+      "additionalProperties": false,
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
+      "properties": {
+        "formants": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Preserve formants when pitch_semitones != 0. Default: on for stem: vocals only (measured: it colours instruments and drums).",
+          "title": "Formants"
+        },
+        "mode": {
+          "default": "resample",
+          "enum": [
+            "resample",
+            "stretch"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        }
+      },
+      "title": "Warp",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/TakeEventOut"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "span_beats": {
+      "title": "Span Beats",
+      "type": "number"
+    },
+    "take": {
+      "$ref": "#/$defs/Take"
+    },
+    "text": {
+      "description": "Compact human/agent-readable digest of the take.",
+      "title": "Text",
+      "type": "string"
+    }
+  },
+  "required": [
+    "take",
+    "events",
+    "span_beats",
+    "text"
+  ],
+  "title": "TakeGetResult",
+  "type": "object"
+}

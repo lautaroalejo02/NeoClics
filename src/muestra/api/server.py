@@ -51,7 +51,19 @@ def _http_schema(spec):
 #: LAN (WP13): reading + the two things the listening UI writes.
 # WP16: the editor writes song.yaml through song.edit (no filesystem paths) and asks
 # for pieces; both are safe for the token-authenticated phone UI.
-REMOTE_WRITE_TOOLS = frozenset({"feedback.append", "chops.choose", "song.edit", "song.pieces"})
+REMOTE_WRITE_TOOLS = frozenset(
+    {
+        "feedback.append",
+        "chops.choose",
+        "song.edit",
+        "song.pieces",
+        # WP17 pads: write only under pads/ and song.yaml (through song.edit)
+        "pads.save_banks",
+        "pads.take_save",
+        "pads.take_delete",
+        "pads.commit",
+    }
+)
 TOKEN_COOKIE = "muestra_token"
 LOOPBACK_NAMES = frozenset({"127.0.0.1", "::1", "localhost"})
 

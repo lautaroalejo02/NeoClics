@@ -7,9 +7,10 @@ Branch `wp17-pads` (from `muestra/e1`).
   `pitch_semitones`/`reverse`/`choke`, hit `length_beats` (gate); shared expansion
   computes `DrumHit.cut0` (gate/choke); renderer `lane_sound`/`slice_audio`/`cut_sound`;
   validator (slice refs + analysis/grid checks), render signature, Spanish diff.
+- `muestra.pads`: schema `schemas/pads.py` (banks, takes), storage under `pads/`, quantise/clean-up, commit ops, slicing (beat/half/transients), tools `pads.get/save_banks/take_save/take_get/take_delete/commit/slice/from_track`; song.pieces `voices`/`note_voices`; tests `tests/pads`.
 
 ## In progress
-- `muestra.pads` package: schema (`schemas/pads.py`), storage, processing, commit ops.
+- UI: pads model (keymap, quantise, latency, choke), pads view, recording.
 
 ## Next
 - pads tools, song.pieces voices, tests; UI pads view, recording, latency; docs.
