@@ -14,6 +14,14 @@ def test_matching_is_one_to_one_and_includes_boundaries():
     assert match_events([1], []) == []
 
 
+def test_absent_reference_tempo_is_unknown_not_zero_error():
+    for reference in (None, float("nan"), 0):
+        result = tempo_metrics(reference, 120)
+        assert result["absolute_pct"] is None
+        assert result["strict_correct"] is None
+        json.dumps(result, allow_nan=False)
+
+
 @pytest.mark.parametrize(
     "factor,label", [(1, "correct"), (0.5, "half"), (2, "double"), (1.5, "3:2"), (2 / 3, "2:3")]
 )

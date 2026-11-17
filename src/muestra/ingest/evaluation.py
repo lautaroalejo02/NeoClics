@@ -51,6 +51,8 @@ def event_metrics(reference, estimated) -> dict:
 
 
 def tempo_metrics(reference_bpm, estimated_bpm) -> dict:
+    if reference_bpm is None or not np.isfinite(reference_bpm) or reference_bpm <= 0:
+        return {"absolute_pct": None, "octave": "missing-reference", "strict_correct": None}
     if estimated_bpm is None:
         return {"absolute_pct": None, "octave": "missing", "strict_correct": False}
     ratio = estimated_bpm / reference_bpm
@@ -186,6 +188,15 @@ def aggregate(results) -> dict:
         for label in ("correct", "relative", "parallel", "fifth", "other", "missing")
     }
     means["key_annotated"] = sum("key_error" in result for result in results)
+    for field in ("key_alternative_error", "key_harmonic_error"):
+        labelled = [result for result in results if field in result]
+        means[field + "s"] = {
+            "annotated": len(labelled),
+            **{
+                label: sum(result[field] == label for result in labelled)
+                for label in ("correct", "relative", "parallel", "fifth", "other", "missing")
+            },
+        }
     means["key_confidence_bins"] = []
     for lower, upper in ((0, 0.25), (0.25, 0.5), (0.5, 0.75), (0.75, 1.000001)):
         labelled = [
@@ -365,6 +376,12 @@ def evaluate_track(
             if input_mode == "mix"
             else separation_model or "published reference stems (oracle)"
         ),
+        "input_warning": (
+            "Oracle stems may not align with the published mix: use the mix-run reference "
+            "reconstruction gate for a matched valid subset."
+            if input_mode != "mix" and separation_model is None
+            else None
+        ),
         "reference_strength": track.get("reference_strength", "none; audition only"),
         "audio": str(audio_path),
         "analysis_s": elapsed,
@@ -398,9 +415,10 @@ def evaluate_track(
         reference_downs = annotation[annotation[:, 1] == 1, 0]
         result["beats"] = event_metrics(reference_beats, analysis.beats_s)
         result["downbeats"] = event_metrics(reference_downs, analysis.downbeats_s)
-        result["tempo"] = tempo_metrics(
-            60 / np.median(np.diff(reference_beats)), analysis.bpm_global
+        reference_bpm = (
+            60 / np.median(np.diff(reference_beats)) if len(reference_beats) >= 2 else None
         )
+        result["tempo"] = tempo_metrics(reference_bpm, analysis.bpm_global)
         result["reliability"] = reliability_metrics(analysis, reference_beats, reference_downs)
     audio, sr = decode(audio_path)
     _, _, chroma = spectral_features(audio, sr)
@@ -421,6 +439,8 @@ def evaluate_track(
     if track.get("key"):
         result["key_error"] = key_error(track["key"], result["key"])
         result["key_alternative_error"] = key_error(track["key"], result["key_frame_normalized"])
+        if "key_harmonic_reference" in result:
+            result["key_harmonic_error"] = key_error(track["key"], result["key_harmonic_reference"])
     if previews:
         preview = source_preview_grid(
             SourcePreviewGridParams(
