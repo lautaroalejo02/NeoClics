@@ -1,0 +1,131 @@
+import { useEffect, useState, type ReactNode } from "react";
+import { useLayout } from "../hooks/hooks";
+import { handleKey } from "./keys";
+import { useApp, useStore } from "../state/react";
+import { ChopsPanel } from "./Chops";
+import { BootSkeleton, EmptyState, ErrorState, Header, HelpDialog, Jobs, OfferBanner, SettingsDialog, Toasts } from "./Chrome";
+import { EarsPanel } from "./Ears";
+import { FeedbackPanel } from "./Feedback";
+import { MixerPanel } from "./Mixer";
+import { Player } from "./Player";
+import { VersionsPanel } from "./Versions";
+
+type TabId = "mixer" | "ears" | "chops" | "feedback" | "versions";
+
+export function App() {
+  const store = useStore();
+  const boot = useApp((s) => s.boot);
+  const bootError = useApp((s) => s.bootError);
+  const theme = useApp((s) => s.theme);
+  const chopCount = useApp((s) => s.chopSets.length);
+  const layout = useLayout();
+  const [help, setHelp] = useState(false);
+  const [settings, setSettings] = useState(false);
+  const [tab, setTab] = useState<TabId>("mixer");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')?.setAttribute("content", theme === "dark" ? "#0b0c18" : "#f4f0e8");
+  }, [theme]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (help || settings) return;
+      // Space on a focused button would click it AND toggle play: let the
+      // transport win, consistently.
+      if (handleKey(store, e, () => setHelp(true))) e.preventDefault();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [store, help, settings]);
+
+  const tabs: { id: TabId; label: string; count?: number }[] = [
+    { id: "mixer", label: "Mezcla" },
+    { id: "ears", label: "Oídos" },
+    { id: "chops", label: "Chops", count: chopCount || undefined },
+  ];
+  if (layout !== "wide") tabs.splice(1, 0, { id: "feedback", label: "Feedback" });
+  if (layout === "narrow") tabs.unshift({ id: "versions", label: "Versiones" });
+  const current = tabs.some((t) => t.id === tab) ? tab : "mixer";
+
+  let main: ReactNode;
+  if (boot === "loading") main = <BootSkeleton />;
+  else if (boot === "error") main = <ErrorState message={bootError} />;
+  else if (boot === "empty")
+    main = (
+      <>
+        <Jobs />
+        <EmptyState />
+      </>
+    );
+  else
+    main = (
+      <>
+        <Jobs />
+        <OfferBanner />
+        <Player />
+        <section className="card" aria-label="Paneles">
+          <div className="tabs" role="tablist">
+            {tabs.map((t) => (
+              <button key={t.id} type="button" role="tab" className="tab" aria-selected={current === t.id} aria-controls={`panel-${t.id}`} id={`tab-${t.id}`} onClick={() => setTab(t.id)} data-testid={`tab-${t.id}`}>
+                {t.label}
+                {t.count ? <span className="count">{t.count}</span> : null}
+              </button>
+            ))}
+          </div>
+          <div className="card-body" style={{ paddingTop: 14 }} role="tabpanel" id={`panel-${current}`} aria-labelledby={`tab-${current}`}>
+            {current === "mixer" && <MixerPanel />}
+            {current === "ears" && <EarsPanel />}
+            {current === "chops" && <ChopsPanel />}
+            {current === "feedback" && <FeedbackPanelInline />}
+            {current === "versions" && <VersionsInline />}
+          </div>
+        </section>
+      </>
+    );
+
+  const ready = boot === "ready";
+  return (
+    <>
+      <a href="#main" className="sr-only">
+        Saltar al reproductor
+      </a>
+      <Header onHelp={() => setHelp(true)} onSettings={() => setSettings(true)} />
+      <div className={`layout ${layout}`}>
+        {ready && layout !== "narrow" && (
+          <aside className="col side" aria-label="Historial">
+            <VersionsPanel />
+          </aside>
+        )}
+        <main className="col" id="main">
+          {main}
+        </main>
+        {ready && layout === "wide" && (
+          <aside className="col side" aria-label="Feedback">
+            <FeedbackPanel />
+          </aside>
+        )}
+      </div>
+      <Toasts />
+      {help && <HelpDialog onClose={() => setHelp(false)} />}
+      {settings && <SettingsDialog onClose={() => setSettings(false)} />}
+    </>
+  );
+}
+
+/** Panels reused inside tabs on smaller layouts: drop their card chrome. */
+function FeedbackPanelInline() {
+  return (
+    <div className="inline-panel">
+      <FeedbackPanel />
+    </div>
+  );
+}
+
+function VersionsInline() {
+  return (
+    <div className="inline-panel">
+      <VersionsPanel />
+    </div>
+  );
+}
