@@ -11,8 +11,9 @@ from ..schemas.metrics import (
     SpectralBalance,
     SpectralReport,
 )
+from ..schemas.song import HighpassFx
 from . import dsp
-from .alarms import hp_fix, is_automated, lp_path, make_alarm
+from .alarms import find_fx, fx_param_path, hp_fix, is_automated, lp_path, make_alarm
 from .context import RenderContext
 
 __all__ = ["measure_spectral", "reference_shares"]
@@ -182,4 +183,11 @@ def _advice(
         if basses:
             b = basses[0]
             return extra, f"subí `tracks.{b.id}.gain_db` (hoy {b.gain_db:g}) {amount} dB.", False
+    elif samples:  # mids: the sample is what carries them in this genre
+        smp = samples[0]
+        hp = find_fx(smp, HighpassFx)
+        if band == "low_mid" and hp and hp[1].cutoff_hz > 200:
+            path = fx_param_path(smp, hp[0], "cutoff_hz")
+            return extra, f"bajá `{path}` (hoy {hp[1].cutoff_hz:g}) a ~150.", False
+        return extra, f"subí `tracks.{smp.id}.gain_db` (hoy {smp.gain_db:g}) {amount} dB.", False
     return extra, f"subí `tracks.{track.id}.gain_db` (hoy {track.gain_db:g}) {amount} dB.", False

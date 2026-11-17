@@ -400,6 +400,8 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
     lufs = dsp.integrated_loudness(mix, sr)
     mix = mix * 10 ** ((target - lufs) / 20)
     mix = _limiter(mix, sr, -2.0)
+    tp = dsp.true_peak(mix, sr)  # the renderer's final limiter is true-peak safe
+    mix = mix * min(1.0, 10 ** (-1.2 / 20) / max(tp, 1e-9))
     if d.over_compress:  # loudness-war squash: +14 dB into a soft clipper
         mix = np.tanh(mix * 10 ** (14 / 20)) * 10 ** (-1.5 / 20)
     if d.clip_master_db:
