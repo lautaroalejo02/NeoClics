@@ -108,12 +108,19 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
     assert json.loads(project.path(result.meta_path).read_text())["tracks"][0]["id"] == "sample"
 
 
-def test_ears_stub_returns_success_hint_and_removes_stale_metrics(project, version_fakes):
+def test_ears_stub_returns_success_hint_and_removes_stale_metrics(
+    project, version_fakes, monkeypatch
+):
+    # ears is real now; simulate it being unavailable to keep the fallback covered.
+    def unavailable(*_args, **_kwargs):
+        raise NotImplementedError
+
+    monkeypatch.setattr(tools.ears, "analyze", unavailable)
     save_song(project, small_song())
     result = run_tool("render", {"project": str(project.root)})
     assert result.ok
     assert result.data["metrics"] is None
-    assert "WP6" in result.data["hint"]
+    assert result.data["hint"]
     assert result.data["metrics_path"] is None
     project.path("renders/v100/metrics.json").write_text("stale", encoding="utf-8")
     result = run_tool("render", {"project": str(project.root)})

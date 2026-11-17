@@ -195,7 +195,9 @@ def test_summary_audio_ranges_waveform_and_ui(client, tmp_project):
     assert peaks["channels"][0]["max"] == pytest.approx([0.2, 0.8])
     assert peaks["channels"][1]["min"] == pytest.approx([-0.2, -0.8])
     assert client.get("/waveform", params={"path": path, "points": 8193}).status_code == 422
-    assert "Your project API is ready" in client.get("/").text
+    # Placeholder page when ui/dist is absent, the built UI when it exists.
+    home = client.get("/").text
+    assert "Your project API is ready" in home or '<div id="root">' in home
     assert client.get("/tools/unknown").status_code == 404
     assert client.get("/docs").status_code == 200
 
