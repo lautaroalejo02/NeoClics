@@ -59,6 +59,23 @@ class FakeGain extends FakeNode {
   gain = new FakeParam(1);
 }
 
+class FakeDelay extends FakeNode {
+  delayTime = new FakeParam(0);
+}
+
+class FakeCompressor extends FakeNode {
+  threshold = new FakeParam(-24);
+  knee = new FakeParam(30);
+  ratio = new FakeParam(12);
+  attack = new FakeParam(0.003);
+  release = new FakeParam(0.25);
+}
+
+class FakeShaper extends FakeNode {
+  curve: Float32Array | null = null;
+  oversample = "none";
+}
+
 class FakeSource extends FakeNode {
   buffer: FakeBuffer | null = null;
   loop = false;
@@ -114,6 +131,15 @@ class FakeCtx {
   }
   createGain() {
     return new FakeGain(this);
+  }
+  createDelay() {
+    return new FakeDelay(this);
+  }
+  createDynamicsCompressor() {
+    return new FakeCompressor(this);
+  }
+  createWaveShaper() {
+    return new FakeShaper(this);
   }
   createBufferSource() {
     return new FakeSource(this);

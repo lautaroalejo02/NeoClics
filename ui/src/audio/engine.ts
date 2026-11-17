@@ -18,7 +18,9 @@
 
 import type { VersionId } from "../api/types";
 import { decodeWav, isWav } from "./wav";
-import { rms, rmsOfSum, matchGain } from "./signal";
+import { matchGain, rms, rmsOfSum } from "./signal";
+import { matchStemGainLimited, matchStemGainNative } from "./stemmatch";
+import { createStemBus, loadLimiterModule, type BusKind, type StemBus } from "./stembus";
 import {
   type MixerState,
   EMPTY_MIXER,
@@ -53,6 +55,8 @@ export interface EngineSnapshot {
   partner: VersionId | null;
   /** What is actually audible on the active deck. */
   listening: "mix" | "stems";
+  /** Which stem-bus limiter is in use ("pending" until the worklet answers). */
+  stemBus: BusKind | "pending" | "none";
   /** Stems requested (mixer touched) but still decoding. */
   stemsLoading: boolean;
   /** Versions whose mix is decoded and playable. */
@@ -117,8 +121,12 @@ class Deck {
   abort = new AbortController();
   lastUsed = 0;
 
-  constructor(ctx: Ctx, dest: AudioNode, spec: DeckSpec) {
+  mixDelay: DelayNode;
+  bus: StemBus;
+
+  constructor(ctx: BaseAudioContext, dest: AudioNode, spec: DeckSpec, bus: StemBus) {
     this.spec = spec;
+    this.bus = bus;
     this.timing = { bpm: spec.bpm, firstBar: spec.firstBar, durationS: spec.durationS };
     this.out = ctx.createGain();
     this.out.gain.value = 0;
@@ -126,8 +134,14 @@ class Deck {
     this.mixG = ctx.createGain();
     this.stemG = ctx.createGain();
     this.stemG.gain.value = 0;
-    this.mixG.connect(this.level);
-    this.stemG.connect(this.level);
+    // Stems go through the limiter bus; the mix is delayed by the bus latency
+    // so the mix <-> stems crossfade stays phase-aligned.
+    this.mixDelay = ctx.createDelay(0.1);
+    this.mixDelay.delayTime.value = bus.latencyS;
+    this.mixG.connect(this.mixDelay);
+    this.mixDelay.connect(this.level);
+    this.stemG.connect(bus.input);
+    bus.output.connect(this.level);
     this.level.connect(this.out);
     this.out.connect(dest);
     for (const t of spec.tracks) {
@@ -240,6 +254,9 @@ export function defaultMemoryBudget(): number {
 export class AudioEngine {
   private ctx: Ctx | null = null;
   private master: GainNode | null = null;
+  /** Stem-bus flavour: decided once per context (see initBus). */
+  private busKind: BusKind | "pending" | null = null;
+  private busPromise: Promise<void> | null = null;
   private decks = new Map<VersionId, Deck>();
   private specs = new Map<VersionId, DeckSpec>();
   private opts: EngineOptions;
@@ -297,6 +314,7 @@ export class AudioEngine {
       prev.active === next.active &&
       prev.partner === next.partner &&
       prev.listening === next.listening &&
+      prev.stemBus === next.stemBus &&
       prev.stemsLoading === next.stemsLoading &&
       prev.preview === next.preview &&
       prev.error === next.error &&
@@ -322,6 +340,7 @@ export class AudioEngine {
       active: this.active,
       partner: this.partner,
       listening: wantStems && deck?.stemsReady ? "stems" : "mix",
+      stemBus: this.busKind ?? "none",
       stemsLoading: wantStems && !!deck && !deck.stemsReady,
       ready: ready.sort(),
       loading: loading.sort(),
@@ -351,7 +370,24 @@ export class AudioEngine {
     this.master.gain.value = this.volume;
     this.master.connect(ctx.destination);
     ctx.onstatechange = () => this.emit();
+    this.initBus(ctx);
     return ctx;
+  }
+
+  /** Decide the stem-bus flavour. AudioWorklet needs a secure context and an
+   *  async module load; until it answers no deck exists ("pending"). */
+  private initBus(ctx: Ctx): void {
+    const aw = (ctx as Ctx & { audioWorklet?: unknown }).audioWorklet;
+    if (!aw) {
+      this.busKind = "native";
+      this.busPromise = Promise.resolve();
+      return;
+    }
+    this.busKind = "pending";
+    this.busPromise = loadLimiterModule(ctx).then((ok) => {
+      this.busKind = ok ? "worklet" : "native";
+      this.emit();
+    });
   }
 
   /** Call synchronously from a user gesture (autoplay policy). */
@@ -419,7 +455,8 @@ export class AudioEngine {
     if (!spec) return null;
     const ctx = this.ensureCtx(spec.sampleRate);
     if (!ctx || !this.master) return null;
-    d = new Deck(ctx, this.master, spec);
+    if (this.busKind === null || this.busKind === "pending") return null; // worklet still loading
+    d = new Deck(ctx, this.master, spec, createStemBus(ctx, this.busKind));
     this.decks.set(version, d);
     this.applyLevel(d, ctx.currentTime);
     this.applyMixer(d, ctx.currentTime);
@@ -433,6 +470,11 @@ export class AudioEngine {
   /** Decode a version's mix (resolves when playable). Stems follow in the
    *  background when `stems` is true. */
   async prepare(version: VersionId, opts: { stems?: boolean } = {}): Promise<void> {
+    const spec = this.specs.get(version);
+    if (spec) {
+      this.ensureCtx(spec.sampleRate);
+      await this.busPromise;
+    }
     const d = this.deckFor(version);
     if (!d) throw new Error(`Sin audio para ${version}`);
     this.touch(d);
@@ -472,8 +514,7 @@ export class AudioEngine {
         if (d.abort.signal.aborted || !d.mix) return;
         // Level-match the pre-master stem sum to the post-master mix so the
         // mix <-> stems switch doesn't jump in loudness.
-        const chans = (b: AudioBuffer) => Array.from({ length: b.numberOfChannels }, (_, i) => b.getChannelData(i));
-        d.stemMatch = matchGain(rms(chans(d.mix)), rmsOfSum([...d.stems.values()].map(chans)));
+        d.stemMatch = await this.matchStems(d);
         this.evict();
         if (this.ctx) this.applyMixer(d, this.ctx.currentTime);
         this.emit();
@@ -484,6 +525,17 @@ export class AudioEngine {
       });
     }
     return d.stemsPromise;
+  }
+
+  /** Gain that makes the stem bus output as loud (RMS) as the mastered mix. */
+  private async matchStems(d: Deck): Promise<number> {
+    const chans = (b: AudioBuffer) => Array.from({ length: b.numberOfChannels }, (_, i) => b.getChannelData(i));
+    const mix = chans(d.mix!);
+    const stems = [...d.stems.values()];
+    if (d.bus.kind === "worklet") {
+      return matchStemGainLimited(mix, stems.map(chans), d.mix!.sampleRate).gain;
+    }
+    return matchStemGainNative(mix, stems, d.mix!.sampleRate);
   }
 
   private loadLanes(d: Deck, trackId: string): Promise<void> {
@@ -664,6 +716,13 @@ export class AudioEngine {
   play(): void {
     this.unlock();
     const ctx = this.ctx;
+    if (this.busKind === "pending" && this.busPromise && !this.playing) {
+      // the limiter worklet is still loading (a few ms): start right after
+      void this.busPromise.then(() => {
+        if (!this.playing) this.play();
+      });
+      return;
+    }
     const d = this.active ? this.deckFor(this.active) : null;
     if (!ctx || !d || this.playing) return;
     if (!d.mix) {
@@ -852,10 +911,9 @@ export class AudioEngine {
     this.emit();
   }
 
-  private applyMixer(d: Deck, now: number): void {
-    const m = this.mixer;
+  private applyMixer(d: Deck, now: number, m: MixerState = this.mixer, allowLoad = true): void {
     const wantStems = !isMixerDefault(m);
-    const pinned = this.active === d.spec.version || this.partner === d.spec.version;
+    const pinned = allowLoad && (this.active === d.spec.version || this.partner === d.spec.version);
     if (wantStems && !d.stemsReady && d.mix && pinned) void this.loadStems(d).catch(() => undefined);
     const useStems = wantStems && d.stemsReady;
     linearTo(d.mixG.gain, useStems ? 0 : 1, now, MODE_FADE_S);
@@ -876,6 +934,73 @@ export class AudioEngine {
         if (g) smoothTo(g.gain, laneGain(m, t.id, l.id), now);
       }
     }
+  }
+
+  // ------------------------------------------------------------ offline render (diagnostics)
+
+  /**
+   * Render what the speakers would get for `version` with `mixer` applied,
+   * OFFLINE and through the very same graph (Deck, stem bus, level match,
+   * loudness-match offset, master volume). Used by the e2e test that proves
+   * stem mode never clips, and by the stem bench. `bypassBus` skips the
+   * limiter to show what the old behaviour did.
+   */
+  async renderOffline(
+    version: VersionId,
+    opts: { mixer?: MixerState; seconds?: number; bypassBus?: boolean } = {},
+  ): Promise<{ channels: Float32Array[]; sampleRate: number; stemMatchDb: number | null; bus: BusKind }> {
+    await this.prepare(version, { stems: true });
+    const live = this.decks.get(version);
+    if (!live?.mix) throw new Error(`Sin audio para ${version}`);
+    await live.stemsPromise;
+    const Off = (globalThis as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
+    if (!Off) throw new Error("Este navegador no tiene OfflineAudioContext");
+    const sr = live.mix.sampleRate;
+    const frames = Math.max(1, Math.round(Math.min(opts.seconds ?? live.spec.durationS, live.spec.durationS) * sr));
+    const off = new Off(2, frames, sr);
+    if (live.bus.kind === "worklet" && !opts.bypassBus) await loadLimiterModule(off);
+    let bus: StemBus;
+    if (opts.bypassBus) {
+      const g = off.createGain();
+      bus = { kind: live.bus.kind, input: g, output: g, latencyS: 0 };
+    } else {
+      bus = createStemBus(off, live.bus.kind);
+    }
+    const master = off.createGain();
+    master.gain.value = this.volume * this.volume;
+    master.connect(off.destination);
+    const d = new Deck(off, master, live.spec, bus);
+    d.mix = live.mix;
+    d.stems = live.stems;
+    d.lanes = live.lanes;
+    d.stemMatch = live.stemMatch;
+    d.laneMatch = live.laneMatch;
+    d.out.gain.value = 1;
+    d.level.gain.value = 10 ** ((this.levelsDb.get(version) ?? 0) / 20);
+    this.applyMixer(d, 0, opts.mixer ?? this.mixer, false);
+    const start = (buf: AudioBuffer, dest: AudioNode) => {
+      const src = off.createBufferSource();
+      src.buffer = buf;
+      src.connect(dest);
+      src.start(0);
+    };
+    start(live.mix, d.mixG);
+    live.stems.forEach((buf, id) => {
+      const n = d.tracks.get(id);
+      if (n) start(buf, n.full);
+    });
+    live.lanes.forEach((buf, key) => {
+      const [tid, lid] = key.split(".");
+      const g = d.tracks.get(tid)?.lanes.get(lid);
+      if (g) start(buf, g);
+    });
+    const out = await off.startRendering();
+    return {
+      channels: [out.getChannelData(0).slice(), out.getChannelData(1).slice()],
+      sampleRate: sr,
+      stemMatchDb: live.stemMatch ? 20 * Math.log10(live.stemMatch) : null,
+      bus: live.bus.kind,
+    };
   }
 
   // ------------------------------------------------------------ preview player
