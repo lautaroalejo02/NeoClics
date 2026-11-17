@@ -409,8 +409,8 @@ FAMILIES = [
         lambda d: (
             track(d, "drums")["pattern"].update(steps_per_bar=8)
             or [
-                l.update(steps=l["steps"][:8])
-                for l in track(d, "drums")["pattern"]["lanes"].values()
+                ln.update(steps=ln["steps"][:8])
+                for ln in track(d, "drums")["pattern"]["lanes"].values()
             ]
         ),
     ),

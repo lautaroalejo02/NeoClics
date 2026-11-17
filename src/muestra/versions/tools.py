@@ -21,6 +21,8 @@ from .describe import describe_song, musical_summary
 from .diff import song_diff
 from .metrics_delta import compare_metrics, load_metrics
 from .models import (
+    DiffItem,
+    RenderMetaOut,
     VersionFeedback,
     VersionInfo,
     VersionsDiffResult,
@@ -84,10 +86,11 @@ def versions_get(p: VersionsGetParams) -> VersionsGetResult:
     except MuestraError:
         info = None  # e.g. no git: still serve the snapshot
     meta, _ = load_meta(project, p.version)
+    meta_out = RenderMetaOut.model_validate(meta.model_dump(by_alias=True)) if meta else None
     mix = project.renders_dir / p.version / "mix.wav"
     return VersionsGetResult(
         version=p.version,
-        meta=meta,
+        meta=meta_out,
         song_yaml=text,
         song_source=source,  # type: ignore[arg-type]
         info=info,
@@ -117,7 +120,7 @@ def versions_diff(p: VersionsDiffParams) -> VersionsDiffResult:
     return VersionsDiffResult(
         a=p.a,
         b=p.b,
-        diff=diff,
+        diff=[DiffItem(path=e.path, **{"from": e.from_}, to=e.to) for e in diff],
         musical_summary=musical_summary(sentences, delta),
         changes=sentences,
         metrics_delta=delta,

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import AwareDatetime, Field
+from pydantic import AwareDatetime, Field, model_serializer
 
 from ..schemas._base import ContractModel, VersionStr
 from ..schemas.metrics import Metrics
@@ -12,6 +12,8 @@ from ..schemas.render_meta import DiffEntry, RenderMeta
 from ..toolbase import ToolOutput
 
 __all__ = [
+    "DiffItem",
+    "RenderMetaOut",
     "VersionFeedback",
     "VersionInfo",
     "VersionsDiffResult",
@@ -19,6 +21,25 @@ __all__ = [
     "VersionsListResult",
     "VersionsRestoreResult",
 ]
+
+
+class DiffItem(DiffEntry):
+    """A :class:`DiffEntry` that serialises its ``from_`` field as ``from``
+    (the contract's JSON name) even without ``by_alias=True``, which is how the
+    tool envelope dumps results."""
+
+    @model_serializer(mode="wrap")
+    def _from_alias(self, handler):
+        data = handler(self)
+        if "from_" in data:
+            data["from"] = data.pop("from_")
+        return data
+
+
+class RenderMetaOut(RenderMeta):
+    """meta.json as returned by versions.get (``diff`` entries use ``from``)."""
+
+    diff: list[DiffItem] = Field(default_factory=list)
 
 
 class VersionFeedback(ContractModel):
@@ -86,7 +107,7 @@ class VersionsListResult(ToolOutput):
 
 class VersionsGetResult(ToolOutput):
     version: VersionStr
-    meta: RenderMeta | None = Field(
+    meta: RenderMetaOut | None = Field(
         default=None,
         description="renders/<version>/meta.json when it exists (derived data — git-ignored).",
     )
@@ -110,7 +131,7 @@ class VersionsGetResult(ToolOutput):
 class VersionsDiffResult(ToolOutput):
     a: VersionStr
     b: VersionStr
-    diff: list[DiffEntry] = Field(
+    diff: list[DiffItem] = Field(
         default_factory=list,
         description="Changed fields; ID-based song.yaml paths "
         "(chops.c1.warp.pitch_semitones, tracks.drums.pattern.lanes.kick.steps, "
