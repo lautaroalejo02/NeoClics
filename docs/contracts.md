@@ -121,6 +121,11 @@ In-process seams (`muestra.versions.core`, `muestra.ears.core`,
 `build_plugin_fx`, `resolve_plugin`, `lookup`, `resolve` — typed stubs
 with fixed signatures; WP owners implement them.
 
+WP3 tempo ruling (2026-11-17):
+`render_instrument(project, instrument, notes, sample_rate, n_frames, *, bpm: float)`
+returns float32 `(n_frames, 2)`. Notes remain in project beats (beat 1 is
+song start); the renderer passes the song's `meta.bpm` explicitly.
+
 **Render orchestration** (the `render` tool, WP2): validate → allocate
 version id → `record_version` (WP5) → render audio → write `meta.json`
 → `ears.analyze` (WP6) → write `metrics.json`.
@@ -448,7 +453,7 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `source.import/separate/analyze/find_chops` | `muestra.ingest.tools` | WP1 |
 | `chops.choose`, `chops.list` | `muestra.ingest.tools` | WP1; choose gains `chop_id` (writes that chop into song.yaml via ruamel) |
 | `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version` |
-| plugins hosting | `muestra.plugins` | WP3, no tools in spec 8 |
+| plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py |
 | `library.index/search` | `muestra.library.tools` | WP4 |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5; restore = byte copy of snapshot |
 | `ears.analyze` | `muestra.ears.tools` | WP6 |

@@ -1,19 +1,16 @@
-"""Plugin hosting seam (WP3 owns the implementation).
-
-Plugin resolution comes from ``muestra.toml`` ``[plugins]``:
-
-* ``search_dirs`` — extra directories scanned for VST3/AU plugins.
-* alias tables — ``surge-xt = {windows = "...", macos = "..."}`` maps a
-  name usable in song.yaml (``instrument.plugin``, ``fx plugin``) to a
-  per-OS install path.
-"""
+"""Headless instruments and persistent, automation-friendly plugin effects."""
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 import numpy as np
+
+from ..errors import MuestraError
+from .discovery import resolve_plugin
+from .host import PluginHost
+from .presets import CURATED, CURATED_PARAMS, instrument_root, resolve_preset
+from .sfz import render_sfz
 
 if TYPE_CHECKING:
     from ..project.core import Project
@@ -22,14 +19,48 @@ if TYPE_CHECKING:
 __all__ = ["resolve_plugin", "render_instrument", "build_plugin_fx"]
 
 
-def resolve_plugin(project: Project, name: str) -> Path:
-    """Resolve a plugin name/alias to its install path for this OS.
+def instrument_spec(project, instrument):
+    name, reference = instrument.plugin, instrument.preset
+    curated = name in CURATED and name not in project.config.plugins.aliases
+    if curated:
+        name, default, _ = CURATED[name]
+        reference = reference or default
+        if name == "sfz" and instrument.preset is None:
+            reference = str(instrument_root() / reference)
+    if name == "sfz":
+        if not reference:
+            raise MuestraError.one(
+                "preset_missing",
+                "The SFZ instrument needs a preset path.",
+                hint="Set preset to a .sfz file or use finger-bass/rhodes.",
+            )
+        return name, resolve_preset(project, reference), curated
+    path = resolve_plugin(project, name)
+    if path.suffix.lower() == ".sfz":
+        return "sfz", path, curated
+    preset = (
+        resolve_preset(project, reference, surge="surge" in path.name.casefold())
+        if reference
+        else None
+    )
+    return path, preset, curated
 
-    Looks in ``muestra.toml`` ``[plugins]`` alias tables first, then
-    scans ``search_dirs`` (and OS defaults). Raises MuestraError with a
-    hint when the plugin can't be found.
-    """
-    raise NotImplementedError("WP3")
+
+def midi_events(notes, sample_rate, n_frames, bpm):
+    """Frame-rounded MIDI with note-offs before note-ons at a shared timestamp."""
+    events = []
+    for note in notes:
+        on = round((note.beat - 1) * 60 / bpm * sample_rate)
+        off = max(on + 1, round((note.beat - 1 + note.length_beats) * 60 / bpm * sample_rate))
+        if on >= n_frames:
+            continue
+        events.extend(
+            [
+                (on, 1, [0x90, note.pitch, note.velocity]),
+                (min(off, n_frames), 0, [0x80, note.pitch, 0]),
+            ]
+        )
+    return [(message, frame / sample_rate) for frame, _, message in sorted(events)]
 
 
 def render_instrument(
@@ -38,23 +69,117 @@ def render_instrument(
     notes: list[MidiNote],
     sample_rate: int,
     n_frames: int,
+    *,
+    bpm: float,
 ) -> np.ndarray:
-    """Render ``notes`` through ``instrument`` to float32 stereo.
+    """Render project-beat notes, release tails included, to exactly (n_frames, 2).
 
-    Returns ``np.ndarray`` of dtype float32, shape ``(n_frames, 2)``.
-    ``notes`` carry project-beat positions (1-indexed from song start),
-    MIDI pitch 0-127 and velocity 1-127; the caller converts to frames
-    at ``meta.bpm``.
+    Pedalboard compensates reported plugin latency internally. Do not trim it twice.
+    The renderer owns track windows, final truncation fades and MIDI-file decoding.
     """
-    raise NotImplementedError("WP3")
+    if not np.isfinite(bpm) or bpm <= 0 or sample_rate <= 0 or n_frames < 0:
+        raise MuestraError.one(
+            "invalid_value",
+            "Positive bpm/sample_rate and nonnegative frames required.",
+            hint="Pass meta.bpm, project sample_rate and the render frame count.",
+        )
+    if not notes or n_frames == 0:
+        return np.zeros((n_frames, 2), dtype=np.float32)
+    path, preset, curated = instrument_spec(project, instrument)
+    if path == "sfz":
+        from ..project.validate import load_song
+
+        seed = load_song(project).meta.seed
+        audio = render_sfz(
+            preset, notes, sample_rate, n_frames, bpm=bpm, seed=seed, params=instrument.params
+        )
+    else:
+        params = (
+            {**CURATED_PARAMS[instrument.plugin], **instrument.params}
+            if curated
+            else instrument.params
+        )
+        with PluginHost(path, preset, params, deterministic=curated) as host:
+            audio = host.render(
+                midi_events(notes, sample_rate, n_frames, bpm), sample_rate, n_frames
+            )
+    if audio.shape != (n_frames, 2) or not np.isfinite(audio).all():
+        raise MuestraError.one(
+            "plugin_audio",
+            f"Invalid audio returned: shape {audio.shape}.",
+            hint="Choose another plugin/preset; check its reported latency.",
+        )
+    return np.ascontiguousarray(audio, dtype=np.float32)
+
+
+class PluginEffect:
+    """Pedalboard process interface; native parameter attributes and set_parameters.
+
+    Owns a worker until close() or context-manager exit. Calls on one instance must
+    be sequential, like a native plugin. Audio orientation follows Pedalboard.
+    """
+
+    def __init__(self, host, params):
+        object.__setattr__(self, "_host", host)
+        object.__setattr__(self, "_params", dict(params))
+
+    @property
+    def parameters(self):
+        return tuple(self._host.info["parameters"])
+
+    @property
+    def reported_latency_samples(self):
+        return self._host.info["latency_samples"]
+
+    def set_parameters(self, params):
+        for name, value in params.items():
+            if name not in self.parameters or not np.isfinite(value):
+                raise MuestraError.one(
+                    "plugin_parameter",
+                    f"Unknown or invalid parameter {name!r}.",
+                    path=f"params.{name}",
+                    hint="Use plugins.scan native parameters.",
+                )
+        self._params.update(params)
+
+    def __setattr__(self, name, value):
+        if name.startswith("_"):
+            object.__setattr__(self, name, value)
+        else:
+            self.set_parameters({name: value})
+
+    def __getattr__(self, name):
+        if name in self._params:
+            return self._params[name]
+        raise AttributeError(name)
+
+    def process(self, audio, sample_rate, buffer_size=8192, reset=False):
+        return self._host.effect(
+            audio, sample_rate, reset=reset, params=self._params, buffer_size=buffer_size
+        )
+
+    __call__ = process
+
+    def close(self):
+        self._host.close()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *_):
+        self.close()
 
 
 def build_plugin_fx(project: Project, fx: PluginFx) -> object:
-    """Instantiate a hosted plugin fx.
-
-    Returns an object with a pedalboard-compatible
-    ``process(audio, sample_rate, reset=False)`` method, so the
-    renderer can insert it into a track's fx chain like any
-    pedalboard plugin.
-    """
-    raise NotImplementedError("WP3")
+    """Build an isolated effect with process(audio, sample_rate, reset=False)."""
+    path = resolve_plugin(project, fx.plugin)
+    preset = resolve_preset(project, fx.preset) if fx.preset else None
+    host = PluginHost(path, preset, fx.params)
+    if not host.info["is_effect"]:
+        host.close()
+        raise MuestraError.one(
+            "plugin_kind",
+            f"{path.name} is not an effect.",
+            hint="Select a third-party effect from plugins.scan.",
+        )
+    return PluginEffect(host, fx.params)
