@@ -121,6 +121,14 @@ In-process seams (`muestra.versions.core`, `muestra.ears.core`,
 `build_plugin_fx`, `resolve_plugin`, `lookup`, `resolve` — typed stubs
 with fixed signatures; WP owners implement them.
 
+WP2 integration ruling (2026-11-17):
+`render_instrument(project, instrument, notes, sample_rate, n_frames, *, bpm: float)`
+returns finite float32 stereo `(n_frames, 2)`. Notes remain in project
+beats (beat 1 = song start); the host uses the explicit version's `bpm`.
+`RenderResult.hint: str | None` carries a nonfatal note when ears metrics
+or optional version-history metadata are unavailable. A stub ears analyzer
+does not fail a completed audio render.
+
 **Render orchestration** (the `render` tool, WP2): validate → allocate
 version id → `record_version` (WP5) → render audio → write `meta.json`
 → `ears.analyze` (WP6) → write `metrics.json`.

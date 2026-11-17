@@ -825,6 +825,19 @@
       "title": "Files",
       "type": "array"
     },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Agent-facing note when metrics or history metadata are unavailable.",
+      "title": "Hint"
+    },
     "meta": {
       "$ref": "#/$defs/RenderMeta"
     },

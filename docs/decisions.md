@@ -1,5 +1,21 @@
 # Decisions
 
+## 2026-11-17 — WP2: approved integration seam corrections
+
+The orchestrator explicitly approved these two corrections during WP2:
+
+- `RenderResult` gains optional `hint`, so an unavailable ears analyzer
+  can return successful rendered audio with an actionable note. The tool
+  envelope contains this note in `data.hint` (the shared registry is unchanged).
+- `plugins.core.render_instrument` gains required keyword-only `bpm: float`.
+  Notes stay in project beats; the plugin host converts them using the
+  rendered version's tempo. Reading live song.yaml would use the wrong
+  tempo when re-rendering a tagged version.
+
+The renderer uses the approved signature; WP3 owns its implementation.
+Only its seam stub is updated here. The render result JSON Schema is
+regenerated. No other schema or song semantics change.
+
 Dated log of decisions made where `docs/spec.md` was silent or ambiguous,
 and of deviations from it. Each entry says what was decided and why.
 (Newest last; WPs append their own entries.)

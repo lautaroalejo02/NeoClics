@@ -38,13 +38,15 @@ def render_instrument(
     notes: list[MidiNote],
     sample_rate: int,
     n_frames: int,
+    *,
+    bpm: float,
 ) -> np.ndarray:
     """Render ``notes`` through ``instrument`` to float32 stereo.
 
     Returns ``np.ndarray`` of dtype float32, shape ``(n_frames, 2)``.
     ``notes`` carry project-beat positions (1-indexed from song start),
-    MIDI pitch 0-127 and velocity 1-127; the caller converts to frames
-    at ``meta.bpm``.
+    MIDI pitch 0-127 and velocity 1-127. ``bpm`` is the meta.bpm of the
+    version being rendered; the host converts project beats to frames.
     """
     raise NotImplementedError("WP3")
 
