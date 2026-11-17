@@ -255,6 +255,20 @@ export interface ChopsChooseResult {
   set_id: string;
   candidate_id: string;
   chop: Record<string, unknown>;
+  // ---- planned by the WP14 backend change (all optional; the UI tolerates
+  // their absence, see ui/API-NEEDS.md): the human's choice is ALWAYS recorded
+  /** the chop id actually written (differs from the requested one when the
+   *  backend wrote the chop under a new id instead of replacing a clip's) */
+  chop_id?: string;
+  requested_chop_id?: string;
+  /** a clip's `repeat` was rescaled to keep its span */
+  rescaled?: boolean | { clip?: string; repeat_from?: number; repeat_to?: number };
+  /** true once the chop_choice feedback event is on disk */
+  recorded?: boolean;
+  /** backend notes (any language); shown as secondary details */
+  message?: string | null;
+  notes?: string[];
+  warnings?: string[];
 }
 
 // ---------- analysis.json → Analysis ----------

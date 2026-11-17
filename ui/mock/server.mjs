@@ -276,6 +276,10 @@ function runTool(name, params) {
     }
     case "chops_choose": {
       if (!validateChoose(params)) throw toolError(ajv.errorsText(validateChoose.errors), "invalid_value", "");
+      if (chooseMode === "fail" || chooseMode === "fail-recorded") {
+        if (chooseMode === "fail-recorded") appendFeedback({ ts: new Date().toISOString(), type: "chop_choice", candidate_id: params.candidate_id });
+        throw toolError("Clip ends at beat 128 but the song ends at beat 64 (bar 32).", "clip_overrun", "tracks[0].clips[0].repeat");
+      }
       const [setId, local] = params.candidate_id.split("/");
       const setPath = chopSetPaths().find((p) => path.basename(p) === `${setId}.json`);
       if (!setPath) throw toolError(`set ${setId} no encontrado`, "ref_not_found", "candidate_id");
@@ -301,7 +305,10 @@ function runTool(name, params) {
         warp: { mode: "resample", pitch_semitones: 0 },
         fade_ms: 5,
       };
-      return { files: [path.relative(PROJECT, setPath).split(path.sep).join("/"), "song.yaml", "feedback.jsonl"], set_id: setId, candidate_id: params.candidate_id, chop };
+      const out = { files: [path.relative(PROJECT, setPath).split(path.sep).join("/"), "song.yaml", "feedback.jsonl"], set_id: setId, candidate_id: params.candidate_id, chop };
+      if (chooseMode === "newid") Object.assign(out, { chop_id: `${params.chop_id}_2`, requested_chop_id: params.chop_id, chop: { ...chop, id: `${params.chop_id}_2` }, recorded: true });
+      if (chooseMode === "rescale") Object.assign(out, { rescaled: { clip: "intro", repeat_from: 8, repeat_to: 5 }, notes: ["Clip 'intro': repeat 8 -> 5 to keep its span."], recorded: true });
+      return out;
     }
     case "render":
       return startRender();
@@ -311,6 +318,8 @@ function runTool(name, params) {
       throw toolError(`herramienta desconocida: ${name}`, "unknown_tool", "");
   }
 }
+
+let chooseMode = "ok";
 
 function toolError(message, code, p) {
   const err = new Error(message);
@@ -445,7 +454,13 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/debug/received") return send(res, 200, received);
   if (pathname === "/debug/render" && req.method === "POST") return send(res, 200, startRender(Number(url.searchParams.get("ms") ?? RENDER_MS)));
   if (pathname === "/debug/separate" && req.method === "POST") return send(res, 200, startSeparate("src1", Number(url.searchParams.get("ms") ?? 45_000)));
+  if (pathname === "/debug/choose" && req.method === "POST") {
+    // what the next chops.choose does: ok | fail (the real English clip_overrun) | newid | rescale | fail-recorded
+    chooseMode = url.searchParams.get("mode") ?? "ok";
+    return send(res, 200, { ok: true, mode: chooseMode });
+  }
   if (pathname === "/debug/reset" && req.method === "POST") {
+    chooseMode = "ok";
     freshProject();
     peaksCache.clear();
     return send(res, 200, { ok: true });

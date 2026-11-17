@@ -177,6 +177,71 @@ describe("App against the mock", () => {
     expect(await screen.findByText(/elegido: cand2 \(vos\)/)).toBeTruthy();
   });
 
+  describe("manual chop choice (WP14 finding 2)", () => {
+    const setChoose = (mode: string) => fetch(`${mock.url}/debug/choose?mode=${mode}`, { method: "POST" });
+    async function openChops() {
+      const b = await boot();
+      await b.user.click(screen.getByTestId("tab-chops"));
+      await b.user.click(await screen.findByTestId("cand-cand2"));
+      return b;
+    }
+
+    it("success says what happened, in Spanish, and shows it in Chops and in the feedback list", async () => {
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      const out = await screen.findByTestId("chop-outcome");
+      expect(out.dataset.status).toBe("ok");
+      expect(out.textContent).toContain("Elegiste el candidato 2; el agente lo va a usar en la próxima versión.");
+      expect(await screen.findByText(/elegido: cand2 \(vos\)/)).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Todo" }));
+      expect(within(screen.getByTestId("feedback-list")).getAllByText(/cs001\/cand2/).length).toBeGreaterThan(0);
+    });
+
+    it("a chop written under a new id says so; a rescaled clip is explained", async () => {
+      await setChoose("newid");
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      expect((await screen.findByTestId("chop-outcome")).textContent).toMatch(/Quedó guardado como chop «c1_2» \(no pisé «c1»\)/);
+      await setChoose("rescale");
+      await user.click(screen.getByTestId("confirm-chop"));
+      await waitFor(() => expect(screen.getByTestId("chop-outcome").textContent).toContain("Ajusté la repetición del clip (repetición 8 → 5)"));
+    });
+
+    it("an English backend error is never the primary message; the one-click comment keeps the choice", async () => {
+      await setChoose("fail");
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      const out = await screen.findByTestId("chop-outcome");
+      expect(out.dataset.status).toBe("error");
+      const primary = out.querySelector("strong")!.textContent!;
+      expect(primary).toMatch(/Ese corte es más largo/);
+      expect(primary).not.toContain("Clip ends");
+      expect(out.textContent).toContain("Clip ends at beat 128"); // kept as secondary detail
+      // nothing was recorded yet...
+      expect((await mock.received()).some((r) => r.event.type === "chop_choice")).toBe(false);
+      // ...so one click leaves it for the agent as a comment
+      await user.click(screen.getByTestId("chop-as-comment"));
+      await waitFor(async () => {
+        const r = await lastReceived();
+        expect(r.valid).toBe(true);
+        expect(r.event).toMatchObject({ type: "comment" });
+        expect(String(r.event.text)).toContain("cs001/cand2");
+        expect(String(r.event.text)).toContain("«c1»");
+      });
+      expect(screen.getByTestId("chop-outcome").dataset.status).toBe("commented");
+      expect(screen.queryByTestId("chop-as-comment")).toBeNull();
+    });
+
+    it("if the backend recorded the choice despite failing, we say it is not lost", async () => {
+      await setChoose("fail-recorded");
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      const out = await screen.findByTestId("chop-outcome");
+      await waitFor(() => expect(out.dataset.status).toBe("recorded"));
+      expect(screen.queryByTestId("chop-as-comment")).toBeNull();
+    });
+  });
+
   it("oídos: alarms in Spanish, clickable to jump", async () => {
     const { engine, user } = await boot();
     await user.keyboard("2"); // v002 has positioned alarms

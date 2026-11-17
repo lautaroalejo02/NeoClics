@@ -7,6 +7,8 @@ import { useRaf } from "../hooks/hooks";
 import { formatClock } from "../music/time";
 import { useApp, useEngine, useStore } from "../state/react";
 import { timeAgo } from "../state/derive";
+import { describeChopScore, fmtBpm, fmtNum, fmtPct, scoreVerdict, signed } from "../text/es";
+import type { ChopOutcome } from "../state/store";
 import type { MuestraClient } from "../api/client";
 import * as I from "./icons";
 
@@ -160,6 +162,55 @@ function CandidateSet({ set }: { set: ChopCandidateSet }) {
           </button>
         </form>
       )}
+      <OutcomeBanner setId={set.set_id} />
+    </div>
+  );
+}
+
+/** What happened to the last manual choice: Spanish message first, the
+ *  backend's raw text only as a secondary detail, and the one-click fallback. */
+function OutcomeBanner({ setId }: { setId: string }) {
+  const store = useStore();
+  const o: ChopOutcome | undefined = useApp((s) => s.chopOutcome[setId]);
+  const [busy, setBusy] = useState(false);
+  if (!o) return null;
+  const bad = o.status === "error";
+  return (
+    <div className={`banner ${bad ? "warn" : ""}`} role="status" style={{ marginTop: 10, alignItems: "flex-start" }} data-testid="chop-outcome" data-status={o.status}>
+      <div className="grow">
+        <strong>{o.message}</strong>
+        {o.advice && <div className="hint">{o.advice}</div>}
+        {o.notes.map((n, i) => (
+          <div className="hint" key={i}>
+            {n}
+          </div>
+        ))}
+        {o.detail && (
+          <details style={{ marginTop: 4 }}>
+            <summary className="hint" style={{ cursor: "pointer" }}>
+              Detalle técnico
+            </summary>
+            <code className="hint" style={{ whiteSpace: "pre-wrap" }}>
+              {o.detail}
+            </code>
+          </details>
+        )}
+      </div>
+      {o.canComment && (
+        <button
+          type="button"
+          className="btn small"
+          disabled={busy}
+          data-testid="chop-as-comment"
+          onClick={async () => {
+            setBusy(true);
+            await store.chopChoiceAsComment(setId);
+            setBusy(false);
+          }}
+        >
+          {busy ? <span className="spinner" /> : <I.Comment size={14} />} Dejárselo al agente como comentario
+        </button>
+      )}
     </div>
   );
 }
@@ -192,7 +243,7 @@ function SourceStrip({ set, analysis, sel, onSelect }: { set: ChopCandidateSet; 
       </div>
       <div className="fb-compose-row hint">
         <span>0:00</span>
-        <span>{analysis ? `${set.source_id} · ${formatClock(dur)} · ${analysis.bpm_global} BPM${analysis.tempo_variable ? " (tempo variable)" : ""}` : "Sin análisis de la fuente: muestro solo los candidatos."}</span>
+        <span>{analysis ? `${set.source_id} · ${formatClock(dur)} · ${fmtBpm(analysis.bpm_global)} BPM${analysis.tempo_variable ? " (tempo variable)" : ""}` : "Sin análisis de la fuente: muestro solo los candidatos."}</span>
         <span>{formatClock(dur)}</span>
       </div>
     </div>
@@ -301,27 +352,21 @@ function CandidateCard(p: {
         </button>
         <span className="hint mono">
           {formatClock(cand.start_s)}–{formatClock(cand.end_s)}
-          {cand.local_bpm ? ` · ${Math.round(cand.local_bpm)} BPM` : ""}
+          {cand.local_bpm ? ` · ${fmtBpm(cand.local_bpm)} BPM` : ""}
         </span>
       </div>
       {score != null && (
-        <div title={`Puntaje ${score.toFixed(2)}`}>
+        <div title={`Puntaje ${fmtNum(score * 100, 0)} de 100`}>
           <div className="fb-compose-row hint">
-            <span>puntaje</span>
-            <span className="mono">{Math.round(score * 100)}</span>
+            <span>{scoreVerdict(score)}</span>
+            <span className="mono">{fmtNum(score * 100, 0)}/100</span>
           </div>
           <div className="score" aria-hidden="true">
             <i style={{ width: `${Math.max(2, Math.min(100, score * 100))}%` }} />
           </div>
         </div>
       )}
-      {cand.score?.reasons && cand.score.reasons.length > 0 && (
-        <ul className="reasons">
-          {cand.score.reasons.map((r, i) => (
-            <li key={i}>{r}</li>
-          ))}
-        </ul>
-      )}
+      <ScoreFacets reasons={cand.score?.reasons} />
       <div className="nudge" onClick={(e) => e.stopPropagation()}>
         <span>Inicio</span>
         <Stepper value={adjust.start_beats} fmt={(v) => `${signed(v)} beats`} onChange={(v) => p.onAdjust({ ...adjust, start_beats: v })} min={-16} max={16} label={`Inicio de ${name}`} />
@@ -331,6 +376,38 @@ function CandidateCard(p: {
       {outside && <p className="hint" style={{ margin: 0, color: "var(--warn)" }}>El preview no cubre este ajuste: escuchás la parte que hay; el agente renderiza el corte completo al confirmar.</p>}
       {err && <p className="hint" style={{ margin: 0, color: "var(--err)" }}>No pude cargar el preview.</p>}
     </article>
+  );
+}
+
+function ScoreFacets({ reasons }: { reasons: readonly string[] | undefined }) {
+  const { facets, rest } = describeChopScore(reasons);
+  if (facets.length === 0 && rest.length === 0) return null;
+  return (
+    <div className="facets">
+      {facets.length > 0 && (
+        <ul className="reasons" aria-label="Cómo suena este corte">
+          {facets.map((f) => (
+            <li key={f.key} data-facet={f.key}>
+              <strong>{f.label}:</strong> {f.verdict}
+              {f.extra ? <span className="hint"> · {f.extra}</span> : null}
+              {f.level != null && f.key !== "motion" ? <span className="hint mono"> · {fmtPct(f.level)}</span> : null}
+            </li>
+          ))}
+        </ul>
+      )}
+      {rest.length > 0 && (
+        <details>
+          <summary className="hint" style={{ cursor: "pointer" }}>
+            Notas del análisis
+          </summary>
+          <ul className="reasons">
+            {rest.map((r, i) => (
+              <li key={i}>{r}</li>
+            ))}
+          </ul>
+        </details>
+      )}
+    </div>
   );
 }
 
@@ -348,7 +425,4 @@ function Stepper({ value, onChange, min, max, fmt, label }: { value: number; onC
   );
 }
 
-function signed(n: number): string {
-  return `${n > 0 ? "+" : ""}${n}`;
-}
 

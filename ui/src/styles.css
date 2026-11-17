@@ -1932,6 +1932,11 @@ button.alarm:hover {
   background: linear-gradient(90deg, color-mix(in srgb, var(--sun-1) 10%, var(--surface)), var(--surface) 70%);
 }
 
+.banner.warn {
+  border-color: color-mix(in srgb, var(--warn) 55%, var(--line));
+  background: linear-gradient(90deg, color-mix(in srgb, var(--warn) 10%, var(--surface)), var(--surface) 70%);
+}
+
 .banner .grow {
   flex: 1;
   min-width: 180px;

@@ -8,6 +8,7 @@ import { MuestraClient, ApiError } from "../api/client";
 import type {
   Analysis,
   ChopAdjust,
+  ChopsChooseResult,
   ChopCandidateSet,
   FeedbackEvent,
   Job,
@@ -23,6 +24,7 @@ import { computePeaks, peaksFromPayload } from "../audio/signal";
 import * as fb from "../feedback/events";
 import { BEATS_PER_BAR, defaultLoopAt, secondsToBeats, stepSeek, type Timing } from "../music/time";
 import { loudnessOffsets, sortVersions, versionNumber } from "./derive";
+import { friendlyError, signed } from "../text/es";
 
 /** The engine surface the store uses (AudioEngine implements it; tests fake it). */
 export type PlaybackEngine = Pick<
@@ -74,6 +76,25 @@ export interface BlindState {
   picked: "x" | "y" | null;
 }
 
+/** What happened to the last manual chop choice of a set (shown in the Chops tab). */
+export interface ChopOutcome {
+  setId: string;
+  /** global candidate id csNNN/candN */
+  candidateId: string;
+  /** chop id the person asked for */
+  chopId: string;
+  adjust: ChopAdjust | null;
+  status: "ok" | "error" | "recorded" | "commented";
+  /** Spanish, primary */
+  message: string;
+  advice: string | null;
+  /** the backend's raw text, secondary */
+  detail: string | null;
+  notes: string[];
+  /** a one-click "leave it as a comment" is still possible */
+  canComment: boolean;
+}
+
 export type Theme = "dark" | "light";
 export type NewVersionPolicy = "play" | "offer";
 
@@ -90,6 +111,8 @@ export interface AppState {
   chopSets: ChopCandidateSet[];
   /** chops declared in song.yaml (suggests the chop id on a manual choose) */
   songChops: { id: string; source: string }[];
+  /** latest manual chop choice per candidate set */
+  chopOutcome: Record<string, ChopOutcome>;
   /** versions.diff(parent, v) musical description, fetched when a row opens. */
   diffs: Record<VersionId, { changes: string[]; metrics: string[] } | "loading" | "error">;
   analyses: Record<string, Analysis>;
@@ -193,6 +216,7 @@ export class Store {
       sendStatus: {},
       chopSets: [],
       songChops: [],
+      chopOutcome: {},
       diffs: {},
       analyses: {},
       jobs: {},
@@ -842,15 +866,56 @@ export class Store {
 
   async chooseChop(set: ChopCandidateSet, candId: string, chopId: string, adjust: ChopAdjust | null): Promise<boolean> {
     const gid = fb.globalCandidateId(set.set_id, candId);
+    const startedAt = Date.now();
+    const base = { setId: set.set_id, candidateId: gid, chopId, adjust };
     try {
-      await this.client.chooseChop(gid, chopId, adjust);
-      this.toast(`Listo: ${gid} quedó como chop «${chopId}». El agente lo usa en la próxima versión.`, "ok", undefined, 6000);
+      const res = await this.client.chooseChop(gid, chopId, adjust);
+      const { message, notes } = describeChopResult(res, gid, chopId);
+      this.setOutcome({ ...base, status: "ok", message, advice: null, detail: null, notes, canComment: false });
+      this.toast(message, "ok", undefined, 7000);
       await Promise.all([this.loadChops(), this.loadFeedback()]);
       return true;
     } catch (e) {
-      this.toast(`No se pudo confirmar el chop: ${errMsg(e)}`, "error", undefined, 8000);
+      const fe = friendlyError(e, "No se pudo confirmar el chop");
+      // the backend may still have written the human's choice to feedback.jsonl
+      await this.loadFeedback();
+      const recorded = this.state.feedback.some(
+        (ev) => ev.type === "chop_choice" && ev.candidate_id === gid && Date.parse(ev.ts) >= startedAt - 2000,
+      );
+      if (recorded) {
+        this.setOutcome({
+          ...base,
+          status: "recorded",
+          message: `No pude aplicarlo en la canción, pero tu elección de ${candLabel(gid)} quedó anotada para el agente.`,
+          advice: fe.advice ?? fe.message,
+          detail: fe.detail,
+          notes: [],
+          canComment: false,
+        });
+      } else {
+        this.setOutcome({ ...base, status: "error", message: fe.message, advice: fe.advice, detail: fe.detail, notes: [], canComment: true });
+      }
+      this.toast(`No se pudo confirmar el chop: ${fe.message}`, "error", undefined, 8000);
       return false;
     }
+  }
+
+  private setOutcome(o: ChopOutcome): void {
+    this.set({ chopOutcome: { ...this.state.chopOutcome, [o.setId]: o } });
+  }
+
+  /** The failure fallback: leave the choice as a plain comment for the agent
+   *  so it is never lost. */
+  async chopChoiceAsComment(setId: string): Promise<boolean> {
+    const o = this.state.chopOutcome[setId];
+    if (!o) return false;
+    const adj = o.adjust && (o.adjust.start_beats || o.adjust.length_beats) ? `, con ajuste de inicio ${signed(o.adjust.start_beats)} y de largo ${signed(o.adjust.length_beats)} beats` : "";
+    const text = `Elijo el candidato ${candLabel(o.candidateId)} del set ${setId} (${o.candidateId}) como chop «${o.chopId}»${adj}. No pude aplicarlo desde la app${o.detail ? ` (${o.detail})` : ""}; usalo en la próxima versión.`;
+    const ok = await this.append(fb.comment({ text, version: null }));
+    if (ok) {
+      this.setOutcome({ ...o, status: "commented", message: "Listo: le dejé tu elección al agente como comentario.", advice: null, canComment: false });
+    }
+    return ok;
   }
 
   // ------------------------------------------------------------ prefs
@@ -878,6 +943,30 @@ export class Store {
     this.ws = null;
     ws?.close();
   }
+}
+
+/** "cs001/cand2" → "candidato 2" */
+export function candLabel(gid: string): string {
+  const m = /cand(\d+)$/.exec(gid);
+  return m ? `candidato ${m[1]}` : gid;
+}
+
+/** Spanish sentence + secondary notes for a successful chops.choose. Tolerates
+ *  both the current result and the WP14 one (see ChopsChooseResult). */
+export function describeChopResult(res: ChopsChooseResult, gid: string, requestedChopId: string): { message: string; notes: string[] } {
+  const wrote = res.chop_id ?? (typeof res.chop?.id === "string" ? res.chop.id : requestedChopId);
+  let message = `Elegiste el ${candLabel(gid)}; el agente lo va a usar en la próxima versión.`;
+  if (wrote && wrote !== requestedChopId) {
+    message += ` Quedó guardado como chop «${wrote}» (no pisé «${requestedChopId}»).`;
+  }
+  const notes: string[] = [];
+  const r = res.rescaled;
+  if (r) {
+    const span = typeof r === "object" && r.repeat_from != null && r.repeat_to != null ? ` (repetición ${r.repeat_from} → ${r.repeat_to})` : "";
+    notes.push(`Ajusté la repetición del clip${span} para que siga ocupando lo mismo en la canción.`);
+  }
+  for (const n of [res.message, ...(res.notes ?? []), ...(res.warnings ?? [])]) if (n && typeof n === "string") notes.push(n);
+  return { message, notes };
 }
 
 export function errMsg(e: unknown): string {
