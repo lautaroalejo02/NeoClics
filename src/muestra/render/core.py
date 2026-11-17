@@ -410,9 +410,16 @@ def render_audio(project: Project, song: Song, range_bars: tuple[int, int]):
 
 
 def render_song(
-    project: Project, song: Song, version: str, range_bars: tuple[int, int], *, stems: bool = True
+    project: Project,
+    song: Song,
+    version: str,
+    range_bars: tuple[int, int],
+    *,
+    stems: bool = True,
+    directory: Path | None = None,
 ) -> Path:
-    """Write stereo PCM24 mix and aligned FLOAT stems into renders/<version>."""
+    """Write stereo PCM24 mix and aligned FLOAT stems into renders/<version>
+    (or ``directory``: the render tool stages there, see render/staging.py)."""
     from pydantic import TypeAdapter, ValidationError
 
     try:
@@ -426,7 +433,7 @@ def render_song(
             hint="Use v001, v002, ...",
         ) from exc
     mix, tracks, lanes, _ = render_audio(project, song, range_bars)
-    directory = project.renders_dir / version
+    directory = directory or project.renders_dir / version
     directory.mkdir(parents=True, exist_ok=True)
     sf.write(directory / "mix.wav", mix, project.config.sample_rate, subtype="PCM_24")
     stem_dir = directory / "stems"

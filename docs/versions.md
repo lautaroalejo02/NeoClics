@@ -47,7 +47,9 @@ With no summary the subject is just `vNNN`.
 
 ### `record_version(project, version, request, summary, agent, parent) -> sha`
 
-Called by the `render` tool **before** audio is rendered.
+Called by the `render` tool **after** the audio exists in a staging folder
+and **before** that folder is published as `renders/vNNN` (WP13, see
+[Atomic versions](#atomic-versions)).
 
 * **Always creates a commit** (empty if nothing changed). Re-rendering an
   unchanged song, or changing only the request text, is still a distinct
@@ -258,11 +260,46 @@ Read tools (`get`, `diff`) work from the `renders/` snapshot without git;
 ## For the `render` tool (WP2)
 
 ```python
-version = next_version_id(project)  # never reused
-sha = record_version(project, version, request, summary, agent, None)  # parent=None
-# ... render audio into renders/<version>/, copy song.yaml byte-for-byte ...
-# meta.json: version, parent (= commit_info(...).parent or suggest_parent), git_commit=sha
+with staging.stage(project) as stage:          # renders/.staging/<token>/ + its lock
+    render audio + song.yaml into stage.dir
+    with staging.version_lock(project):        # renders/.staging/version.lock
+        version = next_version_id(project)     # never reused for a published version
+        stage.mark(version)                    # pending.json, before the commit
+        sha = record_version(project, version, request, summary, agent, None)
+        stage.mark(version, sha)
+        write meta.json into stage.dir          # parent = commit_info(sha).parent
+        stage.publish_new(renders/<version>)    # one rename
 ```
+
+## Atomic versions
+
+(WP13.) A version the human can see always has its audio. The `render` tool
+renders into `renders/.staging/<token>/` while holding
+`renders/.staging/<token>.lock`, and only then (under the project-wide
+`renders/.staging/version.lock`) allocates the id, commits + tags, writes
+`meta.json` and renames the folder to `renders/vNNN`. `.staging` never
+matches `vNNN`, so it never counts as a version, is never listed and never
+bumps the id counter.
+
+* **Failure or interruption in-process** (an exception, Ctrl-C): the tag is
+  deleted, the branch is moved back if our commit is still its tip, the
+  staging folder is removed. The tool result says "No version was created".
+* **Hard kill** (power loss, `kill -9`): the next `render` and `muestra
+  serve` run `staging.recover`. Rule: a staging folder whose lock nobody
+  holds belongs to a dead process. If its `pending.json` names a version
+  `vNNN` and `renders/vNNN` does not exist, that version never had audio:
+  its tag is deleted when it points at the commit recorded in
+  `pending.json` (or, when the kill came before that was written, at a
+  commit whose `Muestra-Version` trailer is `vNNN`), the branch is moved
+  back when that commit is its tip, and the folder is deleted. A tag made
+  by hand, or a version whose `renders/` folder exists, is never touched.
+  Recovery runs under the version lock, so it can't race a live render.
+* **Id reuse.** A rolled-back id can be allocated again: no render of it
+  ever existed, so nobody can have heard, rated or commented it. Ids of
+  published versions are never reused (unchanged rule).
+* A re-render (`version=`) also renders into staging; the old audio stays
+  in place until the new files exist, then each file is replaced (the UI may
+  be streaming the old one; Windows can't rename a folder with open files).
 
 Re-rendering an existing version (`RenderParams.version`) must **not** call
 `record_version`: the commit and tag already exist; read the song with

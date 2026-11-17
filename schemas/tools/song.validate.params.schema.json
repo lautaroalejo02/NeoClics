@@ -7,6 +7,19 @@
       "title": "Check Files",
       "type": "boolean"
     },
+    "check_plugins": {
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Also verify instrument/plugin aliases and presets are available on this machine (default: same as check_files).",
+      "title": "Check Plugins"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,

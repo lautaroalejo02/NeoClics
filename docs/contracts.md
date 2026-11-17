@@ -147,9 +147,18 @@ beats (beat 1 = song start); the host uses the explicit version's `bpm`.
 or optional version-history metadata are unavailable. A stub ears analyzer
 does not fail a completed audio render.
 
-**Render orchestration** (the `render` tool, WP2): validate → allocate
-version id → `record_version` (WP5) → render audio → write `meta.json`
-→ `ears.analyze` (WP6) → write `metrics.json`.
+**Render orchestration** (the `render` tool, WP2; order changed by WP13):
+validate (incl. instruments) → render audio + `song.yaml` into
+`renders/.staging/<token>/` → under `renders/.staging/version.lock`:
+allocate version id → `record_version` (WP5) → write `meta.json` → move
+the folder to `renders/vNNN` (one rename) → `ears.analyze` (WP6) → write
+`metrics.json`. **A version never exists without its audio:** any failure
+before the move undoes the commit and tag, deletes the staging folder and
+returns `ok: false` with a hint ending "No version was created (no
+commit, no tag, no renders/ folder)."; unexpected exceptions become code
+`render_failed`. Leftovers of a killed process are rolled back at the
+start of the next render and when `muestra serve` starts (rule:
+`docs/versions.md`, "Atomic versions").
 
 ## Project layout
 
@@ -349,6 +358,14 @@ order**: master fx in listed order → loudness gain toward `target_lufs`
    for each chopped source; `start_downbeat` in range; chop grid fits
    (`chop_overrun`); sample-clip warp requires a library `bpm`;
    referenced stem exists in `stems`.
+4. **`check_plugins`** (WP13; `song.validate` param, default = `check_files`):
+   every instrument alias/plugin and preset, and every plugin fx, resolves on
+   this machine. Codes `plugin_missing`, `plugin_ambiguous`, `preset_missing`,
+   `preset_ambiguous`; paths are id-based
+   (`tracks.bass.instrument.plugin`, `tracks.bass.instrument.preset`,
+   `tracks.sample.fx.<fxid|[i]>.plugin`); a plugin hint lists the aliases
+   available here inline ("Use one of the instruments available here:
+   finger-bass, slap-bass, …").
 
 ## `analysis.json` → `Analysis` (per source)
 

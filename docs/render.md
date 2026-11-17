@@ -140,9 +140,12 @@ normalization. All outputs end with the required 5 ms raised-cosine fade.
 This uses memory proportional to song length and is intended for loops;
 very long arrangements are not yet streamed.
 
-`render` validates before allocating/recording a version, calls WP5's
-version seams, writes audio and the byte-preserved snapshot/meta, then
-calls ears and writes metrics. An ears stub returns audio plus
+`render` validates (including instrument/plugin availability), renders the
+audio and the byte-preserved snapshot into `renders/.staging/<token>/`,
+then allocates/records the version (WP5 seams), writes meta and publishes
+the folder as `renders/vNNN` in one rename, then calls ears and writes
+metrics (WP13: a failed render leaves no version; `docs/versions.md`,
+"Atomic versions"). An ears stub returns audio plus
 `RenderResult.hint`, with no stale metrics. Optional history/diff stubs also
 produce hints; normal version recording is required. When existing metadata
 is present, re-renders preserve its request/agent. If it has been deleted,

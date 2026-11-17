@@ -46,6 +46,16 @@ def _http_schema(spec):
     return expand(schema)
 
 
+def _recover_renders(root: Path) -> None:
+    """Roll back versions left without audio by a killed render (WP13)."""
+    from ..render import staging
+
+    try:
+        staging.recover(open_project(root))
+    except Exception:  # noqa: BLE001 - never block the UI on cleanup
+        project_logger(root).exception("Could not clean interrupted renders")
+
+
 def create_app(
     project: str | Path,
     *,
@@ -62,6 +72,7 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(app):
+        await asyncio.to_thread(_recover_renders, root)
         await asyncio.to_thread(watcher.initialize)
         watching = asyncio.create_task(watcher.run())
         worker = asyncio.create_task(jobs.worker())

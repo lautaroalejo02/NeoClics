@@ -105,7 +105,8 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
             project=str(project.root), request="more pump", summary="sample", agent="agent"
         )
     )
-    assert order == ["validate", "allocate", "record", "audio", "ears"]
+    # WP13: audio first, so a failed render never leaves a version behind.
+    assert order == ["validate", "audio", "allocate", "record", "ears"]
     assert result.meta.git_commit == "a" * 40
     assert result.meta.parent == "v001"
     assert result.metrics_summary is not None and result.metrics_path
@@ -131,7 +132,7 @@ def test_ears_stub_returns_success_hint_and_removes_stale_metrics(
     assert result.data["hint"]
     assert result.data["metrics_path"] is None
     project.path("renders/v100/metrics.json").write_text("stale", encoding="utf-8")
-    result = run_tool("render", {"project": str(project.root)})
+    result = run_tool("render", {"project": str(project.root), "version": "v100"})
     assert result.ok
     assert not project.path("renders/v100/metrics.json").exists()
 

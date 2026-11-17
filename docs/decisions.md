@@ -674,3 +674,20 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
     contradicted by a fitting bass/sample pair is `info`. The skill's `ears.md`/`workflow.md`
     were updated to the new behaviour and to `render` returning `metrics_summary`.
     Thresholds unchanged. Details: docs/ears.md.
+
+## 2026-11-17 — WP13: audit fixes (backend)
+
+1. **Atomic versions.** `render` renders audio into `renders/.staging/<token>/`
+   first and only then allocates the id, commits, tags, writes `meta.json`
+   and renames the folder to `renders/vNNN` (under
+   `renders/.staging/version.lock`). Any failure rolls back commit + tag;
+   killed renders are rolled back by `staging.recover` at the next render
+   and at `muestra serve` start (rule in docs/versions.md "Atomic
+   versions"). A rolled-back id may be reused (no audio of it ever
+   existed); published ids never are. Error hints end with "No version was
+   created"; unexpected exceptions are `render_failed`. Why: the auditor's
+   `plugin: funky-bass` left a tagged ghost v00N with no audio that became
+   the next render's parent.
+2. **`song.validate` checks instruments** (`check_plugins`, default =
+   `check_files`): id-based paths `tracks.<id>.instrument.plugin|preset`,
+   hint lists the available aliases inline (never "run plugins.list").

@@ -125,6 +125,11 @@ class SongValidateParams(ProjectScoped):
         description="Also verify referenced files exist and chops fit the "
         "analyzed grid. Set false to validate a song without its audio.",
     )
+    check_plugins: bool | None = Field(
+        default=None,
+        description="Also verify instrument/plugin aliases and presets are available "
+        "on this machine (default: same as check_files).",
+    )
 
 
 class SongValidateResult(ToolOutput):
@@ -135,9 +140,10 @@ class SongValidateResult(ToolOutput):
 def song_validate(p: SongValidateParams) -> SongValidateResult:
     """Validate song.yaml: structure, references, ids, automation targets,
     clip/pattern lengths, sidechain cycles, and (with check_files) file
-    existence plus chop-grid consistency against cache/analysis/."""
+    existence plus chop-grid consistency against cache/analysis/, and
+    (check_plugins) that instruments and plugin presets are available."""
     project = open_project(p.project)
-    issues = validate_song(project, check_files=p.check_files)
+    issues = validate_song(project, check_files=p.check_files, check_plugins=p.check_plugins)
     return SongValidateResult(valid=not issues, issues=issues)
 
 

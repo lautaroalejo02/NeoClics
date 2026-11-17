@@ -1,9 +1,10 @@
 """Render and preview tools, with git versioning and ears orchestration.
 
-The ``render`` tool orchestrates: validate -> allocate version id
-(max+1) -> ``versions.core.record_version`` (commit + tag) -> render
-audio -> write ``renders/vNNN/song.yaml`` (byte copy) + meta.json ->
-``ears.core.analyze`` -> write metrics.json.
+The ``render`` tool orchestrates: validate -> render audio into a staging
+folder -> (under the version lock) allocate version id (max+1) ->
+``versions.core.record_version`` (commit + tag) -> write song.yaml (byte
+copy) + meta.json -> publish the folder as ``renders/vNNN`` ->
+``ears.core.analyze`` -> write metrics.json (see render/staging.py).
 """
 
 from __future__ import annotations
@@ -25,6 +26,7 @@ from ..schemas.song import BEATS_PER_BAR
 from ..toolbase import ProjectScoped, ToolOutput
 from ..versions import core as versions
 from ..versions.diff import song_diff
+from . import staging
 from .audio import fade
 from .core import beat_frame, render_audio, render_chop, render_song
 
@@ -193,10 +195,28 @@ class RenderResult(ToolOutput):
 
 
 def render(p: RenderParams) -> RenderResult:
-    """Render the song to renders/vNNN/: record the version (git commit
-    + tag), render mix + stems, write song.yaml/meta.json, run ears for
-    metrics.json (spec section 8)."""
+    """Render the song to renders/vNNN/: render mix + stems into a staging
+    folder, then record the version (git commit + tag), write
+    song.yaml/meta.json and publish the folder; run ears for metrics.json
+    (spec section 8). A failed render leaves no version behind."""
     project = open_project(p.project)
+    staging.recover(project)
+    if p.version:
+        return _render(project, p)
+    try:
+        return _render(project, p)
+    except MuestraError as exc:
+        hint = f"{exc.hint or ''} {staging.NOT_CREATED}".strip()
+        raise MuestraError(exc.issues, hint=hint) from exc
+    except Exception as exc:  # noqa: BLE001 - say what (not) happened, never a bare 500
+        raise MuestraError.one(
+            "render_failed",
+            f"Render failed ({type(exc).__name__}: {exc}).",
+            hint=staging.NOT_CREATED,
+        ) from exc
+
+
+def _render(project, p: RenderParams) -> RenderResult:
     started = time.perf_counter()
     hints = []
     prior = None
@@ -228,73 +248,90 @@ def render(p: RenderParams) -> RenderResult:
             value=bars,
             hint=f"Use 1 <= start < end <= {song.meta.length_bars + 1}.",
         )
-    version = p.version or versions.next_version_id(project)
-    parent = prior.parent if prior else None
-    commit = prior.git_commit if prior else None
-    diff = prior.diff if prior else []
-    info = None
-    if p.version:
-        # Re-render: never a new commit. History (tag + trailers) wins over an
-        # old meta.json, and still answers after renders/ was deleted.
-        tag = versions.version_tags(project.root).get(version)
-        info = versions.commit_info(project.root, tag) if tag else None
-        if info is not None:
-            parent, commit = info.parent, info.sha
-    else:
-        # parent=None lets versions derive it from history, which honours
-        # versions.restore (restore v001 -> render -> parent v001).
-        commit = versions.record_version(project, version, p.request, p.summary, p.agent, None)
-        info = versions.commit_info(project.root, commit)
-        parent = info.parent if info else None
-    directory = render_song(project, song, version, bars, stems=p.stems)
-    (directory / "song.yaml").write_bytes(raw)
-    if parent and (not p.version or not diff):
-        try:
-            diff = song_diff(versions.song_at(project, parent), song)
-        except MuestraError:
-            hints.append(f"Musical diff against parent {parent} unavailable.")
-    relative = directory.relative_to(project.root).as_posix()
-    track_meta = []
-    if p.stems:
-        for track in song.tracks:
-            kind = (
-                "clips" if track.clips is not None else "pattern" if track.pattern else "instrument"
+    with staging.stage(project) as stage:
+        # Audio first: nothing is versioned until it exists (WP13 finding 1).
+        render_song(project, song, p.version or "v001", bars, stems=p.stems, directory=stage.dir)
+        (stage.dir / "song.yaml").write_bytes(raw)
+        with staging.version_lock(project):
+            version = p.version or versions.next_version_id(project)
+            stage.mark(version, rerender=bool(p.version))
+            parent = prior.parent if prior else None
+            commit = prior.git_commit if prior else None
+            diff = prior.diff if prior else []
+            info = None
+            if p.version:
+                # Re-render: never a new commit. History (tag + trailers) wins over an
+                # old meta.json, and still answers after renders/ was deleted.
+                tag = versions.version_tags(project.root).get(version)
+                info = versions.commit_info(project.root, tag) if tag else None
+                if info is not None:
+                    parent, commit = info.parent, info.sha
+            else:
+                # parent=None lets versions derive it from history, which honours
+                # versions.restore (restore v001 -> render -> parent v001).
+                commit = versions.record_version(
+                    project, version, p.request, p.summary, p.agent, None
+                )
+                stage.mark(version, commit)
+                info = versions.commit_info(project.root, commit)
+                parent = info.parent if info else None
+            if parent and (not p.version or not diff):
+                try:
+                    diff = song_diff(versions.song_at(project, parent), song)
+                except MuestraError:
+                    hints.append(f"Musical diff against parent {parent} unavailable.")
+            directory = project.renders_dir / version
+            relative = directory.relative_to(project.root).as_posix()
+            track_meta = []
+            if p.stems:
+                for track in song.tracks:
+                    kind = (
+                        "clips"
+                        if track.clips is not None
+                        else "pattern"
+                        if track.pattern
+                        else "instrument"
+                    )
+                    track_meta.append(
+                        {
+                            "id": track.id,
+                            "kind": kind,
+                            "stem": f"{relative}/stems/{track.id}.wav",
+                            "lanes": [
+                                {"id": lane, "stem": f"{relative}/stems/{track.id}.{lane}.wav"}
+                                for lane in (track.pattern.lanes if track.pattern else [])
+                            ],
+                        }
+                    )
+            meta = RenderMeta(
+                version=version,
+                parent=parent,
+                git_commit=commit,
+                created_at=_created_at(prior, info if p.version else None),
+                request=_first(p.request, info.request if info else None, prior and prior.request),
+                summary=_first(p.summary, info.summary if info else None, prior and prior.summary),
+                agent=_first(p.agent, info.agent if info else None, prior and prior.agent)
+                or "muestra",
+                diff=diff,
+                render_time_s=time.perf_counter() - started,
+                duration_s=sf.info(stage.dir / "mix.wav").duration,
+                sample_rate=project.config.sample_rate,
+                bpm=song.meta.bpm,
+                key=song.meta.key,
+                length_bars=song.meta.length_bars,
+                range_bars=bars,
+                mix=f"{relative}/mix.wav",
+                tracks=track_meta,
             )
-            track_meta.append(
-                {
-                    "id": track.id,
-                    "kind": kind,
-                    "stem": f"{relative}/stems/{track.id}.wav",
-                    "lanes": [
-                        {"id": lane, "stem": f"{relative}/stems/{track.id}.{lane}.wav"}
-                        for lane in (track.pattern.lanes if track.pattern else [])
-                    ],
-                }
-            )
-    meta = RenderMeta(
-        version=version,
-        parent=parent,
-        git_commit=commit,
-        created_at=_created_at(prior, info if p.version else None),
-        request=_first(p.request, info.request if info else None, prior and prior.request),
-        summary=_first(p.summary, info.summary if info else None, prior and prior.summary),
-        agent=_first(p.agent, info.agent if info else None, prior and prior.agent) or "muestra",
-        diff=diff,
-        render_time_s=time.perf_counter() - started,
-        duration_s=sf.info(directory / "mix.wav").duration,
-        sample_rate=project.config.sample_rate,
-        bpm=song.meta.bpm,
-        key=song.meta.key,
-        length_bars=song.meta.length_bars,
-        range_bars=bars,
-        mix=f"{relative}/mix.wav",
-        tracks=track_meta,
-    )
-    _write_json(directory / "meta.json", meta)
+            _write_json(stage.dir / "meta.json", meta)
+            if p.version:
+                # A re-render without ears must never keep stale metrics.
+                (directory / "metrics.json").unlink(missing_ok=True)
+                stage.publish_over(directory)
+            else:
+                stage.publish_new(directory)
     metrics = None
     metrics_path = None
-    # A re-render without ears must never return stale metrics from an old render.
-    (directory / "metrics.json").unlink(missing_ok=True)
     try:
         metrics = ears.analyze(project, version)
     except NotImplementedError:
