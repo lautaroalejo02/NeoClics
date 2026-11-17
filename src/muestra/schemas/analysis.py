@@ -37,7 +37,7 @@ class Section(ContractModel):
         if self.end_s <= self.start_s:
             raise PydanticCustomError(
                 "invalid_range",
-                "Section {label!r}: end_s must be after start_s.",
+                "Section {label}: end_s must be after start_s.",
                 {"label": self.label, "hint": "Swap or fix the timestamps."},
             )
         return self

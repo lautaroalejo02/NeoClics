@@ -14,12 +14,11 @@ The globally unique candidate id used by ``chops.choose`` is
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Literal
 
-from pydantic import Field
+from pydantic import AwareDatetime, Field
 
-from ._base import ContractModel, IdStr, RelPath
+from ._base import CandidateIdStr, ContractModel, IdStr, RelPath
 from .song import StemName
 
 __all__ = [
@@ -97,24 +96,24 @@ class ChopCandidate(ContractModel):
 class AgentPick(ContractModel):
     """The candidate the agent chose in mode 'auto', with its reason."""
 
-    candidate_id: str = Field(description="Local candidate id, e.g. 'cand2'.")
+    candidate_id: CandidateIdStr = Field(description="Global candidate id 'csNNN/candN'.")
     justification: str = Field(min_length=1)
 
 
 class ChosenRecord(ContractModel):
     """Written by ``chops.choose`` back onto the set it came from."""
 
-    candidate_id: str
+    candidate_id: CandidateIdStr
     mode: Literal["auto", "manual"]
     adjust: ChopAdjust = Field(default_factory=ChopAdjust)
-    at: datetime
+    at: AwareDatetime
 
 
 class ChopCandidateSet(ContractModel):
     schema_version: Literal[0] = 0
     set_id: str = Field(pattern=r"^cs\d{3,}$", description="Allocated id: 'cs001', ...")
     source_id: IdStr
-    created_at: datetime
+    created_at: AwareDatetime
     query: ChopQuery
     candidates: list[ChopCandidate] = Field(default_factory=list)
     pick: AgentPick | None = None

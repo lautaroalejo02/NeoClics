@@ -14,13 +14,12 @@ Unknown ``type`` values are validation errors, not silently skipped.
 
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Annotated, Literal
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 from pydantic_core import PydanticCustomError
 
-from ._base import ContractModel, IdStr, VersionStr
+from ._base import CandidateIdStr, ContractModel, IdStr, VersionStr
 from .chops import ChopAdjust
 
 __all__ = [
@@ -33,7 +32,7 @@ __all__ = [
 
 
 class _EventBase(ContractModel):
-    ts: datetime = Field(description="ISO-8601 timestamp of the event.")
+    ts: AwareDatetime = Field(description="ISO-8601 timestamp of the event (timezone-aware, UTC).")
 
 
 class RatingEvent(_EventBase):
@@ -76,8 +75,9 @@ class ChopChoiceEvent(_EventBase):
 
     type: Literal["chop_choice"] = "chop_choice"
     version: VersionStr | None = None
-    set_id: str = Field(description="Chop candidate set id, e.g. 'cs001'.")
-    candidate_id: str = Field(description="Local candidate id inside the set, e.g. 'cand2'.")
+    candidate_id: CandidateIdStr = Field(
+        description="Global candidate id 'csNNN/candN', e.g. 'cs001/cand2'."
+    )
     adjust: ChopAdjust | None = None
 
 

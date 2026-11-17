@@ -5,6 +5,7 @@ loading and filesystem-aware validation live in ``muestra.project``.
 """
 
 from ._base import (
+    CandidateIdStr,
     FileRef,
     IdStr,
     KeyStr,
@@ -15,6 +16,7 @@ from ._base import (
     is_library_uri,
 )
 from .analysis import Analysis, KeyEstimate, Section, Stems
+from .api import Job, JobStatus, WsEvent, WsEventType
 from .chops import (
     AgentPick,
     CandidateScore,
@@ -26,7 +28,13 @@ from .chops import (
     full_candidate_id,
     parse_candidate_id,
 )
-from .config import ProjectConfig, SeparationConfig
+from .config import (
+    LibraryConfig,
+    PluginPaths,
+    PluginsConfig,
+    ProjectConfig,
+    SeparationConfig,
+)
 from .feedback import (
     ABChoiceEvent,
     ChopChoiceEvent,
@@ -34,8 +42,9 @@ from .feedback import (
     FeedbackEvent,
     RatingEvent,
 )
+from .library import LibraryHit, LibraryIndex, LibraryIndexEntry
 from .metrics import Metrics
-from .render_meta import DiffEntry, RenderMeta
+from .render_meta import DiffEntry, RenderMeta, RenderTrackMeta, StemLaneRef
 from .song import (
     Automation,
     Chop,
@@ -43,6 +52,7 @@ from .song import (
     Fx,
     Instrument,
     Master,
+    MidiNote,
     Pattern,
     PatternLane,
     Song,
@@ -58,6 +68,7 @@ __all__ = [
     "AgentPick",
     "Analysis",
     "Automation",
+    "CandidateIdStr",
     "CandidateScore",
     "Chop",
     "ChopAdjust",
@@ -74,28 +85,41 @@ __all__ = [
     "Fx",
     "IdStr",
     "Instrument",
+    "Job",
+    "JobStatus",
     "KeyEstimate",
     "KeyStr",
     "LaneName",
+    "LibraryConfig",
+    "LibraryHit",
+    "LibraryIndex",
+    "LibraryIndexEntry",
     "LibraryURI",
     "Master",
     "Metrics",
+    "MidiNote",
     "Pattern",
     "PatternLane",
+    "PluginPaths",
+    "PluginsConfig",
     "ProjectConfig",
     "RatingEvent",
     "RelPath",
     "RenderMeta",
+    "RenderTrackMeta",
     "Section",
     "SeparationConfig",
     "Song",
     "SongMeta",
     "Source",
+    "StemLaneRef",
     "StemName",
     "Stems",
     "Track",
     "VersionStr",
     "Warp",
+    "WsEvent",
+    "WsEventType",
     "full_candidate_id",
     "is_library_uri",
     "parse_candidate_id",
