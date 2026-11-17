@@ -178,7 +178,7 @@
     },
     "Clip": {
       "additionalProperties": false,
-      "description": "Places a chop or a library sample on a track's grid.\n\nExactly one of ``chop`` / ``sample`` must be set. ``sample`` clips\nneed ``length_beats`` (grid occupancy; audio is truncated at the\nboundary, never looped \u2014 use ``repeat`` to tile) and may carry their\nown ``warp``; the renderer resolves the source BPM from the library\nindex.",
+      "description": "Places a chop or a library sample on a track's grid.\n\nExactly one of ``chop`` / ``sample`` must be set. ``sample`` clips\nneed ``length_beats`` (grid occupancy; audio is truncated at the\nboundary, never looped \u2014 use ``repeat`` to tile) and may carry their\nown ``warp``; the renderer resolves the source BPM from the library\nindex.\n\nWP16 (all optional, defaults = the WP0 behaviour):\n\n* ``length_beats`` on a chop clip trims it: each pass is that many beats\n  (default: the chop's length). ``trim_start_beats`` skips that many beats\n  of the material at the start of every pass (negative = starts earlier in\n  the record). Material outside the chop is rendered from the source.\n* ``stretch`` time-stretches the material keeping its pitch: a pass uses\n  ``length_beats / stretch`` beats of material and lasts ``length_beats``.\n* ``gain_db``, ``reverse``, ``fade_in_ms``/``fade_out_ms`` (fade every pass\n  to/from silence instead of the seam crossfade) apply to every pass;\n  ``instances`` overrides single passes.",
       "properties": {
         "at_bar": {
           "description": "1-indexed bar where the clip starts.",
@@ -199,6 +199,49 @@
           ],
           "default": null,
           "title": "Chop"
+        },
+        "fade_in_ms": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fade In Ms"
+        },
+        "fade_out_ms": {
+          "anyOf": [
+            {
+              "maximum": 10000.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fade Out Ms"
+        },
+        "gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "instances": {
+          "additionalProperties": {
+            "$ref": "#/$defs/InstanceOverride"
+          },
+          "description": "Per-pass overrides keyed by 1-based repeat number (WP16).",
+          "title": "Instances",
+          "type": "object"
         },
         "length_beats": {
           "anyOf": [
@@ -227,6 +270,11 @@
           "title": "Repeat",
           "type": "integer"
         },
+        "reverse": {
+          "default": false,
+          "title": "Reverse",
+          "type": "boolean"
+        },
         "sample": {
           "anyOf": [
             {
@@ -239,6 +287,22 @@
           ],
           "default": null,
           "title": "Sample"
+        },
+        "stretch": {
+          "default": 1.0,
+          "description": "Time-stretch keeping pitch: a pass plays length_beats/stretch beats of material over length_beats beats (WP16).",
+          "maximum": 4.0,
+          "minimum": 0.25,
+          "title": "Stretch",
+          "type": "number"
+        },
+        "trim_start_beats": {
+          "default": 0.0,
+          "description": "Beats of material skipped at the start of every pass (WP16).",
+          "maximum": 4096.0,
+          "minimum": -128.0,
+          "title": "Trim Start Beats",
+          "type": "number"
         },
         "warp": {
           "anyOf": [
@@ -461,6 +525,38 @@
         "cutoff_hz"
       ],
       "title": "HighpassFx",
+      "type": "object"
+    },
+    "InstanceOverride": {
+      "additionalProperties": false,
+      "description": "Override for ONE repeat of a clip (WP16): ``instances: {3: {mute: true}}``.\n\nKeys of ``Clip.instances`` are 1-based repeat numbers (1 = the first pass).\nValues are relative to the clip: ``gain_db`` adds to the clip's gain,\n``pitch_semitones`` adds a length-preserving shift on top of the material,\n``reverse`` plays that pass backwards (XOR with the clip's ``reverse``).",
+      "properties": {
+        "gain_db": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -60.0,
+          "title": "Gain Db",
+          "type": "number"
+        },
+        "mute": {
+          "default": false,
+          "title": "Mute",
+          "type": "boolean"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        },
+        "reverse": {
+          "default": false,
+          "title": "Reverse",
+          "type": "boolean"
+        }
+      },
+      "title": "InstanceOverride",
       "type": "object"
     },
     "Instrument": {
@@ -717,7 +813,7 @@
     },
     "Pattern": {
       "additionalProperties": false,
-      "description": "Step-sequenced drum pattern, tiled across the track's window.\n\nEach lane's ``steps`` string must be exactly\n``steps_per_bar * bars`` characters (ignoring spaces).\n\n``swing`` in [0, 1] delays every odd-indexed (off) step by\n``swing * step / 3``: 0 is straight, 1 is full triplet swing.",
+      "description": "Step-sequenced drum pattern, tiled across the track's window.\n\nEach lane's ``steps`` string must be exactly\n``steps_per_bar * bars`` characters (ignoring spaces).\n\n``swing`` in [0, 1] delays every odd-indexed (off) step by\n``swing * step / 3``: 0 is straight, 1 is full triplet swing.\n\n``hits`` (WP16) are free-timed hits on top of the steps.",
       "properties": {
         "bars": {
           "default": 1,
@@ -725,6 +821,13 @@
           "minimum": 1,
           "title": "Bars",
           "type": "integer"
+        },
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/PatternHit"
+          },
+          "title": "Hits",
+          "type": "array"
         },
         "lanes": {
           "minProperties": 1,
@@ -760,9 +863,53 @@
       "title": "Pattern",
       "type": "object"
     },
+    "PatternHit": {
+      "additionalProperties": false,
+      "description": "A free-timed drum hit (WP16): any beat, not only the step grid.\n\n``beat`` is 1-indexed from the song start (like notes); ``lane`` names a\nlane of the pattern (its sample, gain and pan); ``sample`` optionally\nplays another sound for this hit only. Swing does not move free hits.\nPerformance pads (WP17) record into this list.",
+      "properties": {
+        "beat": {
+          "description": "1-indexed song beat (fractional allowed).",
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "lane": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Lane",
+          "type": "string"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path or 'library://<path>' URI.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "velocity": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Velocity",
+          "type": "number"
+        }
+      },
+      "required": [
+        "beat",
+        "lane"
+      ],
+      "title": "PatternHit",
+      "type": "object"
+    },
     "PatternLane": {
       "additionalProperties": false,
-      "description": "One instrument lane of a drum pattern.",
+      "description": "One instrument lane of a drum pattern.\n\n``overrides`` (WP16) replaces single bars: ``{7: \"x...x.......x...\"}`` =\nin SONG bar 7 this lane plays that bar instead of the pattern (one bar of\n``steps_per_bar`` step chars; all rests = the lane is silent in that bar).\n``steps`` may be omitted (all rests) for a lane that only has overrides or\nfree ``hits``.",
       "properties": {
         "gain_db": {
           "default": 0.0,
@@ -770,6 +917,14 @@
           "minimum": -60.0,
           "title": "Gain Db",
           "type": "number"
+        },
+        "overrides": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Per-bar exceptions: song bar (1-indexed) -> that bar's steps (WP16).",
+          "title": "Overrides",
+          "type": "object"
         },
         "pan": {
           "default": 0.0,
@@ -784,13 +939,13 @@
           "type": "string"
         },
         "steps": {
+          "default": "",
           "title": "Steps",
           "type": "string"
         }
       },
       "required": [
-        "sample",
-        "steps"
+        "sample"
       ],
       "title": "PatternLane",
       "type": "object"
