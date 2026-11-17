@@ -19,7 +19,7 @@ def agent_setup(repo: Path, project: Path | None, write: Path | None = None) -> 
             "--repo must point to the Muestra source checkout containing pyproject.toml."
         )
     command = shutil.which("uv") or "uv"
-    args = ["run", "--directory", str(repo), "--extra", "server", "muestra", "mcp"]
+    args = ["run", "--directory", str(repo), "muestra", "mcp"]
     if project:
         args += ["--project", str(project.resolve())]
     entry = {"command": command, "args": args}

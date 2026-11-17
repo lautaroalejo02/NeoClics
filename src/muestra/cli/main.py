@@ -143,6 +143,23 @@ def emit(value: dict, force_json: bool = False) -> None:
         print(json.dumps(value, indent=2, ensure_ascii=False))
 
 
+def _stderr_progress(spec):
+    """Long tools (separation takes minutes) report progress on stderr, so
+    stdout stays one JSON document. Throttled: a line per 5% or new message."""
+    if not spec.long_running:
+        return None
+    last = {"value": -1.0, "message": None}
+
+    def progress(value: float, message: str | None = None) -> None:
+        value = max(0.0, min(1.0, float(value)))
+        if value - last["value"] < 0.05 and message == last["message"] and value < 1.0:
+            return
+        last.update(value=value, message=message)
+        print(f"[{value:4.0%}] {message or spec.name}", file=sys.stderr, flush=True)
+
+    return progress
+
+
 def main(argv: list[str] | None = None) -> int:
     # Windows console/pipes otherwise inherit a legacy code page, breaking Unicode feedback.
     for stream in (sys.stdout, sys.stderr):
@@ -159,7 +176,7 @@ def main(argv: list[str] | None = None) -> int:
             _merge(params, collect_params(spec, args))
             _merge(params, _dotted_flags(extras))
             runtime = Runtime(project)
-            result = runtime.call(spec, params)
+            result = runtime.call(spec, params, progress=_stderr_progress(spec))
             emit(result.model_dump(mode="json"), force_json)
             return 0 if result.ok and (result.data or {}).get("valid", True) is not False else 1
         if extras:
@@ -213,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.command,
                 "invalid_value",
                 str(exc),
-                "Use muestra --help; install server dependencies with uv sync --extra server.",
+                "Use muestra --help; run muestra doctor to check the installation.",
             ).model_dump(mode="json"),
             force_json,
         )

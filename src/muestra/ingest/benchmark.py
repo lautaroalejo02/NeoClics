@@ -1,4 +1,4 @@
-"""Owner-run benchmark: uv run --extra ingest python -m muestra.ingest.benchmark.
+"""Owner-run benchmark: uv run --extra separation python -m muestra.ingest.benchmark.
 
 Runs each model in a fresh subprocess, samples process-tree RSS every 100ms,
 and writes JSON + Markdown. No uploads, references or ground truth required.
