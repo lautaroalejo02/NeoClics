@@ -26,6 +26,10 @@ export default defineConfig({
   projects: [
     { name: "desktop-chromium", use: { ...devices["Desktop Chrome"], viewport: { width: 1440, height: 900 } } },
     { name: "phone-chromium", use: { ...devices["Pixel 7"] } },
+    // WP14: other engines. WebKit stands in for iPhone Safari; install with `npm run e2e:install`.
+    { name: "desktop-firefox", use: { ...devices["Desktop Firefox"], viewport: { width: 1440, height: 900 } } },
+    { name: "desktop-webkit", use: { ...devices["Desktop Safari"], viewport: { width: 1440, height: 900 } } },
+    { name: "phone-webkit", use: { ...devices["iPhone 14"] } },
   ],
   webServer: {
     command: `"${UV}" run --directory "${REPO}" python -m tests.integration.e2e_server --dir "${DIR}" --port ${PORT}`,

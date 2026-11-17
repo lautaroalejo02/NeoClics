@@ -86,6 +86,12 @@ const GAIN_TAU_S = 0.006; // mute/solo/volume smoothing time constant
 
 type Ctx = AudioContext;
 
+/** The AudioContext constructor, including old Safari's prefixed one. */
+function audioContextCtor(): typeof AudioContext | null {
+  const g = globalThis as { AudioContext?: typeof AudioContext; webkitAudioContext?: typeof AudioContext };
+  return g.AudioContext ?? g.webkitAudioContext ?? null;
+}
+
 interface Run {
   when: number;
   offset: number;
@@ -333,7 +339,7 @@ export class AudioEngine {
     const loading: VersionId[] = [];
     this.decks.forEach((d, v) => (d.mix ? ready : loading).push(v));
     let audio: EngineSnapshot["audio"] = "idle";
-    if (typeof AudioContext === "undefined") audio = "unsupported";
+    if (!audioContextCtor()) audio = "unsupported";
     else if (this.ctx) audio = this.ctx.state === "running" ? "running" : "suspended";
     return {
       audio,
@@ -354,17 +360,18 @@ export class AudioEngine {
 
   private ensureCtx(sampleRate?: number): Ctx | null {
     if (this.ctx) return this.ctx;
-    if (typeof AudioContext === "undefined") return null;
+    const AC = audioContextCtor();
+    if (!AC) return null;
     let ctx: Ctx;
     try {
       // Matching the render's rate avoids any resampling on decode.
-      ctx = new AudioContext(
+      ctx = new AC(
         sampleRate && sampleRate >= 8000 && sampleRate <= 96000
           ? { sampleRate, latencyHint: "interactive" }
           : { latencyHint: "interactive" },
       );
     } catch {
-      ctx = new AudioContext();
+      ctx = new AC();
     }
     this.ctx = ctx;
     this.master = ctx.createGain();
