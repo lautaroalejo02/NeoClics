@@ -65,6 +65,13 @@ const songYaml = (project: string) => fs.readFileSync(path.join(project, "song.y
 
 test.describe.configure({ mode: "serial" });
 
+// leave the shared real project as the other specs expect it
+let restore: (() => void) | null = null;
+test.afterEach(() => {
+  restore?.();
+  restore = null;
+});
+
 test("editor: remove one kick, hear it gone, undo/redo, sounds, clips, notes, save, ask", async ({ page, request }, info) => {
   test.skip(info.project.name !== "desktop-chromium", "editor flows run once, on desktop Chromium");
   test.setTimeout(300_000);
@@ -72,6 +79,7 @@ test("editor: remove one kick, hear it gone, undo/redo, sounds, clips, notes, sa
   page.on("pageerror", (e) => errors.push(e.message));
   const project = await projectPath(request);
   const original = songYaml(project);
+  restore = () => fs.writeFileSync(path.join(project, "song.yaml"), original, "utf-8");
   await page.addInitScript(() => localStorage.setItem("muestra.view", "arreglo"));
   await page.goto("/");
   await expect(page.getByTestId("timeline")).toBeVisible({ timeout: 30_000 });
