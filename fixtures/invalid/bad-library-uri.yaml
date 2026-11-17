@@ -1,0 +1,8 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: drums
+    pattern:
+      steps_per_bar: 16
+      lanes:
+        kick: {sample: "library://../escape.wav", steps: "x...x...x...x..."}

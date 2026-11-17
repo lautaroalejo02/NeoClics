@@ -1,0 +1,24 @@
+{
+  "schema_version": 0,
+  "source_id": "src1",
+  "file": "sources/fake-source.wav",
+  "duration_s": 5.7,
+  "sample_rate": 22050,
+  "bpm_global": 120.0,
+  "tempo_variable": false,
+  "beats_s": [0.25, 0.75, 1.25, 1.75, 2.25, 2.75, 3.25, 3.75, 4.25, 4.75, 5.25],
+  "downbeats_s": [0.25, 2.25, 4.25],
+  "key": {"tonic": "F#", "mode": "minor", "confidence": 0.9},
+  "sections": [
+    {"label": "intro", "start_s": 0.0, "end_s": 2.25},
+    {"label": "main", "start_s": 2.25, "end_s": 5.7}
+  ],
+  "loudness_lufs": -14.0,
+  "stems": {
+    "drums": "cache/stems/src1/drums.wav",
+    "bass": "cache/stems/src1/bass.wav",
+    "vocals": "cache/stems/src1/vocals.wav",
+    "other": "cache/stems/src1/other.wav"
+  },
+  "separation_model": "fixture-stem-splitter-0.1"
+}

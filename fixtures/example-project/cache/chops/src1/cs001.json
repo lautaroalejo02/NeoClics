@@ -1,0 +1,55 @@
+{
+  "schema_version": 0,
+  "set_id": "cs001",
+  "source_id": "src1",
+  "created_at": "2026-11-17T20:00:00Z",
+  "query": {"section": "intro", "stem": "other", "length_beats": 8, "n": 3},
+  "candidates": [
+    {
+      "id": "cand1",
+      "source_id": "src1",
+      "stem": "other",
+      "start_downbeat": 1,
+      "start_s": 0.25,
+      "length_beats": 8,
+      "end_s": 4.25,
+      "local_bpm": 120.0,
+      "preview": "cache/previews/src1/cs001/cand1.wav",
+      "score": {"value": 0.91, "reasons": ["starts on the intro downbeat", "8-beat loop lands on a downbeat"]}
+    },
+    {
+      "id": "cand2",
+      "source_id": "src1",
+      "stem": "other",
+      "start_downbeat": 2,
+      "start_s": 2.25,
+      "length_beats": 4,
+      "end_s": 4.25,
+      "local_bpm": 120.0,
+      "preview": "cache/previews/src1/cs001/cand2.wav",
+      "score": {"value": 0.7, "reasons": ["shorter loop inside the main section"]}
+    },
+    {
+      "id": "cand3",
+      "source_id": "src1",
+      "stem": "other",
+      "start_downbeat": 3,
+      "start_s": 4.25,
+      "length_beats": 2,
+      "end_s": 5.25,
+      "local_bpm": 120.0,
+      "preview": "cache/previews/src1/cs001/cand3.wav",
+      "score": {"value": 0.4, "reasons": ["only 2 beats left on the grid"]}
+    }
+  ],
+  "pick": {
+    "candidate_id": "cand1",
+    "justification": "Longest full loop that starts on a downbeat inside the requested 'intro' section; the riff motif sits at the head."
+  },
+  "chosen": {
+    "candidate_id": "cand1",
+    "mode": "auto",
+    "adjust": {"start_beats": 0.0, "length_beats": 0.0},
+    "at": "2026-11-17T20:05:00Z"
+  }
+}

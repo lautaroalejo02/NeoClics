@@ -1,0 +1,11 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: drums
+    pattern:
+      lanes:
+        kick: {sample: "library://kits/k/kick.wav", steps: "x...x...x...x..."}
+  - id: drums                   # duplicate track id -> duplicate_id
+    pattern:
+      lanes:
+        clap: {sample: "library://kits/k/clap.wav", steps: "....x.......x..."}

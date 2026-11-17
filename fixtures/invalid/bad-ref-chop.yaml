@@ -1,0 +1,8 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+chops:
+  - {id: c1, source: src1, stem: mix, start_downbeat: 1, length_beats: 8}
+tracks:
+  - id: sample
+    clips:
+      - {chop: c9, at_bar: 1}      # c9 does not exist -> ref_not_found

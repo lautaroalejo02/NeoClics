@@ -1,0 +1,8 @@
+schema_version = 0
+sample_rate = 48000
+export_bit_depth = 24
+library = ["../library"]
+
+[separation]
+backend = "audio-separator"
+model = "fixture-stem-splitter-0.1"

@@ -1,0 +1,8 @@
+schema_version: 0
+meta:
+  title: bad
+  bpm: 120
+  key: Am
+  length_bars: 16
+  tempo: 120        # typo: unknown field -> extra_forbidden
+tracks: []

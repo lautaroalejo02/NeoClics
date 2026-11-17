@@ -1,0 +1,7 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+sources:
+  - {id: src1, file: sources/x.wav}
+chops:
+  # start_downbeat is 1-indexed -> too_small (ge=1)
+  - {id: c1, source: src1, stem: mix, start_downbeat: 0, length_beats: 8}

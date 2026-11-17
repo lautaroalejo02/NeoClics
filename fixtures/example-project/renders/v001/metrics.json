@@ -1,0 +1,41 @@
+{
+  "schema_version": 0,
+  "version": "v001",
+  "loudness": {
+    "integrated_lufs": -12.4,
+    "true_peak_dbtp": -1.3,
+    "clipping": false,
+    "clipped_samples": 0
+  },
+  "spectral": {
+    "bands_hz": {"low": [20.0, 250.0], "mid": [250.0, 4000.0], "high": [4000.0, 20000.0]},
+    "mix": {"low_db": -18.5, "mid_db": -21.0, "high_db": -30.2},
+    "tracks": {
+      "sample": {"low_db": -26.0, "mid_db": -22.5, "high_db": -33.0},
+      "drums": {"low_db": -19.0, "mid_db": -27.0, "high_db": -31.5},
+      "bass": {"low_db": -20.0, "mid_db": -35.0, "high_db": -50.0}
+    }
+  },
+  "low_end_masking": {
+    "band_hz": [40.0, 150.0],
+    "energy_db": {"drums": -19.0, "bass": -20.0, "sample": -30.0},
+    "dominant_track": "drums"
+  },
+  "alignment": {
+    "tracks": {
+      "sample": {"mean_offset_ms": 2.1, "max_abs_offset_ms": 4.0, "n_transients": 8},
+      "drums": {"mean_offset_ms": 0.0, "max_abs_offset_ms": 0.0, "n_transients": 44}
+    },
+    "max_abs_offset_ms": 4.0
+  },
+  "tonal": {
+    "estimated": {"tonic": "F#", "mode": "minor", "confidence": 0.8},
+    "target_key": "F#m",
+    "tonic_match": true,
+    "mode_match": true,
+    "in_key": true
+  },
+  "clicks": {"count": 0, "events": []},
+  "style_similarity": null,
+  "alarms": []
+}

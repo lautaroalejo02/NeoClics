@@ -1,0 +1,9 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: drums
+    clips:
+      - {sample: "library://kits/k/loop.wav", length_beats: 8, at_bar: 1}
+    pattern:                          # clips + pattern -> track_kind
+      lanes:
+        kick: {sample: "library://kits/k/kick.wav", steps: "x...x...x...x..."}

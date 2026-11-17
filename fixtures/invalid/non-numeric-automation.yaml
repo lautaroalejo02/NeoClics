@@ -1,0 +1,15 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: drums
+    pattern:
+      lanes:
+        kick: {sample: "library://kits/k/kick.wav", steps: "x...x...x...x..."}
+  - id: sample
+    clips:
+      - {sample: "library://kits/k/loop.wav", length_beats: 8, at_bar: 1, repeat: 8}
+    fx:
+      - {id: sc, type: sidechain, key_track: drums, depth: 0.6}
+automation:
+  # key_track is a string param -> automation_target (not numeric)
+  - {target: tracks.sample.fx.sc.key_track, curve: lin, points: [[1, 0], [5, 1]]}

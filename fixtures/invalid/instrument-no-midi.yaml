@@ -1,0 +1,6 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: bass
+    instrument: {plugin: surge-xt}
+    # midi is required together with instrument -> track_kind

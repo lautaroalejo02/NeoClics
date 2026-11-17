@@ -1,0 +1,11 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+sources:
+  - {id: src1, file: sources/x.wav}
+chops:
+  - {id: c1, source: src1, stem: mix, start_downbeat: 1, length_beats: 8}
+tracks:
+  - id: sample
+    clips:
+      # 8 beats * repeat 9 = 72 beats > 64 -> clip_overrun
+      - {chop: c1, at_bar: 1, repeat: 9}

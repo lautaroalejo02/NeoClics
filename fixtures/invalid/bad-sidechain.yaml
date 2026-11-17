@@ -1,0 +1,9 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: sample
+    clips:
+      - {sample: "library://kits/k/loop.wav", length_beats: 8, at_bar: 1, repeat: 8}
+    fx:
+      # 'nosuch' is not a track id -> ref_not_found
+      - {id: sc, type: sidechain, key_track: nosuch, depth: 0.6}

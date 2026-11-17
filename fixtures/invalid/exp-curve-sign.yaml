@@ -1,0 +1,11 @@
+schema_version: 0
+meta: {title: bad, bpm: 120, key: Am, length_bars: 16}
+tracks:
+  - id: sample
+    clips:
+      - {sample: "library://kits/k/loop.wav", length_beats: 8, at_bar: 1, repeat: 8}
+    fx:
+      - {id: lp, type: lowpass, cutoff_hz: 18000}
+automation:
+  # exp curve crosses zero -> automation_target
+  - {target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, -800], [5, 18000]]}
