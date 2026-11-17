@@ -139,20 +139,9 @@ def invoke_spec(
 
 def tool_description(spec: ToolSpec) -> str:
     doc = inspect.getdoc(spec.func) or spec.description
-    return (
-        f"{doc}\n"
-        "Uses the current project unless project is supplied. Song bars/beats and source "
-        "downbeat indices are 1-based; range_bars is [start,end), end exclusive; "
-        "clip preview indices are 0-based. Times ending _s are seconds, _ms milliseconds, "
-        "_hz Hertz, _db decibels. Paths returned in files are project-relative. "
-        "On failure fix errors using their hints. Read feedback before editing song.yaml, "
-        "then song_validate, preview, render and inspect metrics/feedback. "
-        + (
-            "May take minutes; wait for the result and use progress notifications."
-            if spec.long_running
-            else ""
-        )
-    )
+    # Shared conventions live once in MCP initialize.instructions (guide.md).
+    # Parameters carry the details; discovery needs the tool's specific purpose.
+    return " ".join(doc.split()).split(". ", 1)[0].rstrip(".") + "."
 
 
 def input_schema(spec: ToolSpec, *, project_default: bool = False) -> dict[str, Any]:

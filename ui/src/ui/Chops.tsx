@@ -319,7 +319,7 @@ function SourceStrip({ set, analysis, sel, onSelect }: { set: ChopCandidateSet; 
       </div>
       <div className="fb-compose-row hint">
         <span>0:00</span>
-        <span>{analysis ? `${set.source_id} · ${formatClock(dur)} · ${fmtBpm(analysis.bpm_global)} BPM${analysis.tempo_variable ? " (tempo variable)" : ""}` : "Sin análisis de la fuente: muestro solo los candidatos."}</span>
+        <span>{analysis ? `${set.source_id} · ${formatClock(dur)} · ${analysis.bpm_global == null ? "sin pulso detectado" : `${fmtBpm(analysis.bpm_global)} BPM`}${analysis.tempo_variable ? " (tempo variable)" : ""}` : "Sin análisis de la fuente: muestro solo los candidatos."}</span>
         <span>{formatClock(dur)}</span>
       </div>
     </div>

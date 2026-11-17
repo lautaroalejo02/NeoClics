@@ -181,10 +181,18 @@
           "type": "array"
         },
         "version": {
-          "description": "Render version id like 'v001'.",
-          "pattern": "^v\\d{3,}$",
-          "title": "Version",
-          "type": "string"
+          "anyOf": [
+            {
+              "description": "Render version id like 'v001'.",
+              "pattern": "^v\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "pattern": "^d-[0-9a-f]{12}$",
+              "type": "string"
+            }
+          ],
+          "title": "Version"
         }
       },
       "required": [
@@ -268,6 +276,19 @@
   },
   "additionalProperties": false,
   "properties": {
+    "draft_id": {
+      "anyOf": [
+        {
+          "pattern": "^d-[0-9a-f]{12}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Draft Id"
+    },
     "files": {
       "items": {
         "type": "string"
@@ -285,7 +306,6 @@
         }
       ],
       "default": null,
-      "description": "Agent-facing note when metrics or history metadata are unavailable.",
       "title": "Hint"
     },
     "meta": {
@@ -320,7 +340,7 @@
         }
       ],
       "default": null,
-      "description": "Compact Spanish ears summary (headline + worst alarms with their song.yaml fixes); the full detail is in metrics_path.",
+      "description": "Compact ears summary; read this first.",
       "title": "Metrics Summary"
     },
     "mix_path": {
@@ -342,14 +362,21 @@
       "type": "object"
     },
     "version": {
-      "description": "Render version id like 'v001'.",
-      "pattern": "^v\\d{3,}$",
-      "title": "Version",
-      "type": "string"
+      "anyOf": [
+        {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Version"
     }
   },
   "required": [
-    "version",
     "mix_path",
     "meta_path",
     "meta"

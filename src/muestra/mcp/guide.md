@@ -1,5 +1,12 @@
 # Muestra: guía corta para agentes
 
+Shared conventions: use the current project unless `project` is supplied.
+Song bars/beats and source downbeat indices are 1-based; `range_bars` is
+`[start,end)` (end exclusive); clip preview indices are 0-based. Suffixes:
+`_s` seconds, `_ms` milliseconds, `_hz` Hertz, `_db` decibels. Returned paths
+are project-relative. Fix errors using their hints. Long tools report progress;
+wait for completion. Windows paths accept both separators; prefer forward slashes.
+
 Muestra es un estudio local: vos editás `song.yaml` y llamás estas herramientas; el humano
 (Lautaro, castellano rioplatense, no usa DAWs) escucha en el browser y comenta. Muestra no
 llama a ningún LLM. **No podés oír**: tus oídos son las métricas de ears (alarmas) y su

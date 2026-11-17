@@ -32,7 +32,8 @@ def test_sdk_stdio_end_to_end(tmp_path):
                     assert {"test_slow", "test_echo", "muestra_guide"} <= names
                     song_tool = next(t for t in listing.tools if t.name == "song_validate")
                     assert "project" not in song_tool.input_schema.get("required", [])
-                    assert "1-based" in song_tool.description
+                    assert "1-based" in initialized.instructions
+                    assert "1-based" not in song_tool.description
                     assert song_tool.annotations.read_only_hint
 
                     created = await client.call_tool(

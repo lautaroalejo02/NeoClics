@@ -12,23 +12,26 @@ from __future__ import annotations
 import hashlib
 import json
 import time
+import uuid
 from datetime import UTC, datetime
 
-import soundfile as sf
-from pydantic import Field, ValidationError
+from pydantic import Field, ValidationError, model_serializer
 
-from ..ears import core as ears
 from ..errors import MuestraError
 from ..project import load_song, open_project, validate_song
-from ..schemas._base import IdStr, RelPath, VersionStr
+from ..schemas._base import DraftIdStr, IdStr, RelPath, VersionStr
 from ..schemas.render_meta import RenderMeta
 from ..schemas.song import BEATS_PER_BAR
 from ..toolbase import ProjectScoped, ToolOutput
-from ..versions import core as versions
-from ..versions.diff import song_diff
 from . import staging
-from .audio import fade
-from .core import beat_frame, render_audio, render_chop, render_song
+
+
+def render_song(*args, **kwargs):
+    """Lazy orchestration seam (also used by failure-injection tests)."""
+    from .core import render_song as implementation
+
+    return implementation(*args, **kwargs)
+
 
 __all__ = [
     "PreviewParams",
@@ -61,6 +64,9 @@ def preview(p: PreviewParams) -> PreviewResult:
     Plays at PROJECT tempo when a song.yaml exists, else at source
     tempo."""
     import soundfile as sf
+
+    from .audio import fade
+    from .core import beat_frame, render_audio, render_chop
 
     project = open_project(p.project)
     song = load_song(project)
@@ -145,10 +151,19 @@ def preview(p: PreviewParams) -> PreviewResult:
     relative = f"cache/previews/render-{key}.wav"
     project.path(relative).parent.mkdir(parents=True, exist_ok=True)
     sf.write(project.path(relative), audio, sr, subtype="PCM_24")
+    from .drafts import register_preview
+
+    register_preview(project, relative, p.target, len(audio) / sr)
     return PreviewResult(target=p.target, preview_path=relative, files=[relative])
 
 
 class RenderParams(ProjectScoped):
+    draft: bool = Field(
+        default=False, description="Render a listenable draft without a version, git commit or tag."
+    )
+    analyze: bool | None = Field(
+        default=None, description="Run ears now (default true for versions, false for drafts)."
+    )
     range_bars: tuple[int, int] | None = Field(
         default=None,
         description="[start_bar, end_bar) to render, 1-indexed, end "
@@ -177,23 +192,38 @@ class RenderParams(ProjectScoped):
 
 
 class RenderResult(ToolOutput):
-    version: VersionStr
+    metrics_summary: str | None = Field(
+        default=None, description="Compact ears summary; read this first."
+    )
+    hint: str | None = None
+    version: VersionStr | None = None
+    draft_id: DraftIdStr | None = None
     mix_path: RelPath
     stem_paths: dict[IdStr, RelPath] = Field(default_factory=dict)
     meta_path: RelPath
-    meta: RenderMeta
     metrics_path: RelPath | None = Field(
         default=None, description="renders/vNNN/metrics.json: the full ears report."
     )
-    metrics_summary: str | None = Field(
-        default=None,
-        description="Compact Spanish ears summary (headline + worst alarms with their "
-        "song.yaml fixes); the full detail is in metrics_path.",
-    )
-    hint: str | None = Field(
-        default=None,
-        description="Agent-facing note when metrics or history metadata are unavailable.",
-    )
+    meta: RenderMeta
+
+    @model_serializer(mode="wrap")
+    def _summary_first(self, handler):
+        data = handler(self)
+        return {
+            key: data[key]
+            for key in (
+                "metrics_summary",
+                "hint",
+                "version",
+                "draft_id",
+                "mix_path",
+                "metrics_path",
+                "meta_path",
+                "stem_paths",
+                "files",
+                "meta",
+            )
+        }
 
 
 def render(p: RenderParams) -> RenderResult:
@@ -202,6 +232,12 @@ def render(p: RenderParams) -> RenderResult:
     song.yaml/meta.json and publish the folder; run ears for metrics.json
     (spec section 8). A failed render leaves no version behind."""
     project = open_project(p.project)
+    if p.draft and p.version:
+        raise MuestraError.one(
+            "invalid_value",
+            "draft and version cannot be combined.",
+            hint="Use draft=true for a new draft, or version for a re-render.",
+        )
     staging.recover(project)
     if p.version:
         return _render(project, p)
@@ -219,6 +255,12 @@ def render(p: RenderParams) -> RenderResult:
 
 
 def _render(project, p: RenderParams) -> RenderResult:
+    import soundfile as sf
+
+    from ..ears import core as ears
+    from ..versions import core as versions
+    from ..versions.diff import song_diff
+
     started = time.perf_counter()
     hints = []
     prior = None
@@ -266,8 +308,13 @@ def _render(project, p: RenderParams) -> RenderResult:
             hints.append(note)
         (stage.dir / "song.yaml").write_bytes(raw)
         with staging.version_lock(project):
-            version = p.version or versions.next_version_id(project)
-            stage.mark(version, rerender=bool(p.version))
+            version = (
+                "d-" + uuid.uuid4().hex[:12]
+                if p.draft
+                else p.version or versions.next_version_id(project)
+            )
+            if not p.draft:
+                stage.mark(version, rerender=bool(p.version))
             parent = prior.parent if prior else None
             commit = prior.git_commit if prior else None
             diff = prior.diff if prior else []
@@ -279,7 +326,7 @@ def _render(project, p: RenderParams) -> RenderResult:
                 info = versions.commit_info(project.root, tag) if tag else None
                 if info is not None:
                     parent, commit = info.parent, info.sha
-            else:
+            elif not p.draft:
                 # parent=None lets versions derive it from history, which honours
                 # versions.restore (restore v001 -> render -> parent v001).
                 commit = versions.record_version(
@@ -346,7 +393,8 @@ def _render(project, p: RenderParams) -> RenderResult:
     metrics = None
     metrics_path = None
     try:
-        metrics = ears.analyze(project, version)
+        if p.analyze is True or (p.analyze is None and not p.draft):
+            metrics = ears.analyze(project, version)
     except NotImplementedError:
         hints.append(
             "Audio rendered; metrics unavailable until the WP6 ears analyzer is installed."
@@ -373,7 +421,8 @@ def _render(project, p: RenderParams) -> RenderResult:
     if metrics_path:
         files.append(metrics_path)
     return RenderResult(
-        version=version,
+        version=None if p.draft else version,
+        draft_id=version if p.draft else None,
         mix_path=meta.mix,
         stem_paths={t.id: t.stem for t in meta.tracks},
         meta_path=f"{relative}/meta.json",

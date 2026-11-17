@@ -5,7 +5,7 @@ from __future__ import annotations
 from pydantic import Field
 
 from ..project.core import open_project
-from ..schemas._base import RelPath, VersionStr
+from ..schemas._base import RelPath, RenderIdStr, VersionStr
 from ..schemas.metrics import Metrics, MetricsDelta
 from ..toolbase import ProjectScoped, ToolOutput
 
@@ -21,7 +21,7 @@ __all__ = [
 
 
 class EarsAnalyzeParams(ProjectScoped):
-    version: VersionStr = Field(description="Render version to analyze, e.g. 'v001'.")
+    version: RenderIdStr = Field(description="Version ('v001') or draft_id ('d-…') to analyze.")
     detail: bool = Field(
         default=False,
         description="Also return the full metrics report (~10 KB); by default only the "
@@ -30,7 +30,7 @@ class EarsAnalyzeParams(ProjectScoped):
 
 
 class EarsAnalyzeResult(ToolOutput):
-    version: VersionStr
+    version: RenderIdStr
     metrics: Metrics | None = Field(default=None, description="Full report (detail=true only).")
     metrics_path: RelPath
     summary: str = Field(

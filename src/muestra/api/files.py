@@ -29,7 +29,7 @@ MIME = {
 
 def audio_path(root: Path, value: str) -> Path:
     try:
-        _RELATIVE.validate_python(value)
+        value = _RELATIVE.validate_python(value)
         if any(ord(c) < 32 or c in '<>"|?*' for c in value):
             raise ValueError("Invalid filename")
         if any(p.split(".", 1)[0].upper() in _RESERVED for p in value.split("/")):

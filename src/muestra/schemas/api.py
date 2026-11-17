@@ -56,6 +56,8 @@ WsEventType = Literal[
     "feedback.appended",
     "song.changed",
     "grid.changed",
+    "draft.created",
+    "drafts.changed",
 ]
 
 

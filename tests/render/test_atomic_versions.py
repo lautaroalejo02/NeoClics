@@ -109,6 +109,14 @@ def test_hard_kill_leftovers_are_rolled_back_on_next_render(repo):
     assert result.data["meta"]["parent"] == "v001"
 
 
+def test_actual_killed_process_rolls_back_its_tag_and_audio(repo):
+    from tests.integration.wp15_audit import kill_after_commit
+
+    assert run_tool("render", {"project": str(repo.root)}).ok
+    proof = kill_after_commit(repo)
+    assert proof["state_unchanged"] and proof["recovered"] == ["v002"]
+
+
 def test_recover_ignores_live_render_and_real_versions(repo):
     assert run_tool("render", {"project": str(repo.root)}).ok
     live = staging.Stage(repo)

@@ -530,10 +530,7 @@ export class Store {
         break;
       }
       case "drafts.changed":
-        void this.client
-          .getSummary()
-          .then((s) => s && this.set({ drafts: s.drafts ?? [] }))
-          .catch(() => undefined);
+        void this.loadAll().catch(() => undefined);
         break;
       case "grid.changed":
         // source.regrid rewrote an analysis (stale candidate sets were retired)

@@ -287,7 +287,7 @@ export interface Analysis {
   file: string;
   duration_s: number;
   sample_rate: number;
-  bpm_global: number;
+  bpm_global: number | null;
   tempo_variable: boolean;
   beats_s: number[];
   downbeats_s: number[];
