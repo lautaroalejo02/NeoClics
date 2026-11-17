@@ -1,9 +1,253 @@
 {
   "$defs": {
+    "AudioFeatures": {
+      "additionalProperties": false,
+      "description": "Descriptive audio features \u2014 the agent's ears.\n\nFrequencies in Hz, times in ms. ``sub``/``low``/``mid``/``high``/\n``air`` are the SHARE (0..1) of the file's spectral energy in\n20-120 / 120-400 / 400-2000 / 2000-8000 / 8000+ Hz; they sum to ~1.\n``tonality`` is the fraction of spectral energy concentrated in a few\nnarrow peaks (1 = pure tone, ~0 = noise). Attack/decay are only\nmeasured for files up to a few seconds long.",
+      "properties": {
+        "air": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy above 8 kHz.",
+          "title": "Air"
+        },
+        "attack_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Envelope rise time, 10% -> 90% of peak (small = clicky).",
+          "title": "Attack Ms"
+        },
+        "decay_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time from the peak until the envelope is 30 dB down.",
+          "title": "Decay Ms"
+        },
+        "fundamental_hz": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dominant low-frequency pitch of the body (30-300 Hz): kick/tom/bass tuning.",
+          "title": "Fundamental Hz"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 2-8 kHz.",
+          "title": "High"
+        },
+        "low": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 120-400 Hz.",
+          "title": "Low"
+        },
+        "mid": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 400-2000 Hz.",
+          "title": "Mid"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nearest note name of fundamental_hz, e.g. 'F#1'.",
+          "title": "Note"
+        },
+        "spectral_centroid_hz": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Brightness: energy-weighted mean frequency.",
+          "title": "Spectral Centroid Hz"
+        },
+        "sub": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 20-120 Hz.",
+          "title": "Sub"
+        },
+        "tonality": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "0 = noise .. 1 = pure harmonic tone.",
+          "title": "Tonality"
+        }
+      },
+      "title": "AudioFeatures",
+      "type": "object"
+    },
+    "IndexProblem": {
+      "additionalProperties": false,
+      "description": "A file that could not be indexed (reported, never fatal).",
+      "properties": {
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "description": "Path relative to the library root.",
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "message"
+      ],
+      "title": "IndexProblem",
+      "type": "object"
+    },
+    "KitLicense": {
+      "additionalProperties": false,
+      "description": "Per-kit licence summary read from the kit's LICENSE.txt.",
+      "properties": {
+        "path": {
+          "description": "Kit directory relative to the library root.",
+          "title": "Path",
+          "type": "string"
+        },
+        "restrictions": {
+          "description": "Machine-readable limits: 'no-redistribution', 'no-ai-training', 'no-resale', 'non-commercial'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Restrictions",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source pack/page named in the licence.",
+          "title": "Source"
+        },
+        "summary": {
+          "default": "",
+          "description": "Condensed terms from LICENSE.txt.",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "KitLicense",
+      "type": "object"
+    },
     "LibraryIndexEntry": {
       "additionalProperties": false,
       "description": "One indexed file inside a library root.",
       "properties": {
+        "bit_depth": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bit Depth"
+        },
         "bpm": {
           "anyOf": [
             {
@@ -18,6 +262,88 @@
           "description": "Detected/tagged source BPM; null = no warp possible.",
           "title": "Bpm"
         },
+        "bpm_confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bpm Confidence"
+        },
+        "bpm_source": {
+          "anyOf": [
+            {
+              "enum": [
+                "name",
+                "detected",
+                "name+detected"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bpm Source"
+        },
+        "channels": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channels"
+        },
+        "clipping": {
+          "default": false,
+          "description": "Has runs of consecutive full-scale samples (hard clipping).",
+          "title": "Clipping",
+          "type": "boolean"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        },
+        "features": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioFeatures"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "flags": {
+          "description": "Heads-ups: 'clipping', 'low-level', 'type-mismatch:...', 'bpm-disagreement:...', 'low-confidence-key', 'type-inferred', ...",
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
+        },
         "key": {
           "anyOf": [
             {
@@ -31,10 +357,156 @@
           "default": null,
           "title": "Key"
         },
+        "key_confidence": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key Confidence"
+        },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "one-shot",
+                "loop",
+                "phrase"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "one-shot = a single hit; loop = repeats seamlessly on a grid; phrase = a tempo-bound one-off figure (drum fill, roll).",
+          "title": "Kind"
+        },
+        "kit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Kit (source pack): the folder under kits/, else the top-level folder.",
+          "title": "Kit"
+        },
+        "loudness_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Integrated loudness estimate (ITU-R BS.1770 K-weighted).",
+          "title": "Loudness Lufs"
+        },
+        "mtime_ns": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mtime Ns"
+        },
         "path": {
           "description": "Path relative to the library root.",
           "title": "Path",
           "type": "string"
+        },
+        "peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Peak Dbfs"
+        },
+        "rms_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rms Dbfs"
+        },
+        "sample_rate": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Rate"
+        },
+        "sig": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Cheap content hash (size + first/last 64 KiB).",
+          "title": "Sig"
+        },
+        "size": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Size"
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Finer class, e.g. conga|cowbell|crash|ride|roll.",
+          "title": "Subtype"
         },
         "tags": {
           "items": {
@@ -53,7 +525,7 @@
             }
           ],
           "default": null,
-          "description": "e.g. kick/snare/clap/hat/loop/oneshot.",
+          "description": "Instrument class: kick|snare|clap|chat|ohat|hat|tom|cym|rim|perc|drums|fill|bass|keys|synth|guitar|pad|vox|fx|other. (Hand-written indexes may use any string.)",
           "title": "Type"
         }
       },
@@ -67,11 +539,65 @@
   "additionalProperties": false,
   "description": "``.muestra-index.json`` inside a library root.",
   "properties": {
+    "analyzer_version": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Version of the measuring/classifying code that wrote the entries.",
+      "title": "Analyzer Version"
+    },
     "entries": {
       "items": {
         "$ref": "#/$defs/LibraryIndexEntry"
       },
       "title": "Entries",
+      "type": "array"
+    },
+    "generator": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "e.g. 'muestra 0.0.0'.",
+      "title": "Generator"
+    },
+    "indexed_at": {
+      "anyOf": [
+        {
+          "format": "date-time",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Indexed At"
+    },
+    "kits": {
+      "additionalProperties": {
+        "$ref": "#/$defs/KitLicense"
+      },
+      "description": "Kit name -> licence info read from <kit>/LICENSE.txt.",
+      "title": "Kits",
+      "type": "object"
+    },
+    "problems": {
+      "items": {
+        "$ref": "#/$defs/IndexProblem"
+      },
+      "title": "Problems",
       "type": "array"
     },
     "schema_version": {

@@ -290,3 +290,102 @@ says so.
 - **R11 events**: `schemas/api.py` defines the models only; the
   file-watching producer is WP7's API server (no WP-owned module exists
   for it yet).
+
+## 2026-11-17 — WP4: sample library (indexing, search, starter kits)
+
+Contract changes (every one is a superset of the WP0/R4 shape; a minimal
+hand-written index `{path, type, tags}` still validates — the fixture
+index is unchanged):
+
+1. **`LibraryIndexEntry` grows** `subtype`, `kind`, `kit`, `bpm_source`,
+   `bpm_confidence`, `key_confidence`, `duration_s`, `sample_rate`,
+   `bit_depth`, `channels`, `peak_dbfs`, `rms_dbfs`, `loudness_lufs`,
+   `clipping`, `features` (`AudioFeatures`), `flags`, and the incremental
+   bookkeeping `size`/`mtime_ns`/`sig`. `LibraryIndex` grows
+   `analyzer_version`, `indexed_at`, `generator`, `kits` (per-kit
+   `KitLicense`) and `problems`. Reason: an agent that cannot hear picks a
+   kick from these numbers; documented in `docs/library.md`.
+2. **Type vocabulary.** `type` is the instrument family:
+   `kick snare clap chat ohat hat tom cym rim perc drums fill bass keys
+   synth guitar pad vox fx other` (`ohat`/`chat` = open/closed hat, `hat` =
+   openness unknown, `cym` = crash/ride/china/splash/gong with the kind in
+   `subtype`). The spec's "loop" is a **`kind`**, not a type: a loop is
+   `kind: loop` with `type` saying what it is (`drums` for multi-hit drum
+   loops, `perc`, `pad`, `bass`, …). `kind` has THREE values —
+   `one-shot | loop | phrase`; `phrase` (drum fills, rolls) is tempo-bound
+   but must not be tiled, so it carries a `bpm` and may be warped like a
+   loop. One-shots never carry a `bpm`.
+3. **`LibraryHit` grows** the same descriptive fields plus `score`,
+   `reasons`, `summary`, `features`, `license`, and serialises **without
+   null/empty/false fields** (search results go into an LLM context; an
+   absent key means the default). `lookup`/`resolve` keep their R4
+   signatures; `lookup` returns the `LibraryHit` (contracts.md used to say
+   `{root, path, entry, abs_path}`, which never matched the code — the code
+   wins and contracts.md now says so).
+4. **New contract `StarterKits`** (`starter-kits.json` inside a library
+   root; `schemas/starter-kits.schema.json`, added to
+   `muestra/schemas/export.py`): `{kits: {name: {description, lanes:
+   {lane: root-relative path}, notes}}}`. A template for the owner's
+   library ships as package data (`muestra/library/data/starter-kits.json`)
+   and is the fallback when a root has no manifest of its own.
+5. **Tools.** `library.index` params: `path` is now optional (omit = every
+   configured root) and gains `force`, `add_root` (add a new `path` to
+   `muestra.toml`), `workers`; result: `index_path` is a plain string (the
+   index lives outside the project, so it can never be a project-relative
+   `RelPath`), plus `indexed` (total entries), `roots[]` (per-root counts,
+   timing, per-type/kit stats, flagged/clipping/type-mismatch counts,
+   problems), `registered`, `hint`. `library.search` params gain `subtype`,
+   `kind`, `kit`, `tags`, `duration_min/max`, `similar_to`,
+   `bpm_tolerance`, `half_double`, `key_exact`, `clean_only`, `detail`
+   (`compact` default | `full`), `offset`; default `limit` is now 10; result
+   gains `total`, `interpreted`, `searched_roots`, `unindexed_roots`,
+   `hint`. **New tools** `library.kits` (starter kits + ready-to-paste
+   pattern) and `library.info` (roots, index status, counts, licences).
+   New error codes `no_library` and `library_not_indexed`; their hint says
+   to run `library.index`. The tool functions accept an optional
+   `progress(done, total, rel)` callback for WP7's job progress.
+6. **Library discovery** (`muestra.library.discovery`) and the one allowed
+   edit outside the package: `Project.library_dirs()` (`project/core.py`,
+   four lines) now returns `[library] roots`, then `MUESTRA_LIBRARY`, then
+   `~/Documents/MuestraLibrary` (only if it exists and the env var is
+   unset). An explicit `roots = []`, or `MUESTRA_LIBRARY=none`/empty, is the
+   opt-out — that is what keeps `test_no_library_configured` hermetic on a
+   machine that has the default library. New projects still get
+   `roots = ["library"]` (their own empty dir); the fallbacks are appended
+   at run time rather than written into `muestra.toml`, so a project stays
+   portable between machines.
+7. **What is indexed.** Audio files (`.wav .flac .aif .aiff .ogg .mp3`)
+   under the root, skipping directories that start with `_` or `.` and a
+   top-level `instruments/` (instrument banks belong to the plugin host,
+   WP3, not to the drum/loop library). Kit = the folder under `kits/` (else
+   the top-level folder); licence = that kit's `LICENSE.txt`.
+8. **Incremental rule.** An entry is reused when size and mtime are
+   unchanged, or when only the mtime changed and the cheap content hash
+   (size + first/last 64 KiB) matches. `analyzer_version` (currently 1) is
+   bumped whenever measuring/classifying changes, which forces a full
+   re-measure. Unreadable files go into `problems` and are retried on the
+   next run.
+9. **Clipping** = ≥4 consecutive full-scale samples that are flat (within
+   2 LSB). A plain "peak ≥ -0.001 FS" test (REPORT.md's) flags every
+   normalised kick, because a sine peak is full-scale for a few samples.
+10. **Names win, audio verifies.** `type` comes from file/folder names;
+    when the measured spectrum clearly contradicts it the file gets a
+    `type-mismatch:name=…,audio=…` flag (never silently retyped). Files
+    whose names say nothing get a conservative audio-based type flagged
+    `type-inferred:…`. `bpm` for loops comes from the name when present,
+    cross-checked by onset-autocorrelation detection (half/double time
+    accepted); disagreement is flagged `bpm-disagreement:…` and the name
+    wins with low confidence.
+
+### Flags for the orchestrator
+
+- **Key detection is a heuristic** (Krumhansl-Schmuckler on a chromagram)
+  and was validated only on synthetic triads; on the real pad/arp/bass loops
+  many keys come back with low confidence (`low-confidence-key`). The
+  trailing `-a/-c/-e` letters in `french-house-loops/instruments` file
+  names are NOT used as keys: their meaning is unknown and the audio does
+  not consistently agree with them.
+- **The curated starter kits were never listened to** (stated in the
+  manifest, in `library.kits` output and in `docs/library.md`).
+- `library.search` treats `bpm`/`key` as hard filters, so they only match
+  loops/phrases; the result hint says so when a filtered search is empty.

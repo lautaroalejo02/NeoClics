@@ -155,7 +155,7 @@ everything takes a path.
 | `sample_rate` | int | 48000 | internal render rate |
 | `export_bit_depth` | 16\|24\|32 | 24 | WAV export |
 | `library` | list[str] | — | legacy bare list of dirs |
-| `library.roots` | list[str] | `["library"]` on create | ordered roots searched by `library://`; relative → project dir |
+| `library.roots` | list[str] | `["library"]` on create | ordered roots searched by `library://`; relative → project dir. `MUESTRA_LIBRARY` and `~/Documents/MuestraLibrary` are appended after them unless `roots = []` is written explicitly (see *Library discovery*) |
 | `plugins.search_dirs` | list[str] | `[]` | extra plugin search dirs |
 | `plugins.aliases` | table | `{}` | alias → `{windows?, macos?, linux?}` per-OS plugin path |
 | `separation.backend` | str | `"audio-separator"` | |
@@ -403,14 +403,57 @@ filters `ts >= since` and must itself be timezone-aware.
 `score{value,reasons}`. `ChopAdjust` = `{start_beats, length_beats}`
 deltas in beats.
 
-## Library index → `LibraryIndex` (R4)
+## Library index → `LibraryIndex` (R4, extended by WP4)
 
-Each `[library]` root holds `.muestra-index.json`:
-`{schema_version, entries: [{path (root-relative POSIX), bpm?, key?,
-tags[]}]}` — `bpm`/`key` optional (one-shots have neither).
-`muestra.library.core.lookup(project, uri) -> LibraryHit | None`
-searches roots in order and returns `{root, path, entry, abs_path}`;
+Each library root holds `.muestra-index.json` (written by `library.index`,
+one entry per line; never inside the project):
+
+```
+{schema_version: 0, analyzer_version?, indexed_at?, generator?,
+ kits: {<kit>: KitLicense{path, summary, restrictions[], source?}},
+ problems: [{path, message}],          # unreadable files, never fatal
+ entries: [LibraryIndexEntry]}
+```
+
+`LibraryIndexEntry` — only `path` (root-relative POSIX) is required, so a
+hand-written index of `{path, type, tags}` still validates:
+
+| field | meaning |
+|---|---|
+| `type` | `kick snare clap chat ohat hat tom cym rim perc drums fill bass keys synth guitar pad vox fx other` (`hat` = openness unknown, `drums` = multi-hit drum loop) |
+| `subtype` | `conga cowbell crash ride sidestick snares-off roll …` |
+| `kind` | `one-shot` \| `loop` (repeats on a grid) \| `phrase` (tempo-bound one-off: fills, rolls) |
+| `kit` | folder under `kits/` (else the top-level folder) |
+| `bpm`, `bpm_source` (`name`\|`detected`\|`name+detected`), `bpm_confidence` | loops/phrases only; one-shots carry no BPM (so they cannot be warped, R4) |
+| `key`, `key_confidence` | canonical `F#m`/`F#` (`muestra.music`), tonal loops only |
+| `duration_s sample_rate bit_depth channels peak_dbfs rms_dbfs loudness_lufs` | container + level facts (BS.1770 K-weighted LUFS) |
+| `clipping` | flat runs of ≥4 full-scale samples |
+| `features` | `AudioFeatures`: `fundamental_hz note attack_ms decay_ms spectral_centroid_hz sub low mid high air tonality` (band fields are energy shares 0..1) |
+| `tags`, `flags` | descriptive tags; heads-ups (`clipping low-level type-mismatch:… bpm-disagreement:… …`) |
+| `size mtime_ns sig` | incremental-index bookkeeping |
+
+Thresholds, vocabularies and ranking: `docs/library.md`.
+`muestra.library.core.lookup(project, uri) -> LibraryHit | None` searches
+the roots in order and returns the `LibraryHit` (`uri, root, path, type,
+subtype, kind, kit, bpm, key, duration_s, tags, flags, …`; an
+un-indexed file that exists still answers, with no bpm);
 `resolve(project, uri) -> Path` raises `file_not_found`.
+`LibraryHit` serialises without null/empty/false fields (compact LLM
+payloads): an absent key means the default.
+
+**Starter kits** — `starter-kits.json` inside a root
+(`schemas/starter-kits.schema.json`):
+`{schema_version, note?, kits: {<name>: {description, lanes: {<lane>:
+<root-relative path>}, notes?}}}`; a template for the owner's library
+ships in `muestra/library/data/`.
+
+## Library discovery
+
+`Project.library_dirs()` = `[library] roots` (project dir relative) →
+`MUESTRA_LIBRARY` (OS path-separated list) → `~/Documents/MuestraLibrary`
+if it exists and the env var is unset. An explicit `roots = []` in
+`muestra.toml`, or `MUESTRA_LIBRARY=none` / empty, disables the
+fallbacks. Implemented in `muestra.library.discovery`.
 
 ## HTTP API model (R11, `schemas/api.py`)
 
@@ -449,7 +492,7 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `chops.choose`, `chops.list` | `muestra.ingest.tools` | WP1; choose gains `chop_id` (writes that chop into song.yaml via ruamel) |
 | `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version` |
 | plugins hosting | `muestra.plugins` | WP3, no tools in spec 8 |
-| `library.index/search` | `muestra.library.tools` | WP4 |
+| `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5; restore = byte copy of snapshot |
 | `ears.analyze` | `muestra.ears.tools` | WP6 |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |
