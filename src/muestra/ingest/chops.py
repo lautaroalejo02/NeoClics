@@ -240,20 +240,22 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
             )
             local_bpm = 60 * length / (end - start)
             bpm = load_song(project).meta.bpm if project.song_path.exists() else local_bpm
-            from ..render.core import render_chop
+            from ..render.core import render_chop_loop
 
             try:
-                rendered = render_chop(project, chop, project.config.sample_rate, bpm)
+                # Two repeats crossfaded at the seam and the wrap (WP13).
+                looped = render_chop_loop(project, chop, project.config.sample_rate, bpm)
                 preview_sr = project.config.sample_rate
             except NotImplementedError:
                 rendered = fade(stereo(audio[round(start * sr) : round(end * sr)]), sr)
+                looped = np.tile(rendered, (2, 1))
                 preview_sr = sr
                 score.reasons.append(
                     "Preview sin warp: render_chop aún no está implementado; "
                     "extracto original con fundidos de 5 ms."
                 )
             preview = preview_dir / f"cand{number}.wav"
-            sf.write(preview, np.tile(rendered, (2, 1)), preview_sr, subtype="PCM_24")
+            sf.write(preview, looped, preview_sr, subtype="PCM_24")
             candidates.append(
                 ChopCandidate(
                     id=f"{set_id}/cand{number}",

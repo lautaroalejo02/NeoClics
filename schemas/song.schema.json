@@ -51,6 +51,7 @@
       "properties": {
         "fade_ms": {
           "default": 5.0,
+          "description": "Seam crossfade (ms) between back-to-back repeats; fade to/from silence only at the first start and last end of a run. 0 = hard cuts.",
           "maximum": 1000.0,
           "minimum": 0.0,
           "title": "Fade Ms",

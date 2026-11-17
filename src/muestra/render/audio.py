@@ -20,7 +20,7 @@ from ..project.core import Project
 
 # Bump whenever decoding/warping or its quality settings change.
 CACHE_ABI = (
-    f"render-3-pb{pedalboard.__version__}-numpy{np.__version__}"
+    f"render-4-pb{pedalboard.__version__}-numpy{np.__version__}"
     f"-scipy{scipy.__version__}-sndfile{sf.__libsndfile_version__}"
 )
 

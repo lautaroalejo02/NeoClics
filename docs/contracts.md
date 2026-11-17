@@ -245,7 +245,17 @@ input (`F#`/`Gb` kept as given, `A#`→`Bb`, `Db`→`C#`, …).
     project grid (pitch-preserving time-stretch), then the same
     length-preserving `pitch_semitones` shift.
   - `pitch_semitones` ∈ −24..24; 0 = no shift.
-- `fade_ms` (default 5): edge fades to prevent clicks.
+- `fade_ms` (default 5): **seam crossfade length** (WP13). Each placement
+  of the chop is rendered with `fade_ms` of extra source past its end (the
+  record continuing, warped at the same rate); when the next placement on
+  the same track starts on the exact frame where this one ends (the next
+  `repeat`, or another clip), that tail fades out with an equal-power
+  (sin/cos) crossfade while the next one fades in over the same length,
+  starting at the boundary — no level dip. Only the first start and the
+  last end of a contiguous run fade to/from silence (raised cosine,
+  `fade_ms`). `fade_ms: 0` = hard cuts. Sample clips use 5 ms the same way.
+  Placement stays sample-accurate; previews (`render_chop`, `preview
+  chop:<id>`) are one slot faded at both ends.
 
 ### tracks — exactly one of
 | kind | fields |
@@ -385,7 +395,14 @@ order**: master fx in listed order → loudness gain toward `target_lufs`
   count as the mix, sample-aligned. A muted track still gets a silent
   stem. Pattern tracks additionally write per-lane stems
   `stems/<track_id>.<lane>.wav` (pre track fx) for the metrics.
-- Length: exactly `range_bars`; tails are cut with a 5 ms fade-out.
+- Length: exactly `range_bars`. A partial range ends with a 5 ms fade-out.
+  **A full render is a loop** (WP13; the UI plays it seamlessly): the mix
+  and stems are not faded at the song end; a clip track whose run reaches
+  the song end and starts at bar 1 wraps (its last tail crossfades into
+  bar 1; its effects are processed 100 ms past the end with automation
+  holding its last value, and that continuation is crossfaded into the
+  cold start, so an automated intro filter does not cut at the wrap);
+  every other track is faded (5 ms) at the song end as before.
 - `range_bars = [start, end)`: 1-indexed, end EXCLUSIVE, requires
   `start < end ≤ length_bars + 1`.
 - `clip:<track>:<index>` preview targets use a **0-based** clip index.

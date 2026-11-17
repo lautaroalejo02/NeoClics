@@ -698,3 +698,13 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
    what to wire in (rewriting the arrangement for the human was judged
    riskier than one explicit agent step). Messages for the human are
    Spanish.
+4. **Seams crossfade; a full render is a loop.** Each chop/sample
+   placement carries a tail of the record past its end; contiguous
+   placements are joined by an equal-power crossfade starting at the
+   boundary (so the grid position and the downbeat stay where they were,
+   with the same `fade_ms` fade-in the old code had), fades to silence only
+   at run edges. `fade_ms` now means crossfade length. A full render's end
+   is not faded; wrapping clip tracks crossfade into bar 1 and get their
+   effects warmed 100 ms past the end. Why: the old per-repeat fade to zero
+   measured −30 to −88 dB dips at every repeat (an audible hiccup every 1–2
+   bars) and the UI loops renders. `CACHE_ABI` bumped (`render-4`).

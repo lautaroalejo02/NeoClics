@@ -171,7 +171,13 @@ class Chop(ContractModel):
     )
     length_beats: float = Field(gt=0, le=128)
     warp: Warp = Field(default_factory=Warp)
-    fade_ms: float = Field(default=5.0, ge=0.0, le=1000.0)
+    fade_ms: float = Field(
+        default=5.0,
+        ge=0.0,
+        le=1000.0,
+        description="Seam crossfade (ms) between back-to-back repeats; fade to/from "
+        "silence only at the first start and last end of a run. 0 = hard cuts.",
+    )
 
 
 # ---------------------------------------------------------------------------

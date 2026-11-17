@@ -66,6 +66,40 @@ mapping. Independent intervals can still colour sustained material at
 tempo discontinuities; the context/crossfade reduces seams, but listening
 is required to judge musical suitability.
 
+## Seams and the loop wrap (WP13)
+
+Chop and sample clips are rendered with a tail of extra source past their
+end (`fade_ms`, sample clips 5 ms). On a track, a placement that starts on
+the exact frame where another ends is joined by an equal-power crossfade
+that starts at the boundary: the tail fades out (cos), the next placement
+fades in (sin). Raised-cosine fades to/from silence happen only at the
+first start and the last end of a contiguous run. Resample chops are
+resampled with 20 ms of pre-roll and a tail guard, so the input fades that
+avoid circular-FFT ringing fall outside the kept audio; stretch chops add
+one more source segment at the last beat's speed.
+
+Measured with the auditor's seam metric (min 1 ms RMS within ±5 ms of the
+seam vs the local median) on a copy of `skill-check` (`other` stem,
+16-beat chop, 4 bars × 8): arranged seams went from −63/−85/−88 dB to
+−0.8/−1.3/−1.9 dB; 40 random non-seam spots of the same track measure a
+median of −6 dB on this metric (normal envelope variation). A chop looped
+by `render_chop_loop` (candidate previews): −1.4 dB (stretch) / −1.5 dB
+(resample), was −29.7 / −46.9 dB with the old faded slot. Render time is
+unchanged within this laptop's run-to-run noise (demo-e2e, warm cache:
+5.6–6.5 s new vs 4.4–7.5 s old).
+
+A full render is a loop: a clip track whose run reaches the song end and
+starts at bar 1 wraps its last tail onto bar 1, is not faded at the end,
+and its effects are processed 100 ms past the end (input wrapped to bar 1,
+automation holding its last value, sidechain triggers wrapped); that warm
+continuation is crossfaded linearly into the cold start. On skill-check
+(lowpass automated 18 kHz → 600 Hz across the wrap, chorus, sidechain) the
+`sample` stem's wrap prediction-error ratio went from 11.5 (ears
+`loop_seam_click`) to 0.9, and the mix's 1 ms dip at the wrap from −16 dB
+to −4.6 dB (bar 5/9/13 downbeats: −9.9/−5.6/−3.4 dB, the sidechain
+pump). The master chain still starts cold (not warmed); partial ranges
+still end with a 5 ms fade.
+
 ## Effects, automation, and sidechain
 
 Automation is right-continuous at duplicate positions, holds endpoint

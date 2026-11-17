@@ -20,7 +20,9 @@ def test_candidates_preview_fallback_diversity_and_manual(rhythmic_project):
     for candidate in result.candidates:
         data, sr = sf.read(project.path(candidate.preview))
         assert len(data) == round((candidate.end_s - candidate.start_s) * sr) * 2
-        assert np.max(abs(data[0])) == 0
+        # WP13: a seamless two-repeat loop (crossfaded seam and wrap), no gap.
+        mid = len(data) // 2
+        assert np.max(abs(data[mid - 2 : mid + 2])) > 0
         assert candidate.score.reasons
     candidate = result.candidates[0]
     chosen, chop, _, _ = choose(
@@ -42,9 +44,9 @@ def test_real_renderer_seam_and_auto_no_feedback(rhythmic_project, monkeypatch):
 
     def render(project, chop, sample_rate, bpm):
         calls.append((chop, sample_rate, bpm))
-        return np.ones((200, 2), dtype=np.float32) * 0.1
+        return np.ones((400, 2), dtype=np.float32) * 0.1
 
-    monkeypatch.setattr("muestra.render.core.render_chop", render)
+    monkeypatch.setattr("muestra.render.core.render_chop_loop", render)
     result, _ = find(project, source_id, ChopQuery(stem="mix", n=1, length_beats=4))
     assert calls[0][1] == project.config.sample_rate
     info = sf.info(project.path(result.candidates[0].preview))
@@ -82,7 +84,7 @@ def test_interrupted_preview_reserves_id(rhythmic_project, monkeypatch):
     def broken(*args):
         raise RuntimeError("renderer failed")
 
-    monkeypatch.setattr("muestra.render.core.render_chop", broken)
+    monkeypatch.setattr("muestra.render.core.render_chop_loop", broken)
     with pytest.raises(RuntimeError, match="renderer failed"):
         find(project, source_id, ChopQuery(stem="mix", n=1))
     monkeypatch.undo()
