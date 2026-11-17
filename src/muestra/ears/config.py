@@ -87,6 +87,10 @@ class Thresholds:
     click_min_db: float = -54.0  # absolute size of the jump (2nd difference), dBFS
     click_edge_window_ms: float = 0.06  # search +- around the expected edge (~3 samples)
     click_error_db: float = -30.0
+    # an instrument note that rises this much above what was sounding is a new
+    # attack (the preset's own transient, like a drum hit), not a click; measured
+    # on Surge 'FM Slap' onsets out of a release tail: +17.3..+17.6 dB (WP11).
+    click_onset_rise_db: float = 12.0
     # technical
     dc_warn_db: float = -45.0
     low_corr_warn: float = 0.5

@@ -35,9 +35,14 @@ steps, track window), note events (inline `notes` or the MIDI file,
 ticks = project beats), clip instances (`at_bar` + `offset_beats`, each
 `repeat`), sidechain triggers (R8: the key track's events, restricted to
 `key_lane`), all in render-relative seconds and convertible to
-bar/beat. Two contract gaps are assumptions to confirm with WP2: a
-pattern's tiles are anchored at the track's `at_bar`, and clip instances
-outside the track window are silent.
+bar/beat. Two contract gaps were assumptions and are now **confirmed
+against the renderer** (WP11, `render/core.py::arrange`): a pattern's
+tiles are anchored at the track's `at_bar`
+(`range(track.at_bar - 1, length_bars, pattern.bars)`, ears uses
+`(bar - at_bar) % bars`), and everything outside the track window is
+silent (`audio[:lo] = 0; audio[hi:] = 0`, then a 5 ms window fade), so
+clip instances outside it are silent and a clip crossing the window edge
+sounds only inside it.
 
 ## Output for a deaf agent
 
@@ -338,6 +343,74 @@ running); ~0.4 s of it is reading the wavs. Under pytest on a loaded
 CPU it measured up to ~4 s; the test only asserts < 12 s. Costs scale
 linearly with length x tracks. All audio is processed as float32;
 running sums are float64.
+
+## Validation on real renderer output (WP11, 2026-11-17)
+
+The synthetic corpus is a mini-renderer; WP11 checked ears against the
+product renderer on the demo project (`~/Documents/MuestraProjects/demo-e2e`:
+a 2-bar chop of the CC0 1928 "Tiger Rag" — tracked at 250 BPM,
+time-stretched to 125 — real htdemucs stems, `disco-01` kit, Surge XT
+`slap-bass`, SFZ `rhodes`, 16 bars). Variants differ from the clean song in
+one line each and were rendered with the `render` tool.
+
+| variant | expected | ears result |
+|---|---|---|
+| clean | no timing / click / sidechain / detune alarms | none of those; 2 real warns (see below) |
+| sidechain removed | `no_sidechain` | `info no_sidechain` |
+| sidechain depth 0.15 (nominal 1.4 dB) | weak, not missing | measured 2.57 dB: no alarm |
+| resample at 128 BPM (12·log2(128/250) = -11.59 st) | `sample_detuned` | `warn sample_detuned` 41.1 cents (predicted; matches) |
+| resample at 125 BPM (exactly -12 st) | nothing | nothing |
+| `fade_ms: 0` | click at chop edges | `warn click` -35.9 dBFS |
+| chop 30 ms early (`start_offset_beats: +0.0625`) | `grid_offset` ≈ -30 ms | `warn grid_offset` **-21.4 ms** (see below) |
+| chop 30 ms late (`start_offset_beats: -0.0625`) | `grid_offset` ≈ +30 ms | **missed** (no alarm) |
+
+Measured on the clean loop: sidechain dip 5.68 dB vs 6.02 nominal
+(dry reference found in `cache/stems/src1/<model-key>/other.wav` through
+`cache/stems/src1/active.json`), drums / bass / keys within ±2.6 ms of
+their events, key `D# major` (= Eb) at 0.88 confidence, `in_key`.
+
+**Fixed: instrument note onsets read as clicks.** The first real render
+raised `error click` on 59 bass note starts (Surge `FM Slap`). They are
+real steps — jump vs the next 5 ms is -1..-6 dB, like an un-faded cosine
+start (+3 dB) and unlike a smooth attack (-34 dB) — but each note rises
++17.3..+17.6 dB out of the previous note's release tail: it is the
+preset's own attack, the instrument equivalent of a drum hit (which ears
+already does not scan). A note start that rises at least
+`click_onset_rise_db` (12 dB) above what was sounding is now skipped;
+retriggers over a sustained sound and note ends are still scanned.
+
+**Clarified: `loudness_off_target` with a healthy PLR.** The clean loop
+ends at -13.0 LUFS against a -10 target with PLR 12 dB. Instrumented: the
+mix is -10.00 LUFS / +7.97 dBTP *before* the renderer's true-peak safety
+limiter (crest 18 dB: kick and clap far above a quiet sample), and the
+limiter's ~9 dB of peak reduction costs 3 LU. The alarm is right; its fix
+now names the cause (raise the quiet tracks / lower the drums, or lower
+the target to what the master gives) instead of "check master.gain_db",
+which cannot help because the renderer normalises toward the target.
+
+**Not fixed: sample grid alignment on dense live material.** The renderer
+places the chop exactly (cross-correlating the variant stems against the
+clean one: +30.0 / -30.0 ms). Ears does not follow: per-instance offsets
+are tight (clean -21.8 ms, the 8 repeats agree within 2.3 ms) but move
++59.7 ms for the late variant and +0.3 ms for the early one. On a 1928
+ragtime band there are onsets every 16th; which of them fall inside the
+±1/8-beat window changes with the shift, so the median is not a shift
+estimator on this material. The clean loop raised nothing only because
+its whole-track MAD (14.8 ms) is above the 8 ms gate; the early variant's
+alarm (-21.4 ms, MAD 6.1) has the same value as the clean loop's own
+distribution, i.e. it is a coincidence, not a detection. Thresholds were
+NOT changed: no single threshold separates these cases. Treat
+`grid_offset` on busy live records as unreliable in both directions;
+the reliable signals there are the drum/instrument event timings (exact)
+and the agent's own `start_offset_beats` changes. A fix needs a different
+estimator (e.g. onset-pattern cross-correlation against the dry stem
+mapped through the analysis grid), left for a later WP.
+
+Remaining warn on the clean loop: `spectral_sub_deficit` -9.3 dB vs the
+modelled "dance" reference (the bass enters at bar 5 and the kick is a
+62 Hz 909-style one). It is consistent with the material; whether it is
+a problem is exactly what the reference model cannot know (see
+"Spectral balance").
 
 ## Calibration corpus
 

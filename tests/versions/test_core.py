@@ -382,3 +382,27 @@ def test_use_config_only_without_identity_still_versions(project, global_gitconf
     global_gitconfig.write_text("[user]\n\tuseConfigOnly = true\n", encoding="utf-8")
     record_version(project, "v001", None, "x", None, None)
     assert git(project, "log", "-1", "--format=%an", "v001") == "Muestra"
+
+
+def test_ears_toml_is_versioned_like_muestra_toml(tmp_path):
+    """WP11: ears.toml (ears thresholds/reference) is committed with every
+    version; like muestra.toml it is configuration, so restore leaves it."""
+    import subprocess
+
+    from muestra.project import create_project
+    from muestra.versions.core import record_version, restore_files
+
+    project = create_project(tmp_path / "song")
+    ears = project.root / "ears.toml"
+    ears.write_bytes(b"[thresholds]\ntiming_warn_ms = 20.0\n")
+    record_version(project, "v001", None, None, None, None)
+    shown = subprocess.run(
+        ["git", "-C", str(project.root), "show", "v001:ears.toml"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    assert shown == b"[thresholds]\ntiming_warn_ms = 20.0\n"
+    ears.write_bytes(b"[thresholds]\ntiming_warn_ms = 30.0\n")
+    record_version(project, "v002", None, None, None, None)
+    restore_files(project, "v001")
+    assert ears.read_bytes().endswith(b"30.0\n")

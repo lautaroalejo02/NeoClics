@@ -7,7 +7,7 @@ from typing import Literal
 from pydantic import AwareDatetime, Field, model_serializer
 
 from ..schemas._base import ContractModel, VersionStr
-from ..schemas.metrics import Metrics
+from ..schemas.metrics import Metrics, MetricsDelta
 from ..schemas.render_meta import DiffEntry, RenderMeta
 from ..toolbase import ToolOutput
 
@@ -148,6 +148,11 @@ class VersionsDiffResult(ToolOutput):
         default_factory=list,
         description="Spanish phrases on how the metrics moved; empty unless both versions "
         "have a metrics.json.",
+    )
+    metrics_compare: MetricsDelta | None = Field(
+        default=None,
+        description="Structured ears comparison (loudness, brightness, low end, per-track "
+        "levels, alarms fixed/introduced/kept); null unless both versions have metrics.",
     )
     identical: bool = Field(
         default=False, description="True when the two songs have no structural difference."

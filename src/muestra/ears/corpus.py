@@ -519,10 +519,11 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
         f"schema_version = 0\nsample_rate = {sr}\nexport_bit_depth = 24\n\n"
         '[library]\nroots = ["library"]\n',
         encoding="utf-8",
+        newline="\n",
     )
     song_text = yaml.safe_dump(song, sort_keys=False, allow_unicode=True)
-    (root / "song.yaml").write_text(song_text, encoding="utf-8")
-    (vdir / "song.yaml").write_text(song_text, encoding="utf-8")
+    (root / "song.yaml").write_text(song_text, encoding="utf-8", newline="\n")
+    (vdir / "song.yaml").write_text(song_text, encoding="utf-8", newline="\n")
     beats = [round(start_s + i * src_spb, 6) for i in range(chop_beats + 4)]
     analysis = {
         "schema_version": 0,
@@ -543,7 +544,7 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
         subtype="FLOAT",
     )
     (root / "cache" / "analysis" / "src1.json").write_text(
-        json.dumps(analysis, indent=2), encoding="utf-8"
+        json.dumps(analysis, indent=2), encoding="utf-8", newline="\n"
     )
     sf.write(vdir / "mix.wav", mix.astype(np.float32), sr, subtype="PCM_24")
     tracks_meta = []
@@ -578,5 +579,5 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
         "mix": f"renders/{version}/mix.wav",
         "tracks": tracks_meta,
     }
-    (vdir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
+    (vdir / "meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8", newline="\n")
     return root

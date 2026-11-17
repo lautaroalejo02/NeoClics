@@ -1,9 +1,9 @@
 """Metrics delta between two versions, in Spanish (WP5).
 
-"el mix quedó 1.2 LU más fuerte; menos energía en graves". Uses the ears
-package's ``compare`` helper when it exists and returns phrases (the ears
-package may expose one later); otherwise a minimal delta is computed here
-from the two ``metrics.json`` files.
+Uses the ears package's structured comparison (``MetricsDelta``: loudness,
+brightness, low end, per-track levels, alarms fixed/introduced) and its
+Spanish notes; the local description is only a fallback for metrics files
+ears cannot compare.
 """
 
 from __future__ import annotations
@@ -13,14 +13,14 @@ from typing import TYPE_CHECKING
 
 from pydantic import ValidationError
 
-from ..schemas.metrics import Metrics
+from ..schemas.metrics import Metrics, MetricsDelta
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from ..project.core import Project
 
-__all__ = ["compare_metrics", "describe_metrics_delta", "load_metrics"]
+__all__ = ["compare_metrics", "describe_metrics_delta", "ears_delta", "load_metrics"]
 
 
 def load_metrics(project: Project, version: str) -> Metrics | None:
@@ -95,29 +95,25 @@ def _join(items: list[str]) -> str:
     return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" y {items[-1]}"
 
 
-def _ears_compare(a: Metrics, b: Metrics) -> list[str] | None:
-    """The ears package's own ``compare`` when it exists and returns phrases."""
-    try:
-        from ..ears import core as ears_core
-    except Exception:  # noqa: BLE001 - optional integration
-        return None
-    fn = getattr(ears_core, "compare", None)
-    if not callable(fn):
+def ears_delta(a: Metrics | None, b: Metrics | None) -> MetricsDelta | None:
+    """The ears package's structured delta (WP6 ``ears.report.compare_metrics``);
+    None when either side has no metrics or ears cannot compare them."""
+    if a is None or b is None:
         return None
     try:
-        res = fn(a, b)
-    except Exception:  # noqa: BLE001
+        from ..ears.report import compare_metrics as ears_compare
+    except ImportError:  # pragma: no cover - ears is part of the base install
         return None
-    if isinstance(res, str):
-        return [res] if res.strip() else []
-    if isinstance(res, (list, tuple)) and all(isinstance(x, str) for x in res):
-        return [x for x in res if x.strip()]
-    return None
+    try:
+        return ears_compare(a, b)
+    except Exception:  # noqa: BLE001 - a broken metrics file never blocks a diff
+        return None
 
 
 def compare_metrics(a: Metrics | None, b: Metrics | None) -> list[str]:
-    """Delta phrases for two metrics (either may be None -> nothing)."""
+    """Delta phrases for two metrics (either may be None -> nothing): the ears
+    notes when ears can compare them, else the local description."""
     if a is None or b is None:
         return []
-    via_ears = _ears_compare(a, b)
-    return via_ears if via_ears is not None else describe_metrics_delta(a, b)
+    delta = ears_delta(a, b)
+    return delta.notes if delta is not None else describe_metrics_delta(a, b)

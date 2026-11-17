@@ -13,7 +13,11 @@ step either, because the reference is taken before it.
 Scanned: clip-track stems (chop edges), instrument stems (note edges),
 and the loop seam (end -> start junction) of those stems (not of the mix,
 where the bar-1 kick is an intended attack). Drum lanes are not scanned:
-a drum hit IS an intentional discontinuity.
+a drum hit IS an intentional discontinuity. For the same reason an
+instrument note that starts out of (near) silence -- it rises at least
+``click_onset_rise_db`` above what was sounding -- is its preset's attack,
+not a click; note starts over a sustained sound (retriggers) and note ends
+are still scanned.
 """
 
 from __future__ import annotations
@@ -28,6 +32,16 @@ from .context import RenderContext
 __all__ = ["measure_clicks"]
 
 MAX_EVENTS = 24
+
+
+def _onset_rise_db(y: np.ndarray, i: int, sr: int) -> float:
+    """Level of the 5 ms after an edge over the 5 ms before it, dB."""
+    w = max(16, int(0.005 * sr))
+    pre = y[max(0, i - w) : i]
+    post = y[i : i + w]
+    if pre.size == 0 or post.size == 0:
+        return 0.0
+    return dsp.db(float(np.sqrt(np.mean(post * post)))) - dsp.db(float(np.sqrt(np.mean(pre * pre))))
 
 
 def _severity(jump_db: float, floor_db: float) -> float:
@@ -75,7 +89,7 @@ def measure_clicks(ctx: RenderContext) -> tuple[ClickReport, list[Alarm]]:
                 edges.append((c.end_s, "clip_end", c.ref, c.chop))
         elif track.instrument is not None:
             for n in tl.notes(track.id):
-                edges.append((n.t, "other", None, None))
+                edges.append((n.t, "note_start", None, None))
                 if n.dur_s:
                     edges.append((n.t + n.dur_s, "other", None, None))
         seen: list[int] = []
@@ -87,6 +101,10 @@ def measure_clicks(ctx: RenderContext) -> tuple[ClickReport, list[Alarm]]:
             ratio, jump, j = dsp.edge_discontinuity(y, i, sr, search, gap)
             if ratio < th.click_ratio or jump < min_jump:
                 continue
+            if edge == "note_start" and _onset_rise_db(y, i, sr) >= th.click_onset_rise_db:
+                continue  # a new attack out of (near) silence is the preset's transient
+            if edge == "note_start":
+                edge = "other"
             if any(abs(j - k) <= 2 * search for k in seen):
                 continue
             seen.append(j)

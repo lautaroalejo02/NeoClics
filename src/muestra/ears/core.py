@@ -125,6 +125,7 @@ def write_metrics(project: Project, version: str) -> tuple[Metrics, Path]:
     path.write_text(
         json.dumps(m.model_dump(mode="json"), indent=2, ensure_ascii=False) + "\n",
         encoding="utf-8",
+        newline="\n",
     )
     return m, path
 

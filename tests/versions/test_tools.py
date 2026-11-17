@@ -243,21 +243,18 @@ def test_diff_works_from_git_when_renders_are_deleted(three):
     assert data["changes"] == ["Bajé el bajo 2 dB"]
 
 
-def test_diff_with_metrics_appends_the_delta(project):
+def test_diff_with_metrics_appends_the_ears_delta(project):
+    """WP11: versions.diff uses the ears comparison (structured + its notes)."""
     write_song(project, song_text())
     fake_render(project, metrics=make_metrics(lufs=-14, low=-20))
     write_song(project, song_text(lambda d: track(d, "bass").update(gain_db=3)))
     fake_render(project, metrics=make_metrics(lufs=-12.8, low=-17, high=-33))
     data = ok(project, "versions.diff", a="v001", b="v002")
-    assert data["metrics_delta"] == [
-        "el mix quedó 1.2 LU más fuerte",
-        "más energía en graves",
-        "menos energía en agudos",
-    ]
-    assert data["musical_summary"] == (
-        "Subí el bajo 3 dB. El mix quedó 1.2 LU más fuerte; más energía en graves; "
-        "menos energía en agudos."
-    )
+    structured = data["metrics_compare"]
+    assert structured["loudness"] == "louder" and structured["lufs_delta"] == 1.2
+    assert data["metrics_delta"] == structured["notes"] and structured["notes"]
+    assert data["metrics_delta"][0].startswith("más fuerte")
+    assert data["musical_summary"].startswith("Subí el bajo 3 dB.")
 
 
 def test_get_meta_diff_entries_use_the_contract_name_from(project):
@@ -270,13 +267,18 @@ def test_get_meta_diff_entries_use_the_contract_name_from(project):
     assert data["meta"]["diff"] == [{"path": "meta.bpm", "from": 120, "to": 128}]
 
 
-def test_diff_uses_the_ears_compare_helper_when_it_exists(project, monkeypatch):
-    import muestra.ears.core as ears_core
+def test_diff_falls_back_to_the_local_delta_when_ears_cannot_compare(project, monkeypatch):
+    import muestra.ears.report as ears_report
 
-    monkeypatch.setattr(ears_core, "compare", lambda a, b: ["frase de ears"], raising=False)
-    fake_render(project, metrics=make_metrics())
-    fake_render(project, metrics=make_metrics(lufs=-5))
-    assert ok(project, "versions.diff", a="v001", b="v002")["metrics_delta"] == ["frase de ears"]
+    def broken(a, b):
+        raise ValueError("incomparable")
+
+    monkeypatch.setattr(ears_report, "compare_metrics", broken)
+    fake_render(project, metrics=make_metrics(lufs=-14))
+    fake_render(project, metrics=make_metrics(lufs=-12.8))
+    data = ok(project, "versions.diff", a="v001", b="v002")
+    assert data["metrics_delta"] == ["el mix quedó 1.2 LU más fuerte"]
+    assert data["metrics_compare"] is None
 
 
 def test_diff_ignores_metrics_when_only_one_side_has_them(project):

@@ -108,7 +108,7 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
     assert order == ["validate", "allocate", "record", "audio", "ears"]
     assert result.meta.git_commit == "a" * 40
     assert result.meta.parent == "v001"
-    assert result.metrics is not None and result.metrics_path
+    assert result.metrics_summary is not None and result.metrics_path
     assert result.meta.range_bars == (1, 3)
     assert result.meta.duration_s == 4
     assert result.stem_paths == {"sample": "renders/v100/stems/sample.wav"}
@@ -127,7 +127,7 @@ def test_ears_stub_returns_success_hint_and_removes_stale_metrics(
     save_song(project, small_song())
     result = run_tool("render", {"project": str(project.root)})
     assert result.ok
-    assert result.data["metrics"] is None
+    assert result.data["metrics_summary"] is None
     assert result.data["hint"]
     assert result.data["metrics_path"] is None
     project.path("renders/v100/metrics.json").write_text("stale", encoding="utf-8")

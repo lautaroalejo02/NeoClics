@@ -272,10 +272,42 @@ class Runtime:
             return result
 
 
+def _render_text(data: dict) -> str:
+    """A render lands in the agent's context on every iteration: say what was
+    made, what changed and what ears heard, in a few lines (the full envelope
+    stays in structured content; metrics.json has the detail)."""
+    meta = data.get("meta") or {}
+    parent = meta.get("parent")
+    head = (
+        f"render OK: {data['version']}"
+        + (f" (parent {parent})" if parent else "")
+        + f" · bars {meta.get('range_bars')} · {meta.get('duration_s', 0):.2f} s audio"
+        + f" · rendered in {meta.get('render_time_s', 0):.1f} s"
+    )
+    stems = ", ".join(t["id"] for t in meta.get("tracks", []))
+    lines = [head, f"mix: {data['mix_path']}" + (f" · stems: {stems}" if stems else "")]
+    diff = meta.get("diff") or []
+    if diff:
+        shown = "; ".join(f"{d['path']} {d.get('from')!r}→{d.get('to')!r}" for d in diff[:8])
+        more = f" (+{len(diff) - 8} more)" if len(diff) > 8 else ""
+        lines.append(f"changes vs {parent}: {shown}{more}")
+    if data.get("metrics_summary"):
+        lines.append(data["metrics_summary"].rstrip())
+        lines.append(f"(full metrics: {data.get('metrics_path')})")
+    if data.get("hint"):
+        lines.append(f"hint: {data['hint']}")
+    return "\n".join(lines)
+
+
 def compact_result(result: ToolResult, project: Path | None = None) -> str:
     import json
 
     location = str(project) if project else "No project selected"
+    if result.ok and result.tool == "render" and isinstance(result.data, dict):
+        try:
+            return f"Project: {location}\n" + _render_text(result.data)
+        except (KeyError, TypeError, ValueError):
+            pass  # fall back to the full envelope
     return f"Project: {location}\n" + json.dumps(
         result.model_dump(mode="json"), ensure_ascii=False, separators=(",", ":")
     )

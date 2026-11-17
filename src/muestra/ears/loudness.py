@@ -96,8 +96,17 @@ def measure_loudness(ctx: RenderContext) -> tuple[Loudness, list[Alarm]]:
             why = "el limitador ya está al tope y no deja llegar más fuerte"
             fix = f"bajá `master.target_lufs` a {round(integrated):g} (lo que el master da)."
         elif delta < 0:
-            why = "suena más bajo de lo pedido"
-            fix = "revisá `master.gain_db` y los `gain_db` de los tracks."
+            # The renderer gains toward the target and then the true-peak safety
+            # limiter caps it: a miss with a healthy PLR means a few peaks (usually
+            # kick/clap) sit far above the rest (WP11: demo loop, crest 18 dB before
+            # the safety limiter, -10.0 -> -13.0 LUFS).
+            why = (
+                "el limitador de seguridad recortó los picos (bombo/clap muy por encima del resto)"
+            )
+            fix = (
+                "subí los `gain_db` de los tracks que suenan bajos (sample, bajo) o bajá "
+                f"los de la batería; o bajá `master.target_lufs` a {round(integrated):g}."
+            )
         else:
             why = "suena más fuerte de lo pedido"
             fix = f"revisá `master.gain_db` (hoy {ctx.song.master.gain_db:g})."

@@ -20,7 +20,6 @@ from ..ears import core as ears
 from ..errors import MuestraError
 from ..project import load_song, open_project, validate_song
 from ..schemas._base import IdStr, RelPath, VersionStr
-from ..schemas.metrics import Metrics
 from ..schemas.render_meta import RenderMeta
 from ..schemas.song import BEATS_PER_BAR
 from ..toolbase import ProjectScoped, ToolOutput
@@ -179,8 +178,14 @@ class RenderResult(ToolOutput):
     stem_paths: dict[IdStr, RelPath] = Field(default_factory=dict)
     meta_path: RelPath
     meta: RenderMeta
-    metrics_path: RelPath | None = None
-    metrics: Metrics | None = None
+    metrics_path: RelPath | None = Field(
+        default=None, description="renders/vNNN/metrics.json: the full ears report."
+    )
+    metrics_summary: str | None = Field(
+        default=None,
+        description="Compact Spanish ears summary (headline + worst alarms with their "
+        "song.yaml fixes); the full detail is in metrics_path.",
+    )
     hint: str | None = Field(
         default=None,
         description="Agent-facing note when metrics or history metadata are unavailable.",
@@ -296,6 +301,11 @@ def render(p: RenderParams) -> RenderResult:
         hints.append(
             "Audio rendered; metrics unavailable until the WP6 ears analyzer is installed."
         )
+    except Exception as exc:  # noqa: BLE001 - a metrics failure never loses a render
+        hints.append(
+            f"Audio rendered; ears could not analyze it ({type(exc).__name__}: {exc}). "
+            f"Retry with ears.analyze version={version}."
+        )
     if metrics is not None:
         _write_json(directory / "metrics.json", metrics)
         metrics_path = f"{relative}/metrics.json"
@@ -311,7 +321,7 @@ def render(p: RenderParams) -> RenderResult:
         stem_paths={t.id: t.stem for t in meta.tracks},
         meta_path=f"{relative}/meta.json",
         meta=meta,
-        metrics=metrics,
+        metrics_summary=metrics.summary if metrics is not None else None,
         metrics_path=metrics_path,
         files=files,
         hint=" ".join(hints) or None,
