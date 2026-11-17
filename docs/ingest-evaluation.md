@@ -3,8 +3,8 @@
 CPU-only Windows 11; no listening claims, paid services, commercial recording
 downloads, or LLM inference. Audio stays outside this repository.
 **The final consolidated tables at the end supersede the historical checkpoints
-below**, including their pending statements. Final validation/control runs are
-still running at this checkpoint.
+below**, including their pending statements. Final whole-repository validation
+passes; one additional separation control is still running at this checkpoint.
 
 ## Material and provenance
 
@@ -316,7 +316,29 @@ a provisional vocal-cleanup option, not a default: Disco 20 s gives ~8.6x
 less vocal projection and +3.74 dB vocal SDR, but more drum projection and
 ~11x CPU. Do not extrapolate its four-minute time or peak RAM. Existing
 `model` overrides already implement these tiers; no new config/schema alias.
-Additional Funk Jazz/Britpop 20-second controls are still running.
+Additional 20-second controls (same reference gate and metrics):
+
+| Track | Model | CPU s | Peak MiB | Drums SDR | Bass SDR | Vocals SDR | Other SDR |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Funk Jazz | htdemucs | 35.39 | 1152 | 13.00 | 17.05 | n/a | 16.66 |
+| Funk Jazz | htdemucs_ft | 138.64 | 1682 | 13.32 | 16.48 | n/a | 16.11 |
+| Funk Jazz | mel-roformer+htdemucs | 457.59 | 2630 | 13.00 | 17.05 | n/a | 16.65 |
+| Britpop | htdemucs | 38.07 | 1117 | 9.81 | 9.12 | 10.16 | 8.65 |
+| Britpop | htdemucs_ft | 150.01 | 1666 | 10.33 | 9.80 | 10.61 | 8.95 |
+
+| Track/model | Vocal projection into other | Bass projection | Drum projection |
+|---|---:|---:|---:|
+| Funk Jazz / htdemucs | no vocal reference | .04374% | .03739% |
+| Funk Jazz / htdemucs_ft | no vocal reference | .12547% | .04402% |
+| Funk Jazz / RoFormer hybrid | no vocal reference | .04387% | .03736% |
+| Britpop / htdemucs | .97777% | .39583% | .16736% |
+| Britpop / htdemucs_ft | .83192% | .34713% | .14332% |
+
+These controls strengthen the decision NOT to change the default: FT loses
+.56 dB bass and .54 dB other SDR on instrumental Funk Jazz, with ~2.9x
+more bass projection into other; RoFormer adds almost no value there.
+Britpop RoFormer is the one remaining running control. Raw checkpoints:
+`separation-controls-20s.{md,json}` in the external evaluation directory.
 
 ## Final chop results
 
@@ -362,12 +384,23 @@ Runtime: Python 3.12.16; numpy 2.5.5; scipy 1.18.1; torch 2.15.0;
 beat-this 1.1.0 (final0 CPU, no DBN); mir_eval .8.2; demucs-infer 4.4.0;
 audio-separator .48.0. No new product dependency or schema change.
 
-Validation checkpoint: first whole suite **844 passed, 10 skipped**, 1070.19 s
-(before the last five added tests); current ingest **76 passed, 3 skipped**,
-57.62 s; opt-in real-track test **1 passed** (three tracks), 78.28 s, two
-upstream Torch autocast warnings. Ruff check passes, format check reports
-**249 files already formatted**. Final whole-suite rerun/clean-tree verification
-is in progress; final counts and disk usage will be appended.
+Final whole suite: **849 passed, 10 skipped**, **962.29 s**. Ruff check passes;
+format check: **249 files already formatted**. Ingest-only: **76 passed,
+3 skipped**, 57.62 s. Opt-in real-track test: **1 passed** (three tracks),
+78.28 s, two upstream Torch autocast warnings. A final diagnostic-text encoding
+repair is additionally covered by **6 pulse tests passed**, 3.64 s, and repeat
+ruff/format checks. No audio/model downloads are required by default tests.
+
+The unannotated real-audio smoke run also passed: 80s Rock, zero annotation
+metrics invented, five actual stereo 20-second click WAVs, grid alternatives
+and reliability map, `ask_human=true`. Click headers and file existence were
+checked; no listening was performed.
+
+All source downloads are **1,340,076,252 bytes**. The evaluation directory,
+including duplicate audit-project imports and derived previews, currently uses
+about **3.1 GiB**, slightly over the intended approximate 3 GB budget. A cleanup
+of reproducible oracle-fusion audit copies was refused by environment policy;
+no source data was deleted. Final disk usage/clean-tree status follows below.
 
 Needed outside ingest: optional typed tool/UI source selector for instrumental
 and no-drums sources (CLI plus existing contracts already works), and agent/UI

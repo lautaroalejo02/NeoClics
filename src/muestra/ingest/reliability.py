@@ -61,7 +61,7 @@ def assess_reliability(analysis: Analysis, pulse: PulseEvidence | None = None) -
             else "Saltos locales de tempo; revisar los clicks."
         )
         if not audible:
-            reason = "Sin ataques periÃ³dicos suficientes sobre los beats; pulso no verificado."
+            reason = "Sin ataques regulares suficientes sobre los beats; pulso no verificado."
         bars.append(
             GridBar(
                 start_s=start,

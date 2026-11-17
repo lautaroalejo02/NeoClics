@@ -229,9 +229,11 @@ downbeats agree on it. Sections are snapped to the corrected downbeats.
 
 Confidence is a documented heuristic, not a probability: tempo 0.85 when only
 the tracked octave fits, 0.5 when two octaves fit the range, 0.7 after an
-octave correction, 0.25 when none fits; bar phase = the tracked four-beat-bar
-consistency, but 0.5 after halving (the tracker cannot say which of its two
-half-bar downbeats is the real "one"). `ask_human` when either is < 0.6.
+octave correction, 0.25 when none fits. The bar-phase base is tracked
+four-beat-bar consistency, or 0.5 after halving (which half-bar is the one is
+ambiguous). WP19 caps automatic bar-phase confidence at 0.55: meter regularity
+does not verify the one. Manual corrections retain their existing confidence.
+`ask_human` when either confidence is < 0.6.
 `grid.alternatives` lists the other readings as ready-to-pass `source.regrid`
 parameters (half/double, "the one two beats later", the other beat phase,
 the one ±1 beat). Analyses cached before WP12 are upgraded on the next
