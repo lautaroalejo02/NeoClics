@@ -77,7 +77,9 @@ Every problem is an `Issue`:
 
 - `data`: the tool's result model serialized; `files`: project-relative
   POSIX paths of generated/updated files (mirrored from the result's own
-  `files` field); `hint`: short agent-facing note on failure.
+  `files` field); `hint`: short agent-facing note on failure, and (WP12) the
+  result's own nonfatal `hint` on success (render, source.analyze,
+  source.regrid, plugins.list...).
 - Failures come back `ok: false` with all `Issue`s — tools raise
   `MuestraError`, never return partial data.
 - **Registration is decentralised** (merge-safety): each subpackage owns
@@ -245,6 +247,9 @@ input (`F#`/`Gb` kept as given, `A#`→`Bb`, `Db`→`C#`, …).
 | pattern | `pattern: Pattern` |
 | instrument | `instrument: Instrument` **and** exactly one of `midi: FileRef` or inline `notes` |
 
+Instrument tracks (WP12) may also take `phrases: [PhrasePlacement]`
+(with or without `notes`, never with `midi`); see *phrases* below.
+
 Every track also has `at_bar` (default 1) and `until_bar` (exclusive,
 default `length_bars + 1`): the window in which the track sounds —
 "drums enter at bar 5" is one field. `at_bar < until_bar ≤
@@ -259,6 +264,19 @@ Inline `notes`: `[{beat, pitch, length_beats, velocity}]` — `beat`
 
 MIDI files: ticks/ppq are **project beats at `meta.bpm`**; tick 0 = bar 1
 beat 1; tempo and time-signature events inside the file are ignored.
+
+### phrases (WP12)
+Top level `phrases: [{id, length_bars (1..64), notes: [{beat, pitch,
+length_beats, velocity}]}]` — `beat` is 1-indexed INSIDE the phrase and must be
+< `length_bars`·4 + 1. On an instrument track, `phrases: [{phrase, at_bar?,
+repeat?, transpose_semitones (−24..24, 0)}]`: `at_bar` defaults to the track's
+`at_bar` and must lie in the track window; `repeat` = passes (an overrun of
+`until_bar`/song end is `clip_overrun`); **omitted `repeat` loops the phrase
+until the track window ends**, the last pass cut. Notes past the window end are
+dropped; transposed pitches must stay 0-127 (`out_of_range`); unknown phrase =
+`ref_not_found`. `Song.track_notes(track)` returns the expanded song-beat notes
+(inline `notes` + phrases, sorted); the renderer and ears use it. Phrase ids are
+unique (`duplicate_id`).
 
 ### clips
 `{chop | sample, length_beats?, warp?, at_bar, offset_beats, repeat}`
@@ -357,7 +375,18 @@ order**: master fx in listed order → loudness gain toward `target_lufs`
 `downbeats_s` (sorted, ≥1), `key{tonic,mode∈major|minor,confidence}`,
 `sections[{label,start_s,end_s}]` (non-overlapping, sorted),
 `loudness_lufs`, `stems{drums?,bass?,vocals?,other?}` (≥1 present),
-`separation_model`, `schema_version`.
+`separation_model`, `schema_version`, and (WP12) `grid?`:
+
+`GridCorrection{origin∈tracker|auto|manual, tempo_factor∈0.5|1|2,
+beat_phase∈0|1, downbeat_shift_beats (−16..16), beats_per_bar (2..12, 4),
+tempo_range_bpm, raw{bpm_global, tempo_variable, beats_s, downbeats_s},
+tempo_confidence, bar_phase_confidence, ask_human, reason (Spanish),
+alternatives[{tempo_factor, beat_phase, downbeat_shift_beats, bpm, label}],
+history[{at, origin∈auto|manual|reset, tempo_factor, beat_phase,
+downbeat_shift_beats, beats_per_bar}]}`. `beats_s`/`downbeats_s`/`bpm_global`
+are always the EFFECTIVE grid (`raw` corrected by the parameters, absolute
+w.r.t. the tracker); absent `grid` = the tracker grid as-is. Method and
+numbers: `docs/ingest.md` ("Grid correction").
 
 ## `renders/vNNN/` output format (R7)
 
@@ -397,7 +426,7 @@ reorders `tracks` / `tracks.<id>.fx` (full grammar: `docs/versions.md`),
 | `loudness` | `integrated_lufs, true_peak_dbtp, clipping, clipped_samples` + (WP6) `sample_peak_dbfs, short_term_max_lufs, lra_lu, target_lufs, target_delta_lu, plr_db, crest_factor_db` | loudness/peak/clipping/dynamics |
 | `spectral` | `bands_hz` + `mix` + `tracks{}` of `{low_db,mid_db,high_db}`; fixed bands 20–250 / 250–4k / 4k–20k Hz + (WP6) `detail_bands_hz` (7 nested bands), `mix_detail_db` (shares), `tracks_detail_db`, `reference`, `deviation_db` | band balance mix+track vs a reference tilt |
 | `low_end_masking` | `band_hz` (40–150), `energy_db{track}`, `dominant_track` + (WP6) `kick`, `pairs[]`, `collisions[{at_s,bar,beat,track,kick_db,track_db,margin_db}]`, `sidechain[{track,depth,expected_dip_db,measured_dip_db,recovery_ms,ducking,…}]` | kick/bass/sample masking + sidechain audible |
-| `alignment` | `tracks{track: {mean_offset_ms,max_abs_offset_ms,n_transients}}`, `max_abs_offset_ms` + (WP6) per track `basis, median_offset_ms, mad_ms, p90_abs_offset_ms, drift_ms, pulse_share, offbeat_offset_ms, histogram_ms, flagged[], clips[]` and `lanes{"<track>.<lane>"}` | grid alignment |
+| `alignment` | `tracks{track: {mean_offset_ms,max_abs_offset_ms,n_transients}}`, `max_abs_offset_ms` + (WP6) per track `basis, median_offset_ms, mad_ms, p90_abs_offset_ms, drift_ms, pulse_share, offbeat_offset_ms, histogram_ms, flagged[], clips[]` and `lanes{"<track>.<lane>"}` + (WP12, clip tracks) `verified, confidence, onsets_per_beat, window_spread_ms` | grid alignment |
 | `tonal` | `estimated KeyEstimate?`, `target_key`, `tonic_match`, `mode_match`, `in_key` + (WP6) `compatible`, `source`, `tracks{}`, `detune[]`, `bass_vs_sample[]` | key coherence + detune |
 | `clicks` | `count`, `events[{track,at_s,severity}]` + (WP6) `bar, beat, edge, clip, chop, ratio, level_db` per event | chop-edge / seam clicks |
 | `style_similarity?` | `model`, `references[{reference,score}]`, `mean_score` | optional CLAP/MERT (hook only in v1) |
@@ -492,8 +521,10 @@ payloads): an absent key means the default.
 **Starter kits** — `starter-kits.json` inside a root
 (`schemas/starter-kits.schema.json`):
 `{schema_version, note?, kits: {<name>: {description, lanes: {<lane>:
-<root-relative path>}, notes?}}}`; a template for the owner's library
-ships in `muestra/library/data/`.
+<root-relative path>}, notes?, patterns?: {<name>: {description, bars,
+steps: {<lane>: <16·bars step chars>}}}}}}`; a template for the owner's library
+ships in `muestra/library/data/`. `patterns` (WP12) must use the kit's lanes;
+the curated kits have `basic`, `busy`, `fill` (+ `phrase` with a crash).
 
 ## Library discovery
 
@@ -514,8 +545,10 @@ fallbacks. Implemented in `muestra.library.discovery`.
   metrics, analyses) comes from `GET /project`, never from `/files`.
 - `GET /project` (alias `/project/summary`): `{project_path, config, song,
   versions: [{version, meta, metrics, feedback}], candidate_sets,
-  analyses: {<src>: Analysis}, feedback, feedback_cursor, feedback_skipped,
-  issues}` — the one shape the UI boots from (WP11).
+  analyses: {<src>: Analysis}, grid_previews: {<src>: index.json of
+  source.preview_grid} (WP12), feedback, feedback_cursor, feedback_skipped,
+  issues}` — the one shape the UI boots from (WP11). Candidate-set fingerprint
+  sidecars (`csNNN.meta.json`) are no longer reported as invalid sets.
 - `GET /waveform?path=<audio>&points=N` (alias `/waveform/peaks`):
   `{path, sample_rate, frames, duration_s, points, channels: [{min, max}]}`.
 - Tool status codes: success 200; expected tool failure 422 (500
@@ -527,7 +560,8 @@ fallbacks. Implemented in `muestra.library.discovery`.
   tools simply block.
 - Events on websocket `/events`: `WsEvent{type, ts, data}` with
   `type ∈ job.updated | version.created | candidates.created |
-  feedback.appended | song.changed`. `version.created` data is
+  feedback.appended | song.changed | grid.changed` (WP12: `{source_id}` when an
+  analysis or its grid click previews change). `version.created` data is
   `{version, meta, metrics}` and is re-sent (upsert) when `metrics.json`
   lands after `meta.json`; a websocket that connects receives
   `job.updated` for every queued/running job first. The API server produces them by
@@ -549,11 +583,12 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `project.create/open` | `muestra.project.tools` | real |
 | `song.get/validate` | `muestra.project.tools` | real; `check_files` param |
 | `feedback.read/append` | `muestra.feedback.tools` | real; cursor + skipped reporting |
-| `source.import/separate/analyze/find_chops` | `muestra.ingest.tools` | WP1 |
+| `source.import/separate/analyze/find_chops` | `muestra.ingest.tools` | WP1; WP12: `source.analyze` takes `min_bpm`/`max_bpm`, returns `analysis` as an `AnalysisSummary` (no beat lists; read the file) + `grid: GridReport` + `hint` |
+| `source.regrid`, `source.preview_grid` | `muestra.ingest.grid_tools` (registered via `ingest.tools.TOOLS`) | WP12; see `docs/ingest.md` "Grid correction" |
 | `chops.choose`, `chops.list` | `muestra.ingest.tools` | WP1; choose gains `chop_id` (writes that chop into song.yaml via ruamel) |
 | `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version`; its result carries `metrics_summary` (compact ears text) + `metrics_path`, never the full metrics (WP11) |
-| plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py |
-| `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
-| `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta` (ears notes), `metrics_compare` (ears `MetricsDelta`), `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
-| `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary`; compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
+| plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py. WP12: `plugins.list` default = aliases + plugins + `preset_counts` + `categories`; presets only with `query`/`plugin`/`category` (`limit` 30, cap 100, `offset`, `matched`, `next_offset`); `detail` adds paths/parameter names |
+| `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. WP12: `library.kits` takes `pattern=<name>` and returns the kit's `patterns{name: description}`. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
+| `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); WP12: `versions.get` returns `metrics_summary` + `metrics_path` by default, the full `metrics` and `song_yaml` only with `detail=true`; restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta` (ears notes), `metrics_compare` (ears `MetricsDelta`), `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
+| `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary` (WP12: `metrics` only with `detail=true`); compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

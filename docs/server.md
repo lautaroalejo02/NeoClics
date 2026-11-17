@@ -89,6 +89,7 @@ Feedback emits only after a complete newline-terminated, valid event is present.
 | `candidates.created` | `{set_id, source_id}` |
 | `feedback.appended` | The validated feedback event |
 | `song.changed` | `{}` |
+| `grid.changed` | `{source_id}` — `source.regrid` rewrote `cache/analysis/<src>.json` (stale candidate sets were retired) or `source.preview_grid` wrote `cache/previews/<src>/grid/index.json` (WP12); refresh `/project` (`analyses`, `grid_previews`, `candidate_sets`) |
 
 Treat version/candidate events as **upserts**, keyed by ID: metadata and later metrics writes
 can announce the same version again, and a manual chop selection changes an existing set.

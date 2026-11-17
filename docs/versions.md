@@ -131,7 +131,15 @@ tracks.bass.fx[1].ratio   (fx w/o id)      master.fx.limiter.ceiling_db
 tracks.drums.fx.hp2       (added fx)       master.fx[0].ratio
 automation.tracks.sample.fx.lp.cutoff_hz.points   (automation keyed by target)
 tracks    /  tracks.<id>.fx   (reorder)
+phrases.riff.length_bars                   phrases.riff.notes[3].pitch      (WP12)
+tracks.bass.phrases[0].transpose_semitones (placements aligned like clips)
 ```
+
+Phrases (WP12) are matched by id; their notes are aligned like inline notes;
+a track's phrase placements are aligned by phrase id or start bar. The Spanish
+description says "El bajo ahora repite la frase riff de 2 compases desde el
+compás 5", and rewriting inline notes as phrases (or back) is ONE sentence that
+ends in "(suena igual)" when the expanded notes are identical.
 
 * Elements are matched by id (sources, chops, tracks, lanes, fx with an id,
   automations by target), so inserting/deleting/reordering never shifts

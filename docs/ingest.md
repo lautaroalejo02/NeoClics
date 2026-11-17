@@ -200,6 +200,65 @@ increasing and inside the file. Downbeats must match distinct beats within
 tempo_variable means the 90th-to-10th percentile interval spread exceeds
 4% of its median. Interval outliers can still inflate that flag.
 
+**Grid correction (WP12).** The tracker's output is kept verbatim in
+`analysis.grid.raw` (`bpm_global`, `tempo_variable`, `beats_s`, `downbeats_s`)
+and the top-level `beats_s`/`downbeats_s`/`bpm_global` are the EFFECTIVE grid
+that chop timing, warp, previews and ears read (no consumer changed).
+`source.analyze` picks the tempo octave: of the tracked tempo, its half and its
+double, the one inside `[min_bpm, max_bpm]` (default 70-160; the tracked tempo
+wins if it fits, else the one in 90-135) — Tiger Rag 250 -> 125. Halving keeps
+every second tracked beat (`beat_phase`: the parity holding most tracked
+downbeats); doubling inserts the midpoint. Downbeats: when the tracked bars
+already have `beats_per_bar` corrected beats, the tracker's own downbeats are
+kept (shifted by `downbeat_shift_beats`), so local irregularities survive;
+otherwise bars are rebuilt every `beats_per_bar` beats, phase-locked to the
+tracked downbeats, adopting a new phase only when two consecutive tracked
+downbeats agree on it. Sections are snapped to the corrected downbeats.
+
+Confidence is a documented heuristic, not a probability: tempo 0.85 when only
+the tracked octave fits, 0.5 when two octaves fit the range, 0.7 after an
+octave correction, 0.25 when none fits; bar phase = the tracked four-beat-bar
+consistency, but 0.5 after halving (the tracker cannot say which of its two
+half-bar downbeats is the real "one"). `ask_human` when either is < 0.6.
+`grid.alternatives` lists the other readings as ready-to-pass `source.regrid`
+parameters (half/double, "the one two beats later", the other beat phase,
+the one ±1 beat). Analyses cached before WP12 are upgraded on the next
+`source.analyze`: if a song chop uses the source, the grid is NOT changed
+(`origin: tracker`, `reason` says what to call); otherwise the automatic
+octave is applied.
+
+`source.regrid(source_id, tempo_factor?, beat_phase?, downbeat_shift_beats?,
+beats_per_bar?, reset?, update_song=true)` re-derives the effective grid from
+the raw one. Parameters are ABSOLUTE w.r.t. the tracker (idempotent; `reset`
+gives the raw grid back; a changed `tempo_factor` resets the shift unless
+given). Song chops on that source are rewritten to cut the SAME audio
+(`start_downbeat` = the corrected downbeat at or before the old start,
+`start_offset_beats` = the remainder, `length_beats` scaled), validated before
+anything is written; the result reports, per chop, before/after fields and
+seconds, `same_audio`, the resample rate before/after and a Spanish `note`
+(including the downbeat to use to start on the corrected "one"), plus
+`suggested_bpm` (keeps the chops' speed when the tempo factor changed).
+Candidate sets of the source are moved to `cache/chops/<src>/stale/` (their
+preview folders stay, so set ids are never reused).
+
+`source.preview_grid(source_id, start_downbeat?, bars=8, stem=mix, <grid
+params>?, alternatives?)` writes `cache/previews/<src>/grid/<stem>-<hash>.wav`:
+the source from that downbeat with a 1 kHz click on every beat (-12 dBFS)
+and a 2 kHz, longer, louder click on every downbeat (-6 dBFS), the music at
+-3 dB, 24-bit at the source rate; with grid params it auditions that grid
+without applying it, with `alternatives` one file per listed alternative.
+`index.json` next to them lists the latest batch for the UI (older click
+files are pruned).
+
+Measured on Tiger Rag (first 30 s, `other` stem, chop 15.28-19.18 s, project
+126.32 BPM, resample): on the raw grid the chop plays at x0.516 (-11.46 st)
+and the record's eighth notes land every 0.98 project beats (an octave down,
+half speed; ears alignment median 14.6 ms, p90 49 ms); after
+`regrid tempo_factor=0.5` it plays at x1.026 (+0.45 st), eighths every 0.492
+beats, ears median 4.0 ms, p90 15.9 ms, pulse share 1.0, with ordinary 16-step
+patterns. Nobody listened: whether 125 and that "one" are musically right is
+the human's call via `source.preview_grid`.
+
 Because v0 only supports 4/4, analysis rejects an inferred grid when fewer
 than 75% of bar intervals contain four beats. Chop discovery additionally
 requires each traversed complete bar to have four beats and a detected
