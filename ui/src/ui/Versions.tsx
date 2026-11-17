@@ -15,6 +15,7 @@ export function VersionsPanel() {
   const b = useApp((s) => s.b);
   const active = useApp((s) => s.active);
   const blind = useApp((s) => s.blind);
+  const diffs = useApp((s) => s.diffs);
   const eng = useEngine();
   useTick(30_000);
   const rows = useMemo(() => versionTree(versions, metas), [versions, metas]);
@@ -104,6 +105,23 @@ export function VersionsPanel() {
                   </div>
                   {meta?.request && <p className="vreq">{meta.request}</p>}
                   {r.summary && <p className="vsum">{r.summary}</p>}
+                  {expanded && r.parent && (() => {
+                    const md = diffs[r.version];
+                    if (md === "loading") return <p className="hint">Leyendo los cambios…</p>;
+                    if (md === "error" || !md) return null;
+                    return (
+                      <div className="musical-diff" data-testid={`musical-diff-${r.version}`}>
+                        {md.changes.length > 0 && (
+                          <ul className="changes" aria-label={`Qué cambió respecto de ${r.parent}`}>
+                            {md.changes.map((c, i) => (
+                              <li key={i}>{c}</li>
+                            ))}
+                          </ul>
+                        )}
+                        {md.metrics.length > 0 && <p className="hint">Oídos: {md.metrics.join("; ")}</p>}
+                      </div>
+                    );
+                  })()}
                   {expanded && diff.length > 0 && (
                     <ul className="diff" aria-label={`Cambios vs ${r.parent ?? "la anterior"}`}>
                       {diff.map((d, i) => {
@@ -164,9 +182,18 @@ export function VersionsPanel() {
                       </span>
                     )}
                     <span className="header-spacer" />
-                    {diff.length > 0 && (
-                      <button type="button" className="linkish" onClick={() => setOpen({ ...open, [r.version]: !expanded })} aria-expanded={expanded}>
-                        {expanded ? "ocultar cambios" : `${diff.length} cambio${diff.length === 1 ? "" : "s"}`}
+                    {(diff.length > 0 || r.parent) && (
+                      <button
+                        type="button"
+                        className="linkish"
+                        onClick={() => {
+                          if (!expanded) void store.loadDiff(r.version);
+                          setOpen({ ...open, [r.version]: !expanded });
+                        }}
+                        aria-expanded={expanded}
+                        data-testid={`changes-${r.version}`}
+                      >
+                        {expanded ? "ocultar cambios" : diff.length ? `${diff.length} cambio${diff.length === 1 ? "" : "s"}` : "sin cambios"}
                       </button>
                     )}
                   </div>
