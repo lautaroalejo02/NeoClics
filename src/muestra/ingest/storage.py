@@ -97,6 +97,7 @@ def import_source(project: Project, path: Path, source_id: str | None) -> tuple[
         for existing_id, entry in catalogue.items():
             existing_path = project.path(entry["file"])
             if existing_path.is_file() and digest(existing_path) == content_hash:
+                write_json(project.path("sources/.muestra-sources.json"), {"sources": catalogue})
                 _register(project, existing_id, entry["file"])
                 return existing_id, entry["file"]
         source_id = source_id or allocate_id("src", set(catalogue))

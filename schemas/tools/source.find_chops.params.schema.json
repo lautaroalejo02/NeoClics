@@ -12,7 +12,7 @@
         }
       ],
       "default": null,
-      "description": "Loop length in beats (default: 8).",
+      "description": "Loop length in beats (default: compare 1/2/4/8 bars).",
       "title": "Length Beats"
     },
     "n": {
