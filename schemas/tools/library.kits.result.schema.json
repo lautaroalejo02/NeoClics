@@ -1,0 +1,183 @@
+{
+  "$defs": {
+    "KitInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "available": {
+          "description": "Every lane's sample exists in the library.",
+          "title": "Available",
+          "type": "boolean"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "lanes": {
+          "items": {
+            "$ref": "#/$defs/KitLane"
+          },
+          "title": "Lanes",
+          "type": "array"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        },
+        "pattern": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ready-to-paste `pattern:` for a drum track (four-on-the-floor steps).",
+          "title": "Pattern"
+        },
+        "restrictions": {
+          "description": "Licence restrictions of the kits the samples come from.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Restrictions",
+          "type": "array"
+        },
+        "source": {
+          "description": "Manifest the kit came from.",
+          "title": "Source",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "name",
+        "available",
+        "source"
+      ],
+      "title": "KitInfo",
+      "type": "object"
+    },
+    "KitLane": {
+      "additionalProperties": false,
+      "properties": {
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "lane": {
+          "title": "Lane",
+          "type": "string"
+        },
+        "present": {
+          "description": "The file exists in the library.",
+          "title": "Present",
+          "type": "boolean"
+        },
+        "sound": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Measured one-line description.",
+          "title": "Sound"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Type"
+        },
+        "uri": {
+          "title": "Uri",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lane",
+        "uri",
+        "present"
+      ],
+      "title": "KitLane",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "caveat": {
+      "default": "Starter kits were chosen from measured features and source reputation; nobody has listened to them.",
+      "title": "Caveat",
+      "type": "string"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "kits": {
+      "items": {
+        "$ref": "#/$defs/KitInfo"
+      },
+      "title": "Kits",
+      "type": "array"
+    }
+  },
+  "title": "LibraryKitsResult",
+  "type": "object"
+}

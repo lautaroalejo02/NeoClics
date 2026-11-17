@@ -1,21 +1,55 @@
 {
   "additionalProperties": false,
   "properties": {
+    "add_root": {
+      "default": true,
+      "description": "Add `path` to muestra.toml [library] roots if it is new.",
+      "title": "Add Root",
+      "type": "boolean"
+    },
+    "force": {
+      "default": false,
+      "description": "Re-measure every file instead of only new/changed ones.",
+      "title": "Force",
+      "type": "boolean"
+    },
     "path": {
-      "description": "Library root to index (added to muestra.toml [library] roots).",
-      "title": "Path",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Library root to index. Added to muestra.toml [library] roots when it is not already one (see add_root). Omit to (re)index every configured root.",
+      "title": "Path"
     },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,
       "title": "Project",
       "type": "string"
+    },
+    "workers": {
+      "anyOf": [
+        {
+          "maximum": 64,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Worker processes (default min(cpu, 8)).",
+      "title": "Workers"
     }
   },
   "required": [
-    "project",
-    "path"
+    "project"
   ],
   "title": "LibraryIndexParams",
   "type": "object"

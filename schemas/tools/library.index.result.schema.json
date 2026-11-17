@@ -1,4 +1,150 @@
 {
+  "$defs": {
+    "RootIndexReport": {
+      "additionalProperties": false,
+      "properties": {
+        "analyzed": {
+          "description": "Files measured this run (new + changed).",
+          "minimum": 0,
+          "title": "Analyzed",
+          "type": "integer"
+        },
+        "by_kind": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Kind",
+          "type": "object"
+        },
+        "by_kit": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Kit",
+          "type": "object"
+        },
+        "by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Type",
+          "type": "object"
+        },
+        "changed": {
+          "minimum": 0,
+          "title": "Changed",
+          "type": "integer"
+        },
+        "clipping": {
+          "default": 0,
+          "title": "Clipping",
+          "type": "integer"
+        },
+        "entries": {
+          "description": "Entries in the index after the run.",
+          "minimum": 0,
+          "title": "Entries",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "flag_counts": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Flag Counts",
+          "type": "object"
+        },
+        "flagged": {
+          "default": 0,
+          "description": "Entries carrying at least one flag.",
+          "title": "Flagged",
+          "type": "integer"
+        },
+        "index_path": {
+          "title": "Index Path",
+          "type": "string"
+        },
+        "new": {
+          "minimum": 0,
+          "title": "New",
+          "type": "integer"
+        },
+        "problems": {
+          "description": "Unreadable files (first 20): {path, message}.",
+          "items": {
+            "additionalProperties": {
+              "type": "string"
+            },
+            "type": "object"
+          },
+          "title": "Problems",
+          "type": "array"
+        },
+        "problems_total": {
+          "default": 0,
+          "title": "Problems Total",
+          "type": "integer"
+        },
+        "removed": {
+          "description": "Entries dropped because the file is gone.",
+          "minimum": 0,
+          "title": "Removed",
+          "type": "integer"
+        },
+        "reused": {
+          "description": "Unchanged files kept from the previous index.",
+          "minimum": 0,
+          "title": "Reused",
+          "type": "integer"
+        },
+        "root": {
+          "title": "Root",
+          "type": "string"
+        },
+        "scanned": {
+          "description": "Audio files found.",
+          "minimum": 0,
+          "title": "Scanned",
+          "type": "integer"
+        },
+        "seconds": {
+          "title": "Seconds",
+          "type": "number"
+        },
+        "type_mismatches": {
+          "default": 0,
+          "description": "Files whose name says one type but whose audio says another.",
+          "title": "Type Mismatches",
+          "type": "integer"
+        },
+        "workers": {
+          "title": "Workers",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "root",
+        "index_path",
+        "scanned",
+        "entries",
+        "analyzed",
+        "new",
+        "changed",
+        "reused",
+        "removed",
+        "seconds",
+        "workers"
+      ],
+      "title": "RootIndexReport",
+      "type": "object"
+    }
+  },
   "additionalProperties": false,
   "properties": {
     "files": {
@@ -8,15 +154,43 @@
       "title": "Files",
       "type": "array"
     },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
     "index_path": {
-      "description": "Path of the index file ('.muestra-index.json' inside the root).",
+      "description": "Path of the (first) index file ('.muestra-index.json' inside the root).",
       "title": "Index Path",
       "type": "string"
     },
     "indexed": {
+      "description": "Total entries across the indexed roots.",
       "minimum": 0,
       "title": "Indexed",
       "type": "integer"
+    },
+    "registered": {
+      "description": "Roots added to muestra.toml by this call.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Registered",
+      "type": "array"
+    },
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/RootIndexReport"
+      },
+      "title": "Roots",
+      "type": "array"
     }
   },
   "required": [

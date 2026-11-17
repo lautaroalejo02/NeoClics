@@ -1,0 +1,106 @@
+{
+  "$defs": {
+    "LibraryRootInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "by_kind": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Kind",
+          "type": "object"
+        },
+        "by_type": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "By Type",
+          "type": "object"
+        },
+        "entries": {
+          "default": 0,
+          "title": "Entries",
+          "type": "integer"
+        },
+        "files": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Files",
+          "type": "array"
+        },
+        "indexed": {
+          "title": "Indexed",
+          "type": "boolean"
+        },
+        "indexed_at": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Indexed At"
+        },
+        "kits": {
+          "additionalProperties": {
+            "additionalProperties": true,
+            "type": "object"
+          },
+          "description": "kit -> {files, restrictions, summary}",
+          "title": "Kits",
+          "type": "object"
+        },
+        "problems": {
+          "default": 0,
+          "title": "Problems",
+          "type": "integer"
+        },
+        "root": {
+          "title": "Root",
+          "type": "string"
+        }
+      },
+      "required": [
+        "root",
+        "indexed"
+      ],
+      "title": "LibraryRootInfo",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "roots": {
+      "items": {
+        "$ref": "#/$defs/LibraryRootInfo"
+      },
+      "title": "Roots",
+      "type": "array"
+    }
+  },
+  "title": "LibraryInfoResult",
+  "type": "object"
+}
