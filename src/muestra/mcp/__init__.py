@@ -1,1 +1,1 @@
-"""Stub package - implemented by a later work package (see docs/spec.md section 12)."""
+"""Official SDK MCP server and bundled agent workflow guide."""

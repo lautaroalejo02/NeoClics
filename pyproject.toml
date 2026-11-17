@@ -54,6 +54,12 @@ ears = [
 
 # WP7 (API + MCP + CLI)
 server = [
+    "fastapi>=0.163.1,<1",
+    "uvicorn[standard]>=0.54,<1",
+    "mcp>=2.3,<3",
+    "portalocker>=4.4.2,<5",
+    # httpx is required by starlette's TestClient (used in tests/server)
+    "httpx>=0.28,<1",
 ]
 
 [project.scripts]
