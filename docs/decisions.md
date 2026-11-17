@@ -1,21 +1,5 @@
 # Decisions
 
-## 2026-11-17 — WP2: approved integration seam corrections
-
-The orchestrator explicitly approved these two corrections during WP2:
-
-- `RenderResult` gains optional `hint`, so an unavailable ears analyzer
-  can return successful rendered audio with an actionable note. The tool
-  envelope contains this note in `data.hint` (the shared registry is unchanged).
-- `plugins.core.render_instrument` gains required keyword-only `bpm: float`.
-  Notes stay in project beats; the plugin host converts them using the
-  rendered version's tempo. Reading live song.yaml would use the wrong
-  tempo when re-rendering a tagged version.
-
-The renderer uses the approved signature; WP3 owns its implementation.
-Only its seam stub is updated here. The render result JSON Schema is
-regenerated. No other schema or song semantics change.
-
 Dated log of decisions made where `docs/spec.md` was silent or ambiguous,
 and of deviations from it. Each entry says what was decided and why.
 (Newest last; WPs append their own entries.)
@@ -306,3 +290,40 @@ says so.
 - **R11 events**: `schemas/api.py` defines the models only; the
   file-watching producer is WP7's API server (no WP-owned module exists
   for it yet).
+
+## 2026-11-17 — WP2: approved integration seam corrections
+
+The orchestrator explicitly approved these two corrections during WP2:
+
+- `RenderResult` gains optional `hint`, so an unavailable ears analyzer
+  can return successful rendered audio with an actionable note. The tool
+  envelope contains this note in `data.hint` (the shared registry is unchanged).
+- `plugins.core.render_instrument` gains required keyword-only `bpm: float`.
+  Notes stay in project beats; the plugin host converts them using the
+  rendered version's tempo. Reading live song.yaml would use the wrong
+  tempo when re-rendering a tagged version.
+
+The renderer uses the approved signature; WP3 owns its implementation.
+Only its seam stub is updated here. The render result JSON Schema is
+regenerated. No other schema or song semantics change.
+
+Implementation choices where the contract does not specify a value:
+
+- Equal-power -3 dB centre pan, no channel crossfeed, at both lane and track stages.
+- Master gain follows master inserts, before loudness normalization. Final
+  safety uses the minimum static declared master limiter ceiling, default -1 dBFS.
+- Full-song effect history and loudness measurement precede range cropping;
+  ranges use the difference between independently rounded absolute boundaries.
+- With `stems=False`, metadata has no track/lane references to nonexistent WAVs.
+- Track windows gate the absolute note/clip timeline rather than moving notes.
+  Pattern tiling begins at the track window's start.
+- Standalone chop candidate previews without song.yaml use the existing
+  render_chop seam; ID-based preview targets require the song's definitions.
+- If prior meta.json is gone, the version-history API exposes no historical
+  request/agent trailers; re-render parameters can supply them, otherwise
+  agent defaults to muestra. Existing metadata retains request/agent.
+
+Fixture inconsistency flagged for integration: analysis spans 5.7 seconds,
+but shared stem placeholders are 1.2 seconds. Renderer reports chop_overrun;
+tests/benchmarks extend only disposable copies using existing fixture audio.
+Details, quality settings, measurements and limitations are in docs/render.md.
