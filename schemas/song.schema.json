@@ -596,6 +596,113 @@
       "title": "Instrument",
       "type": "object"
     },
+    "LaneSlice": {
+      "additionalProperties": false,
+      "description": "A slice of a chop or of a source, played as a drum lane's sound (WP17).\n\nExactly one of ``chop`` (a slice of that chop: ``start_beats`` counts beats\ninto the chop, its stem and warp are the chop's) or ``source`` (with\n``start_downbeat``; ``start_beats`` counts beats along the source's grid\nfrom that downbeat, like a chop's ``start_offset_beats``; ``stem`` and\n``warp`` belong to this form only).\n\n``speed``: ``project`` = warped to the project tempo exactly like a chop of\nthat length (the chop warp path: it fills ``length_beats`` project beats);\n``source`` = the record's own speed and pitch (no warp, its natural length).",
+      "properties": {
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0,
+          "maximum": 64,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "speed": {
+          "default": "project",
+          "enum": [
+            "project",
+            "source"
+          ],
+          "title": "Speed",
+          "type": "string"
+        },
+        "start_beats": {
+          "default": 0.0,
+          "maximum": 4096.0,
+          "minimum": -4096.0,
+          "title": "Start Beats",
+          "type": "number"
+        },
+        "start_downbeat": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only.",
+          "title": "Start Downbeat"
+        },
+        "stem": {
+          "anyOf": [
+            {
+              "enum": [
+                "drums",
+                "bass",
+                "vocals",
+                "other",
+                "mix"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only (default mix); chop slices use the chop's.",
+          "title": "Stem"
+        },
+        "warp": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Warp"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source slices only (default resample); chops use their own."
+        }
+      },
+      "required": [
+        "length_beats"
+      ],
+      "title": "LaneSlice",
+      "type": "object"
+    },
     "LimiterFx": {
       "additionalProperties": false,
       "properties": {
@@ -879,6 +986,21 @@
           "title": "Lane",
           "type": "string"
         },
+        "length_beats": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 64.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Gate (WP17): the sound is cut after this many beats (3 ms fade); default = it plays out.",
+          "title": "Length Beats"
+        },
         "sample": {
           "anyOf": [
             {
@@ -909,8 +1031,22 @@
     },
     "PatternLane": {
       "additionalProperties": false,
-      "description": "One instrument lane of a drum pattern.\n\n``overrides`` (WP16) replaces single bars: ``{7: \"x...x.......x...\"}`` =\nin SONG bar 7 this lane plays that bar instead of the pattern (one bar of\n``steps_per_bar`` step chars; all rests = the lane is silent in that bar).\n``steps`` may be omitted (all rests) for a lane that only has overrides or\nfree ``hits``.",
+      "description": "One instrument lane of a drum pattern.\n\n``overrides`` (WP16) replaces single bars: ``{7: \"x...x.......x...\"}`` =\nin SONG bar 7 this lane plays that bar instead of the pattern (one bar of\n``steps_per_bar`` step chars; all rests = the lane is silent in that bar).\n``steps`` may be omitted (all rests) for a lane that only has overrides or\nfree ``hits``.\n\nWP17 (performance pads), all optional: the sound is ``sample`` (a file)\nXOR ``slice`` (a piece of a chop/source, :class:`LaneSlice`).\n``pitch_semitones`` tunes it like a sampler (resampled: higher = shorter),\n``reverse`` plays it backwards, ``choke`` (1-16) is a choke group: a hit\ncuts every earlier hit still sounding on the lanes of the same group of\nthis track (itself included), with a 3 ms fade.",
       "properties": {
+        "choke": {
+          "anyOf": [
+            {
+              "maximum": 16,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Choke"
+        },
         "gain_db": {
           "default": 0.0,
           "maximum": 24.0,
@@ -933,10 +1069,41 @@
           "title": "Pan",
           "type": "number"
         },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        },
+        "reverse": {
+          "default": false,
+          "title": "Reverse",
+          "type": "boolean"
+        },
         "sample": {
-          "description": "Project-relative POSIX path or 'library://<path>' URI.",
-          "title": "Sample",
-          "type": "string"
+          "anyOf": [
+            {
+              "description": "Project-relative POSIX path or 'library://<path>' URI.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "slice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/LaneSlice"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "steps": {
           "default": "",
@@ -944,9 +1111,6 @@
           "type": "string"
         }
       },
-      "required": [
-        "sample"
-      ],
       "title": "PatternLane",
       "type": "object"
     },

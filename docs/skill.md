@@ -16,6 +16,7 @@ los necesita.
 | `styles.md` | perfiles de 9.1 como movimientos concretos | ~5 KB |
 | `ears.md` | cada alarma, qué cambiar, qué no mide | ~9 KB |
 | `feedback.md` | frases del humano → cambios; cuándo preguntar | ~6 KB |
+| `pads.md` | tomas de los pads (WP17): leerlas, ponerlas en la canción, limpiarlas, slices | ~5 KB |
 | `troubleshooting.md`, `paid-tools.md` | problemas frecuentes; política de pagos y A/B ciego | ~7 KB |
 | `examples/*.yaml` | canciones completas validadas y renderizadas | 2-6.5 KB c/u |
 | `AGENTS.fragment.md` | bloque para pegar en AGENTS.md / CLAUDE.md | 1 KB |

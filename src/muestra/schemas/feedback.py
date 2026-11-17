@@ -62,6 +62,14 @@ class NoteRef(ContractModel):
     phrase: IdStr | None = Field(default=None, description="The note belongs to this phrase.")
 
 
+class PadRef(ContractModel):
+    """A pad (WP17): bank id + physical key code (pads/banks.json)."""
+
+    bank: IdStr
+    key: str = Field(pattern=r"^[A-Za-z0-9]{1,16}$")
+    name: str | None = None
+
+
 class Selection(ContractModel):
     """What the human pointed at in the editor (WP16). Positions are musical:
     start_beat/end_beat are 1-indexed song beats, end exclusive."""
@@ -88,6 +96,12 @@ class Selection(ContractModel):
     excerpt: dict[str, Any] | None = Field(
         default=None, description="The selected elements as they were (song.yaml values)."
     )
+    take: str | None = Field(
+        default=None,
+        pattern=r"^t[0-9]{3,}$",
+        description="WP17: a recorded take (pads/takes/<id>.json; read it with pads.take_get).",
+    )
+    pad: PadRef | None = Field(default=None, description="WP17: a pad of pads/banks.json.")
 
 
 class CommentEvent(_EventBase):

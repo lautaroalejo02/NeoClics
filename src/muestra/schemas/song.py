@@ -68,7 +68,7 @@ from __future__ import annotations
 import math
 import re
 import types
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Annotated, Literal, Union, get_args, get_origin  # noqa: UP035
 
 import annotated_types
@@ -114,6 +114,8 @@ __all__ = [
     "parse_steps",
     "InstanceOverride",
     "PatternHit",
+    "LaneSlice",
+    "CUT_FADE_MS",
     "DrumHit",
     "ClipPass",
     "pattern_hits",
@@ -388,6 +390,82 @@ def parse_steps(steps: str) -> list[float | None]:
     return out
 
 
+class LaneSlice(ContractModel):
+    """A slice of a chop or of a source, played as a drum lane's sound (WP17).
+
+    Exactly one of ``chop`` (a slice of that chop: ``start_beats`` counts beats
+    into the chop, its stem and warp are the chop's) or ``source`` (with
+    ``start_downbeat``; ``start_beats`` counts beats along the source's grid
+    from that downbeat, like a chop's ``start_offset_beats``; ``stem`` and
+    ``warp`` belong to this form only).
+
+    ``speed``: ``project`` = warped to the project tempo exactly like a chop of
+    that length (the chop warp path: it fills ``length_beats`` project beats);
+    ``source`` = the record's own speed and pitch (no warp, its natural length).
+    """
+
+    chop: IdStr | None = None
+    source: IdStr | None = None
+    stem: StemName | None = Field(
+        default=None, description="Source slices only (default mix); chop slices use the chop's."
+    )
+    start_downbeat: int | None = Field(default=None, ge=1, description="Source slices only.")
+    start_beats: float = Field(default=0.0, ge=-4096.0, le=4096.0)
+    length_beats: float = Field(gt=0, le=64)
+    speed: Literal["project", "source"] = "project"
+    warp: Warp | None = Field(
+        default=None, description="Source slices only (default resample); chops use their own."
+    )
+
+    @model_validator(mode="after")
+    def _one_origin(self) -> LaneSlice:
+        if (self.chop is None) == (self.source is None):
+            raise PydanticCustomError(
+                "slice_source",
+                "A slice needs exactly one of 'chop' or 'source'.",
+                {"hint": "Set 'chop: <chop_id>' or 'source: <source_id>' + 'start_downbeat'."},
+            )
+        if self.chop is not None and (
+            self.stem is not None or self.start_downbeat is not None or self.warp is not None
+        ):
+            raise PydanticCustomError(
+                "slice_source",
+                "'stem', 'start_downbeat' and 'warp' belong to source slices; a chop slice "
+                "uses the chop's.",
+                {"hint": "Remove them, or slice the source directly (source + start_downbeat)."},
+            )
+        if self.source is not None and self.start_downbeat is None:
+            raise PydanticCustomError(
+                "missing_field",
+                "A source slice needs 'start_downbeat' (1-based index into the analysis).",
+                {"hint": "Add 'start_downbeat'; 'start_beats' then counts beats from it."},
+            )
+        return self
+
+    def as_chop(self, chops: dict[str, Chop]) -> Chop | None:
+        """The slice as a Chop (the renderer's chop path); None for an unknown chop."""
+        if self.chop is not None:
+            base = chops.get(self.chop)
+            if base is None:
+                return None
+            return base.model_copy(
+                update={
+                    "start_offset_beats": base.start_offset_beats + self.start_beats,
+                    "length_beats": self.length_beats,
+                }
+            )
+        return Chop(
+            id="slice",
+            source=self.source,
+            stem=self.stem or "mix",
+            start_downbeat=self.start_downbeat,
+            start_offset_beats=self.start_beats,
+            length_beats=self.length_beats,
+            warp=self.warp or Warp(),
+            fade_ms=0.0,
+        )
+
+
 class PatternLane(ContractModel):
     """One instrument lane of a drum pattern.
 
@@ -396,9 +474,17 @@ class PatternLane(ContractModel):
     ``steps_per_bar`` step chars; all rests = the lane is silent in that bar).
     ``steps`` may be omitted (all rests) for a lane that only has overrides or
     free ``hits``.
+
+    WP17 (performance pads), all optional: the sound is ``sample`` (a file)
+    XOR ``slice`` (a piece of a chop/source, :class:`LaneSlice`).
+    ``pitch_semitones`` tunes it like a sampler (resampled: higher = shorter),
+    ``reverse`` plays it backwards, ``choke`` (1-16) is a choke group: a hit
+    cuts every earlier hit still sounding on the lanes of the same group of
+    this track (itself included), with a 3 ms fade.
     """
 
-    sample: FileRef
+    sample: FileRef | None = None
+    slice: LaneSlice | None = None
     steps: StepStr = ""
     gain_db: float = Field(default=0.0, ge=-60.0, le=24.0)
     pan: float = Field(default=0.0, ge=-1.0, le=1.0)
@@ -406,6 +492,19 @@ class PatternLane(ContractModel):
         default_factory=dict,
         description="Per-bar exceptions: song bar (1-indexed) -> that bar's steps (WP16).",
     )
+    pitch_semitones: float = Field(default=0.0, ge=-24.0, le=24.0)
+    reverse: bool = False
+    choke: int | None = Field(default=None, ge=1, le=16)
+
+    @model_validator(mode="after")
+    def _one_sound(self) -> PatternLane:
+        if (self.sample is None) == (self.slice is None):
+            raise PydanticCustomError(
+                "lane_sound",
+                "A lane needs exactly one of 'sample' (a file) or 'slice' (a chop/source slice).",
+                {"hint": "Set 'sample: library://...' or 'slice: {chop: c1, length_beats: 1}'."},
+            )
+        return self
 
 
 class PatternHit(ContractModel):
@@ -421,6 +520,13 @@ class PatternHit(ContractModel):
     lane: LaneName
     velocity: float = Field(default=1.0, gt=0.0, le=1.0)
     sample: FileRef | None = None
+    length_beats: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=64.0,
+        description="Gate (WP17): the sound is cut after this many beats (3 ms fade); "
+        "default = it plays out.",
+    )
 
 
 class Pattern(ContractModel):
@@ -1076,6 +1182,7 @@ class Song(ContractModel):
                 issues += _check_pattern(
                     track.pattern, f"tracks[{ti}].pattern", self.meta.length_bars, track
                 )
+                issues += self._check_slices(track.pattern, f"tracks[{ti}].pattern")
             for fi, fx in enumerate(track.fx):
                 if isinstance(fx, SidechainFx):
                     issues += _check_sidechain_ref(fx, track, ti, fi, track_ids, tracks)
@@ -1092,6 +1199,37 @@ class Song(ContractModel):
                     )
                 )
         issues += self._check_sidechain_cycles()
+        return issues
+
+    def _check_slices(self, pattern: Pattern, path: str) -> list[Issue]:
+        """WP17: slice lanes point at an existing chop or source."""
+        issues: list[Issue] = []
+        chops = {c.id for c in self.chops}
+        sources = {s.id for s in self.sources}
+        for lane, spec in pattern.lanes.items():
+            sl = spec.slice
+            if sl is None:
+                continue
+            if sl.chop is not None and sl.chop not in chops:
+                issues.append(
+                    Issue(
+                        path=f"{path}.lanes.{lane}.slice.chop",
+                        code="ref_not_found",
+                        message=f"Lane {lane!r} slices unknown chop {sl.chop!r}.",
+                        hint="Point 'chop' at an id in 'chops'.",
+                        value=sl.chop,
+                    )
+                )
+            if sl.source is not None and sl.source not in sources:
+                issues.append(
+                    Issue(
+                        path=f"{path}.lanes.{lane}.slice.source",
+                        code="ref_not_found",
+                        message=f"Lane {lane!r} slices unknown source {sl.source!r}.",
+                        hint="Point 'source' at an id in 'sources'.",
+                        value=sl.source,
+                    )
+                )
         return issues
 
     def _check_phrase_placements(self, track: Track, ti: int) -> list[Issue]:
@@ -1606,7 +1744,12 @@ class DrumHit:
     bar: int
     step: int | None
     index: int | None
-    sample: str
+    #: the file it plays; None = the lane's ``slice`` (WP17)
+    sample: str | None
+    #: WP17: 0-based song beat where the sound is cut (gate ``length_beats`` or
+    #: a later hit of the same choke group), 3 ms fade starting there;
+    #: None = it plays out (to the track window's end).
+    cut0: float | None = None
 
 
 def _lane_velocities(pattern: Pattern, lane: PatternLane) -> list[float | None]:
@@ -1669,9 +1812,50 @@ def pattern_hits(song: Song, track: Track) -> list[DrumHit]:
             continue
         bar = int(math.floor(beat / BEATS_PER_BAR + 1e-9)) + 1
         out.append(
-            DrumHit(beat, hit.lane, hit.velocity, "free", bar, None, i, hit.sample or lane.sample)
+            DrumHit(
+                beat,
+                hit.lane,
+                hit.velocity,
+                "free",
+                bar,
+                None,
+                i,
+                hit.sample or lane.sample,
+                beat + hit.length_beats if hit.length_beats is not None else None,
+            )
         )
-    return sorted(out, key=lambda h: (h.beat0, h.lane))
+    out.sort(key=lambda h: (h.beat0, h.lane))
+    return _apply_chokes(pattern, out)
+
+
+#: WP17: fade (ms) of a gated or choked hit, starting at its cut point.
+CUT_FADE_MS = 3.0
+
+
+def _apply_chokes(pattern: Pattern, hits: list[DrumHit]) -> list[DrumHit]:
+    """Cut each hit at the next STRICTLY later hit of its lane's choke group."""
+    groups = {name: lane.choke for name, lane in pattern.lanes.items() if lane.choke}
+    if not groups:
+        return hits
+    nxt: dict[int, float] = {}
+    out = list(hits)
+    by_group: dict[int, list[int]] = {}
+    for i, h in enumerate(out):
+        g = groups.get(h.lane)
+        if g is not None:
+            by_group.setdefault(g, []).append(i)
+    for idx in by_group.values():
+        for k, i in enumerate(idx):
+            later = next(
+                (out[j].beat0 for j in idx[k + 1 :] if out[j].beat0 > out[i].beat0 + 1e-9), None
+            )
+            if later is not None:
+                nxt[i] = later
+    for i, cut in nxt.items():
+        h = out[i]
+        if h.cut0 is None or cut < h.cut0:
+            out[i] = replace(h, cut0=cut)
+    return out
 
 
 def lane_bar_steps(pattern: Pattern, lane: PatternLane, bar: int, at_bar: int) -> list:

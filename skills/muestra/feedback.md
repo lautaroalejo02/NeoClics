@@ -8,7 +8,8 @@
 - `ab_choice` `{a, b, winner}`: comparó en la misma posición y eligió.
 - `chop_choice` `{candidate_id, adjust?}`: eligió otro chop en la UI; ya está en `song.yaml`.
 - `comment` con `selection` (WP16, "Pedile al agente" en el editor): un pedido sobre
-  EXACTAMENTE esos elementos. Ver abajo.
+  EXACTAMENTE esos elementos. Ver abajo. Con `selection.take` es sobre una toma grabada
+  con los pads y con `selection.pad` sobre un pad: [pads.md](pads.md).
 
 `digest` trae una línea legible por evento (por MCP es lo que ves primero); los pedidos
 sobre una selección dicen qué señaló, dónde, y la op de `song.edit` que lo saca.

@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "keys": {
+      "description": "Keys to fill, in order (default: the UI layout, bottom row first).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Keys",
+      "type": "array"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "track": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Track",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "track"
+  ],
+  "title": "FromTrackParams",
+  "type": "object"
+}

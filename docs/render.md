@@ -328,3 +328,30 @@ independent R3 computations and repeated PCM24 exports are compared exactly.
   (`tests/editor/test_pieces.py`). The browser mix does NOT reproduce the master chain
   (master fx, `target_lufs` loudness loop, safety limiter): the editor says "vista
   previa del editor" and one key plays a draft render of the current state.
+
+## Drum lanes: slices, tuning, choke and gate (WP17)
+
+`render.core.lane_sound(project, song, lane, sample, sr, decoded)` is the ONE definition
+of what a hit of a lane plays (velocity 1, lane gain 0 dB, unpanned); the renderer and
+`song.pieces` voices both call it, so the browser's pads and the committed take play the
+renderer's own samples.
+
+- File lane, no pitch/reverse: the decoded file with the 1 ms end fade (unchanged since
+  WP0; bit-identical).
+- `slice`: `slice_audio` — `speed: project` = `chop_audio` of the slice as a chop
+  (`start_offset_beats + start_beats`, `length_beats`, the chop's warp; a source slice its
+  own) fitted to `length_beats` project beats; `speed: source` = the record between the
+  slice's grid points, unwarped. 2 ms raised-cosine edge fades (a slice is cut out of a
+  record).
+- `pitch_semitones`: sampler tuning, `vinyl` (band-limited Fourier resample) of the sound
+  padded with 10 ms of silence at both ends (keeps the circular FFT from wrapping the
+  attack), length `/ 2^(st/12)`.
+- `reverse`: reversed with 2 ms fades at both ends.
+- Gate / choke (`DrumHit.cut0`): the hit is cut `cut0 - beat0` beats after its frame with a
+  3 ms raised-cosine fade starting there (`cut_sound`); the browser schedules the same
+  envelope (fade from the cut point, `CUT_FADE_MS`).
+
+Measured (real e2e, `ui/e2e-real/pads.spec.ts`, 125 BPM, 9 free hits recorded off the grid
+and committed): first audible sample of each hit in a draft render's lane stem vs the
+recorded hit time: −0.01 to +0.03 ms (sub-sample; beats are stored to 1e-6). The browser's
+offline render of the committed take: same values within 0.01 ms.

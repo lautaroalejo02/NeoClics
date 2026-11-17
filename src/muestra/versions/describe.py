@@ -1049,7 +1049,7 @@ class _Describer:
             x, y = la.get(lane), lb.get(lane)
             if x is None:
                 pos = _rhythm_name(_hit_positions(y["steps"], spp_b)[0], spp_b)
-                out.append(f"Agregué {_lane_in(lane, np)} ({pos}, sample {_base(y['sample'])})")
+                out.append(f"Agregué {_lane_in(lane, np)} ({pos}, {_lane_sound(y)})")
             elif y is None:
                 out.append(f"Saqué {_lane_in(lane, np)}")
             elif not same(x, y):
@@ -1069,9 +1069,33 @@ class _Describer:
                 )
             else:
                 out += _steps_change(lane, tid, at_bar, x["steps"], y["steps"], spp_a, spp_b)
-        if x.get("sample") != y.get("sample"):
+        if x.get("sample") != y.get("sample") or not same(x.get("slice"), y.get("slice")):
+            if x.get("sample") and y.get("sample"):
+                out.append(
+                    f"Cambié el sample {_del(_lane_np(lane))} de {_base(x['sample'])} a {_base(y['sample'])}"
+                )
+            else:
+                out.append(
+                    f"Cambié el sonido {_del(_lane_np(lane))}: antes {_lane_sound(x)}, ahora {_lane_sound(y)}"
+                )
+        if not same(x.get("pitch_semitones"), y.get("pitch_semitones")):
+            d = _f(y.get("pitch_semitones")) - _f(x.get("pitch_semitones"))
             out.append(
-                f"Cambié el sample {_del(_lane_np(lane))} de {_base(x['sample'])} a {_base(y['sample'])}"
+                f"{'Subí' if d > 0 else 'Bajé'} la afinación {_del(_lane_in(lane, np))} "
+                f"{_semitones(d)} (como un sampler: más agudo es más corto)"
+            )
+        if bool(x.get("reverse")) != bool(y.get("reverse")):
+            out.append(
+                f"Di vuelta {_lane_in(lane, np)} (ahora suena al revés)"
+                if y.get("reverse")
+                else f"{_lane_in(lane, np).capitalize()} vuelve a sonar al derecho"
+            )
+        if x.get("choke") != y.get("choke"):
+            out.append(
+                f"Saqué {_lane_in(lane, np)} del grupo de corte {x.get('choke')}"
+                if y.get("choke") is None
+                else f"Puse {_lane_in(lane, np)} en el grupo de corte {y.get('choke')} "
+                "(un golpe del grupo corta al anterior)"
             )
         if not same(x.get("gain_db"), y.get("gain_db")):
             d = _f(y.get("gain_db")) - _f(x.get("gain_db"))
@@ -1083,7 +1107,11 @@ class _Describer:
                 out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_in(lane, np)} {_n(abs(d))} dB")
         if not same(x.get("pan"), y.get("pan")):
             out.append(f"Paneé {_lane_in(lane, np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})")
-        for k in sorted((set(x) | set(y)) - {"steps", "sample", "gain_db", "pan", "overrides"}):
+        for k in sorted(
+            (set(x) | set(y))
+            - {"steps", "sample", "gain_db", "pan", "overrides"}
+            - {"slice", "pitch_semitones", "reverse", "choke"}
+        ):
             if not same(x.get(k), y.get(k)):
                 out.append(f"Cambié {k} de {_lane_in(lane, np)} de {_n(x.get(k))} a {_n(y.get(k))}")
         return out
@@ -1504,6 +1532,21 @@ def _override_change(
     return out
 
 
+def _lane_sound(lane: dict) -> str:
+    """'sample kick-01' / 'un pedazo del chop c1 (desde el tiempo 3, 1 tiempo)' (WP17)."""
+    sl = lane.get("slice")
+    if not sl:
+        return f"sample {_base(lane.get('sample'))}"
+    length = _f(sl.get("length_beats"))
+    span = f"{_n(length)} {_plural(length, 'tiempo', 'tiempos')}"
+    start = _f(sl.get("start_beats"))
+    speed = " a la velocidad del disco" if sl.get("speed") == "source" else ""
+    if sl.get("chop"):
+        return f"un pedazo del chop {sl['chop']} (desde el tiempo {_n(start + 1)}, {span}){speed}"
+    where = f"compás {sl.get('start_downbeat')}" + (f" + {_n(start)} tiempos" if start else "")
+    return f"un pedazo de la fuente {sl.get('source')} ({where}, {span}){speed}"
+
+
 def _hit_key(h: dict) -> tuple:
     return (h.get("lane"), round(_f(h.get("beat")), 6))
 
@@ -1521,7 +1564,13 @@ def _free_hits_change(np: str, a: list[dict], b: list[dict]) -> list[str]:
         by.setdefault(("rem", a[i]["lane"]), []).append(_bar_of(_f(a[i]["beat"])))
     for ia, ib in al.modified(a, b):
         x, y = a[ia], b[ib]
-        kind = "moved" if not same(x.get("beat"), y.get("beat")) else "edit"
+        kind = (
+            "moved"
+            if not same(x.get("beat"), y.get("beat"))
+            else "gate"
+            if not same(x.get("length_beats"), y.get("length_beats"))
+            else "edit"
+        )
         by.setdefault((kind, y["lane"]), []).append(_bar_of(_f(y["beat"])))
     for (kind, lane), bars in by.items():
         n = len(bars)
@@ -1534,6 +1583,8 @@ def _free_hits_change(np: str, a: list[dict], b: list[dict]) -> list[str]:
             out.append(f"Saqué {golpes} {_del(lane_np)} {_del(where)}")
         elif kind == "moved":
             out.append(f"Moví {golpes} {_del(lane_np)} en {where}")
+        elif kind == "gate":
+            out.append(f"Cambié cuánto duran {golpes} {_del(lane_np)} en {where}")
         else:
             out.append(f"Cambié la dinámica de {golpes} {_del(lane_np)} en {where}")
     return out

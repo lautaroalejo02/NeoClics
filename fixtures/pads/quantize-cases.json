@@ -1,0 +1,135 @@
+{
+ "note": "Shared quantise vectors (WP17): muestra.pads.process.quantize_beat and ui/src/pads/quantize.ts must give exactly `out` (rounded to 1e-6). Hand-checked. Loop takes fold into [-1/16, wrap - 1/16): a press a hair before the loop start is an early beat 1.",
+ "cases": [
+  {
+   "beat": 1.13,
+   "grid": "1/16",
+   "strength": 1,
+   "swing": 0,
+   "out": 1.25
+  },
+  {
+   "beat": 1.12,
+   "grid": "1/16",
+   "strength": 1,
+   "swing": 0,
+   "out": 1.0
+  },
+  {
+   "beat": 0.9,
+   "grid": "1/8",
+   "strength": 0.5,
+   "swing": 0,
+   "out": 0.95
+  },
+  {
+   "beat": 0.6,
+   "grid": "1/8",
+   "strength": 1,
+   "swing": 1,
+   "out": 0.666667
+  },
+  {
+   "beat": 0.3,
+   "grid": "1/8t",
+   "strength": 1,
+   "swing": 0,
+   "out": 0.333333
+  },
+  {
+   "beat": 0.3,
+   "grid": "1/8t",
+   "strength": 1,
+   "swing": 1,
+   "out": 0.333333
+  },
+  {
+   "beat": 0.1,
+   "grid": "1/16t",
+   "strength": 1,
+   "swing": 0,
+   "out": 0.166667
+  },
+  {
+   "beat": 7.95,
+   "grid": "1/16",
+   "strength": 1,
+   "swing": 0,
+   "wrap": 8,
+   "out": 0.0
+  },
+  {
+   "beat": 7.95,
+   "grid": "off",
+   "strength": 1,
+   "swing": 0,
+   "wrap": 8,
+   "out": -0.05
+  },
+  {
+   "beat": 3.0,
+   "grid": "off",
+   "strength": 1,
+   "swing": 0,
+   "out": 3.0
+  },
+  {
+   "beat": 2.4,
+   "grid": "1/16",
+   "strength": 1,
+   "swing": 0.5,
+   "out": 2.5
+  },
+  {
+   "beat": 2.3,
+   "grid": "1/16",
+   "strength": 1,
+   "swing": 0.5,
+   "out": 2.291667
+  },
+  {
+   "beat": 1.13,
+   "grid": "1/16",
+   "strength": 0,
+   "swing": 0,
+   "out": 1.13
+  },
+  {
+   "beat": -0.05,
+   "grid": "1/16",
+   "strength": 1,
+   "swing": 0,
+   "out": 0.0
+  },
+  {
+   "beat": 5.0625,
+   "grid": "1/8",
+   "strength": 0.75,
+   "swing": 0,
+   "out": 5.015625
+  },
+  {
+   "beat": 12.987654321,
+   "grid": "off",
+   "strength": 1,
+   "swing": 0,
+   "out": 12.987654
+  },
+  {
+   "beat": 7.9,
+   "grid": "off",
+   "strength": 1,
+   "swing": 0,
+   "wrap": 8,
+   "out": 7.9
+  },
+  {
+   "beat": 7.96,
+   "grid": "1/16",
+   "strength": 0.5,
+   "swing": 0,
+   "wrap": 8,
+   "out": -0.02
+  }
+ ]
+}

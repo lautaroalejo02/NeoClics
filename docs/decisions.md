@@ -992,3 +992,64 @@ Contract changes, all **additive** (old songs parse and render bit-identically,
   one arrives. Not reproduced at all: the master chain (fx, `target_lufs` loop, safety
   limiter); the mix goes through the stem-bus limiter and is level-matched to the last
   render's stems/mix ratio. `F` plays a draft render of the current state.
+
+### 2026-11-17 — WP17 performance pads: slice lanes, choke/gate, takes
+
+The owner wants to assign sounds to the computer keyboard, play over the base, record
+what he plays and then use it. Contract changes, all **additive** for writers (every old
+song parses and renders bit-identically; `tests/pads/test_pads.py::
+test_plain_file_lanes_render_bit_identically` + the WP16 identity test), with one
+**reader-visible relaxation**: `PatternLane.sample` is now optional.
+
+- **Slice lanes.** `PatternLane` = exactly one of `sample` (file) or `slice` (`LaneSlice`:
+  `chop` + `start_beats` into it, or `source` + `start_downbeat` + `start_beats` with own
+  `stem`/`warp`; `length_beats`; `speed: project|source`). `speed: project` renders
+  through the chop path (`chop_audio` of the slice as a chop: it fills `length_beats`
+  project beats exactly, warp and pitch of the chop); `source` = unwarped record audio
+  between the slice's grid points. 2 ms edge fades. Readers of `lane.sample` must handle
+  None (`DrumHit.sample` is None for slice hits). Chosen over "slices as clips" because a
+  played rhythm is drum-like (velocity, choke, many short hits on one row) and the editor
+  already draws/edits `pattern.hits` hit by hit.
+- **Lane `pitch_semitones` (−24..24), `reverse`, `choke` (1-16); hit `length_beats`.**
+  Pitch is SAMPLER tuning (Fourier resample with 10 ms zero padding: higher = shorter),
+  the MPC convention, so a tuned pad sounds like it did on the pad. A choke group cuts
+  every EARLIER hit still sounding on the lanes of that group of the track (same lane
+  included; simultaneous hits both sound); `length_beats` gates a hit. Both cut with a
+  3 ms raised-cosine fade STARTING at the cut point (`CUT_FADE_MS`). The cut point
+  (`DrumHit.cut0`) is computed in the shared expansion (`pattern_hits` →
+  `_apply_chokes`), mirrored in `ui/src/editor/song.ts`, so renderer, ears, diff and
+  browser agree.
+- **Takes live beside the song, not in it.** `pads/banks.json` (`PadsFile`) and
+  `pads/takes/<tNNN>.json` (`Take`), plain JSON, LF, atomic writes under
+  `cache/locks/pads.lock`. `pads` joins `VERSIONED_PATHS` (committed with each version)
+  but restore never rewinds it; deleting a take moves it to `pads/takes/deleted/`.
+  Rejected: takes inside `song.yaml` (an unused performance is not arrangement, it would
+  pollute diffs and every render signature) and takes only in the browser (lost with the
+  browser profile; the agent could not read them). A take stores the RAW performance
+  (beats from its origin as HEARD, after latency compensation) and its quantise settings
+  separately: quantise is applied on read/commit, never destructively.
+- **Loop takes fold presses a 64th note (1/16 beat) before the downbeat to an early beat 1**
+  (stored slightly negative, cycle of the next pass), not to the end of the cycle — a run
+  showed a press 0.4 ms early landing on beat 7.9996 of an 8-beat loop.
+- **Quantise** grids off/1/16/1/8/1/8t/1/16t, strength 0..1, swing 0..1 = the pattern's
+  swing law (`swing * step / 3` on odd points of straight grids; triplet grids ignore
+  it). Python (`muestra.pads.process`) and TS (`ui/src/pads/model.ts`) share vectors
+  (`fixtures/pads/quantize-cases.json`); half-up rounding to 1e-6 beats in both.
+- **A take becomes song material only through `pads.commit`** → `song.edit` ops: a new
+  pattern track (`pads`, `pads-2`, …) with one lane per pad, or hits layered into an
+  existing drum track (a pad whose sound equals a lane reuses it), note pads → instrument
+  `notes`. The UI asks for the ops (`dry_run`) and applies them through its own edit
+  queue, so "usar la toma" is undoable with Ctrl+Z like any edit.
+- **Tools** `pads.get`, `pads.take_get`, `pads.slice`, `pads.from_track` (readonly) and
+  `pads.save_banks`, `pads.take_save`, `pads.take_delete`, `pads.commit`; the four
+  writers join the LAN remote-write set (they write only under `pads/` and through
+  `song.edit`). `song.pieces` adds `sounds` → `voices` (lane/pad sounds rendered by the
+  renderer's own `lane_sound`) and `notes` → `note_voices` (single instrument notes for
+  note pads). `CommentEvent.selection` adds `take` and `pad`; the digest tells the agent
+  which tool reads them.
+- **Latency (UI).** Pads bypass the editor's stem bus (its limiter look-ahead adds 5-6 ms)
+  and go straight to the master through a zero-latency soft clipper. A press is placed at
+  the ctx time that was AUDIBLE at the key event's timestamp (output timestamp), minus the
+  stem bus delay of the base and the per-output calibrated offset (tap-along helper,
+  stored in localStorage per output device + latency class). ≥ 80 ms output latency is
+  reported as "parecen auriculares Bluetooth: usá cable".

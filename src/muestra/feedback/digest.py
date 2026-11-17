@@ -94,4 +94,16 @@ def event_line(e) -> str:
         )
     if sel.source_s:
         parts.append(f"fuente {sel.source} {sel.source_s[0]:.2f}-{sel.source_s[1]:.2f} s")
+    if sel.take:
+        parts.append(
+            f"es la toma {sel.take} de los pads: leela con pads.take_get(take_id={sel.take}); "
+            "para ponerla o limpiarla en la canción, pads.commit (quantize, cleanup) o song.edit "
+            "sobre los golpes que ya puso"
+        )
+    if sel.pad:
+        parts.append(
+            f"es el pad {sel.pad.key} del banco {sel.pad.bank}"
+            + (f" («{sel.pad.name}»)" if sel.pad.name else "")
+            + ": pads.get lo muestra; cambialo con pads.save_banks"
+        )
     return line + ("\n    " + "; ".join(parts) if parts else "")

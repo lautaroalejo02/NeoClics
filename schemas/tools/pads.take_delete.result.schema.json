@@ -1,0 +1,21 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "moved_to": {
+      "title": "Moved To",
+      "type": "string"
+    }
+  },
+  "required": [
+    "moved_to"
+  ],
+  "title": "TakeDeleteResult",
+  "type": "object"
+}

@@ -409,6 +409,11 @@ export class ArrangementPlayer {
     this.run = null;
   }
 
+  /** The current run (WP17 pads: loop-unwrapped clock for recording). */
+  get runInfo(): { when: number; offset: number; loopStart: number; loopEnd: number } | null {
+    return this.run ? { ...this.run } : null;
+  }
+
   /** Song position (s) heard at ctx time t. */
   position(t: number): number {
     const r = this.run;

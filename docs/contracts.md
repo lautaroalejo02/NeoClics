@@ -1,5 +1,43 @@
 # Muestra contracts (as implemented, WP0.1)
 
+WP17 performance pads (decisions 2026-11-17 WP17). `PatternLane` = exactly one of
+`sample` | `slice` (**`sample` is now optional: readers must handle None**) + optional
+`pitch_semitones` (−24..24, sampler-style resample), `reverse`, `choke` (1..16).
+`LaneSlice{chop? | source? + start_downbeat?, stem? (source only, default mix),
+start_beats=0, length_beats (0,64], speed: project|source, warp? (source only)}`.
+`PatternHit.length_beats?` (0,64] = gate. Expansion: `DrumHit.sample: str | None`,
+`DrumHit.cut0` (gate/choke cut, 3 ms fade from there, `CUT_FADE_MS`). Validation:
+slice refs (`ref_not_found` at `...lanes.<l>.slice.chop|source`); with `check_files`, a
+slice is checked as the chop it renders through (analysis, stem, grid, `chop_overrun` at
+`tracks[i].pattern.lanes.<l>.slice.<field>`). Diff: Spanish sentences for slice, pitch,
+reverse, choke and gate changes. Files `pads/banks.json` → `PadsFile{schema_version,
+active_bank, banks[{id, name, pads[Pad]}]}` and `pads/takes/<tNNN>.json` → `Take{id,
+name, created_at, updated_at, status: recording|done, bpm, origin_beat (0-based song
+beat), loop_beats?, length_beats, bank?, pads{<key code>: Pad}, events[{beat (0-based
+from origin, heard, unquantised, ≥ −1/16 before beat 0 = early beat 1), pad, velocity,
+length_beats?, cycle}], quantize{grid: off|1/16|1/8|1/8t|1/16t, strength, swing},
+latency_ms, commits[], note?}`; `Pad{key (KeyboardEvent.code), name, color?, sample? |
+slice? | note{track, pitches[]}, gain_db, pan, pitch_semitones, reverse, choke?, mode:
+oneshot|gate, velocity=0.8, accent=1, lane?}`. JSON schemas: the `pads.*` tool schemas
+under `schemas/tools/`. `pads/` is versioned (`VERSIONED_PATHS`), never rewound by
+restore; deleted takes move to `pads/takes/deleted/`. Tools: `pads.get` →
+`{banks, takes[summary], problems, hint}`; `pads.take_get{take_id, quantize?,
+cleanup{dedupe_ms, velocity: as_played|fixed|even, velocity_value}, at_bar?}` →
+`{take, events[{beat, raw_beat, pad, name, velocity, length_beats, cycle,
+song_beat?}], span_beats, text}`; `pads.take_save{take}` (allocates `tNNN` when id is
+missing); `pads.take_delete`; `pads.commit{take_id, target: new_track|track, track?,
+new_track_id?, at_bar, repeat? | until_bar?, quantize?, cleanup, base_revision?,
+dry_run}` → `{ops, track, new_track, lanes{key: lane}, new_lanes, hits, notes, dropped,
+repeat, span_beats, messages, changes, revision}`; `pads.slice{chop | source +
+start_downbeat, stem, start_beats, length_beats?, by: beat|half|transients, speed,
+warp?, max_slices}` → `{slices[LaneSlice]}`; `pads.from_track{track, keys?}` →
+`{pads[Pad]}`; `pads.save_banks{banks}`. `song.pieces` adds params `sounds[{sample? |
+slice?, pitch_semitones, reverse}]`, `notes[{track, pitch, seconds}]` and results
+`voices[{…sound, piece}]` (every slice/tuned/reversed lane of the song + the requested
+sounds, rendered by `render.core.lane_sound`), `note_voices[{track, pitch, seconds,
+piece}]`. `Selection` adds `take?` (`tNNN`) and `pad?{bank, key, name?}`. Remote (LAN)
+write tools add `pads.save_banks`, `pads.take_save`, `pads.take_delete`, `pads.commit`.
+
 WP16 per-event control and editor (all additive; decisions 2026-11-17 WP16).
 `PatternLane.overrides{<song bar>: <steps_per_bar chars>}` replaces one bar of a lane;
 `PatternLane.steps` may be omitted (rests). `Pattern.hits[{beat (1-indexed song
@@ -249,6 +287,7 @@ start of the next render and when `muestra serve` starts (rule:
   cache/stems/<src>/  cache/analysis/<src>.json  cache/previews/<src>/<set>/
   cache/chops/<src>/<set_id>.json
   docs/decisions.md
+  pads/banks.json  pads/takes/<tNNN>.json  pads/takes/deleted/   # WP17, versioned
 ```
 
 `muestra.project` provides `create_project`, `open_project`,
@@ -727,5 +766,6 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `versions.prune` | `muestra.versions.tools` | WP13: dry run by default; `{dry_run, remove[{version,bytes}], keep[{version,bytes,reasons}], freed_bytes, cache_files, cache_freed_bytes, disk, hint}`; rules in `docs/versions.md` "Disk use". `versions.list` adds `disk` and per-record `size_bytes`; `GET /project` adds `disk` |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); WP12: `versions.get` returns `metrics_summary` + `metrics_path` by default, the full `metrics` and `song_yaml` only with `detail=true`; restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta` (ears notes), `metrics_compare` (ears `MetricsDelta`), `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
 | `song.edit`, `song.state`, `song.pieces` | `muestra.editor.tools` | WP16: see the paragraph at the top; `docs/render.md` "Editor pieces" |
+| `pads.get/save_banks/take_save/take_get/take_delete/commit/slice/from_track` | `muestra.pads.tools` | WP17: see the paragraph at the top |
 | `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary` (WP12: `metrics` only with `detail=true`); compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

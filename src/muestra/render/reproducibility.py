@@ -12,7 +12,15 @@ def render_signature(project, song) -> str:
 
     refs = set()
     grids = {}
-    for chop in song.chops:
+    by_id = {c.id: c for c in song.chops}
+    sliced = [
+        lane.slice.as_chop(by_id)
+        for t in song.tracks
+        if t.pattern
+        for lane in t.pattern.lanes.values()
+        if lane.slice is not None
+    ]
+    for chop in [*song.chops, *(c for c in sliced if c is not None)]:  # WP17 slice lanes
         analysis = load_analysis(project, chop.source)
         grids[chop.source] = [analysis.beats_s, analysis.downbeats_s]
         ref = analysis.file if chop.stem == "mix" else getattr(analysis.stems, chop.stem)
@@ -20,7 +28,7 @@ def render_signature(project, song) -> str:
     for track in song.tracks:
         refs.update(c.sample for c in track.clips or [] if c.sample)
         if track.pattern:
-            refs.update(lane.sample for lane in track.pattern.lanes.values())
+            refs.update(lane.sample for lane in track.pattern.lanes.values() if lane.sample)
             refs.update(h.sample for h in track.pattern.hits if h.sample)  # WP16
         if track.midi:
             refs.add(track.midi)

@@ -1,0 +1,199 @@
+{
+  "$defs": {
+    "Cleanup": {
+      "additionalProperties": false,
+      "properties": {
+        "dedupe_ms": {
+          "default": 0.0,
+          "description": "Merge presses of one pad closer than this.",
+          "maximum": 200.0,
+          "minimum": 0.0,
+          "title": "Dedupe Ms",
+          "type": "number"
+        },
+        "velocity": {
+          "default": "as_played",
+          "enum": [
+            "as_played",
+            "fixed",
+            "even"
+          ],
+          "title": "Velocity",
+          "type": "string"
+        },
+        "velocity_value": {
+          "default": 0.8,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Velocity Value",
+          "type": "number"
+        }
+      },
+      "title": "Cleanup",
+      "type": "object"
+    },
+    "TakeQuantize": {
+      "additionalProperties": false,
+      "description": "Non-destructive quantise of a take (applied on read/commit).\n\n``strength`` 0..1 moves each hit that fraction of the way to the nearest\ngrid point; ``swing`` 0..1 delays the odd (off) points of a straight grid\nby ``swing * step / 3`` (the song's pattern swing; 1 = full triplet feel;\ntriplet grids ignore it).",
+      "properties": {
+        "grid": {
+          "default": "off",
+          "enum": [
+            "off",
+            "1/16",
+            "1/8",
+            "1/8t",
+            "1/16t"
+          ],
+          "title": "Grid",
+          "type": "string"
+        },
+        "strength": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Strength",
+          "type": "number"
+        },
+        "swing": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Swing",
+          "type": "number"
+        }
+      },
+      "title": "TakeQuantize",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "at_bar": {
+      "default": 1,
+      "description": "Song bar where take beat 0 goes.",
+      "minimum": 1,
+      "title": "At Bar",
+      "type": "integer"
+    },
+    "base_revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Base Revision"
+    },
+    "cleanup": {
+      "$ref": "#/$defs/Cleanup"
+    },
+    "dry_run": {
+      "default": false,
+      "description": "Return the ops without writing.",
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "new_track_id": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Default: pads, pads-2, ...",
+      "title": "New Track Id"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "quantize": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TakeQuantize"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Default: the take's."
+    },
+    "repeat": {
+      "anyOf": [
+        {
+          "maximum": 4096,
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Passes (default 1).",
+      "title": "Repeat"
+    },
+    "take_id": {
+      "pattern": "^t[0-9]{3,}$",
+      "title": "Take Id",
+      "type": "string"
+    },
+    "target": {
+      "default": "new_track",
+      "description": "new_track = a new pattern track with one lane per pad; track = layer the hits into an existing drum (pattern) track.",
+      "enum": [
+        "new_track",
+        "track"
+      ],
+      "title": "Target",
+      "type": "string"
+    },
+    "track": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "With target=track.",
+      "title": "Track"
+    },
+    "until_bar": {
+      "anyOf": [
+        {
+          "minimum": 2,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Loop the take until this bar (exclusive).",
+      "title": "Until Bar"
+    }
+  },
+  "required": [
+    "project",
+    "take_id"
+  ],
+  "title": "CommitParams",
+  "type": "object"
+}

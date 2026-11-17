@@ -19,7 +19,7 @@ import type { Store } from "../state/store";
 import { friendlyError } from "../text/es";
 import { buildArrangement, emptyPieces, materialKey, type MaterialPiece, type PieceSet, type TrackStatus } from "./arrange";
 import { applyOps, ConflictError, PathError, type Op } from "./ops";
-import { BEATS_PER_BAR, instrumentFingerprint, songSeconds, stable, trackKind, wetFingerprint, type SongJson } from "./song";
+import { BEATS_PER_BAR, instrumentFingerprint, plainSound, songSeconds, stable, trackKind, voiceKey, wetFingerprint, type SongJson, type SoundJson } from "./song";
 import { beatToX, clampScroll, defaultView, layoutRows, type Snap, type View } from "./timeline";
 import { type Selection, emptySelection, selectionPayload } from "./selection";
 
@@ -363,9 +363,25 @@ export class EditorStore {
 
   // ------------------------------------------------------------ arrangement + pieces
 
+  /** WP17: a take auditioned over the base (a virtual track, never saved). */
+  private previewTrack: import("./song").TrackJson | null = null;
+  /** WP17: the pads view captures the keyboard (editor shortcuts stand down). */
+  padsActive = false;
+
+  setPreviewTrack(t: import("./song").TrackJson | null): void {
+    this.previewTrack = t;
+    this.rebuild();
+  }
+
+  /** WP17: a buffer under a one-shot key (rendered instrument notes for take audition). */
+  addOneshot(key: string, b: AudioBuffer): void {
+    this.pieces.oneshots.set(key, b);
+  }
+
   rebuild(): void {
-    const song = this.state.song;
-    if (!song) return;
+    const base = this.state.song;
+    if (!base) return;
+    const song = this.previewTrack ? { ...base, tracks: [...(base.tracks ?? []).filter((t) => t.id !== this.previewTrack!.id), this.previewTrack] } : base;
     const { arr, status } = buildArrangement(song, this.pieces, { solo: new Set(this.state.solo) });
     this.engine.editorBpm = song.meta.bpm;
     this.engine.setArrangement(arr);
@@ -519,7 +535,7 @@ export class EditorStore {
   private async ingest(res: PiecesResult, song: SongJson): Promise<void> {
     const paths = new Map(res.pieces.map((p) => [p.id, p.path]));
     const load = (id: string) => this.buffer(id, paths.get(id)!);
-    if (res.materials.length || Object.keys(res.oneshots).length) {
+    if (res.materials.length || Object.keys(res.oneshots).length || res.voices?.length) {
       const mats: MaterialPiece[] = [];
       for (const m of res.materials) {
         const pass = { chop: m.chop ?? null, sample: m.sample ?? null } as Parameters<typeof materialKey>[1];
@@ -538,6 +554,7 @@ export class EditorStore {
       }
       const oneshots = new Map<string, AudioBuffer>();
       for (const [ref, id] of Object.entries(res.oneshots)) oneshots.set(ref, await load(id));
+      for (const v of res.voices ?? []) this.pieces.voices.set(voiceKey(v), await load(v.piece));
       // keep older materials that still match (other revisions' variants)
       const keep = this.pieces.materials.filter((old) => !mats.some((m) => m.buffer === old.buffer));
       this.pieces = { ...this.pieces, sampleRate: res.sample_rate, materials: [...mats, ...keep].slice(0, 400), oneshots: new Map([...this.pieces.oneshots, ...oneshots]) };
@@ -555,6 +572,7 @@ export class EditorStore {
     const used = new Set<AudioBuffer>([
       ...this.pieces.materials.map((m) => m.buffer),
       ...this.pieces.oneshots.values(),
+      ...this.pieces.voices.values(),
       ...[...this.pieces.wet.values()].map((w) => w.buffer),
       ...[...this.pieces.inst.values()].map((w) => w.buffer),
     ]);
@@ -594,6 +612,65 @@ export class EditorStore {
     } catch {
       return null;
     }
+  }
+
+  /** The buffer of any lane/pad sound: a file one-shot, or a rendered voice
+   *  (slice / tuned / reversed: song.pieces renders it like the renderer). */
+  async soundBuffer(snd: SoundJson): Promise<AudioBuffer | null> {
+    if (plainSound(snd)) return this.sampleBuffer(snd.sample!);
+    const key = voiceKey(snd);
+    const have = this.pieces.voices.get(key);
+    if (have) return have;
+    try {
+      const res = await this.app.client.tool<PiecesResult>("song_pieces", { sounds: [snd], dry: false, wet: false, tracks: [] });
+      const v = res.voices?.[0];
+      const path = v && res.pieces.find((p) => p.id === v.piece)?.path;
+      if (!v || !path) return null;
+      const b = await this.buffer(v.piece, path);
+      this.pieces.voices.set(voiceKey(v), b);
+      return b;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Several sounds in one song.pieces call (loading a pad bank). */
+  async soundBuffers(snds: SoundJson[]): Promise<Map<string, AudioBuffer>> {
+    const out = new Map<string, AudioBuffer>();
+    const need: SoundJson[] = [];
+    for (const s of snds) {
+      const k = plainSound(s) ? s.sample! : voiceKey(s);
+      const have = plainSound(s) ? this.pieces.oneshots.get(k) : this.pieces.voices.get(k);
+      if (have) out.set(k, have);
+      else need.push(s);
+    }
+    if (!need.length) return out;
+    const samples = need.filter(plainSound).map((s) => s.sample!);
+    const sounds = need.filter((s) => !plainSound(s));
+    const res = await this.app.client.tool<PiecesResult>("song_pieces", { samples, sounds, dry: false, wet: false, tracks: [] });
+    const paths = new Map(res.pieces.map((p) => [p.id, p.path]));
+    for (const [ref, id] of Object.entries(res.oneshots)) {
+      const b = await this.buffer(id, paths.get(id)!);
+      this.pieces.oneshots.set(ref, b);
+      out.set(ref, b);
+    }
+    for (const v of res.voices ?? []) {
+      const b = await this.buffer(v.piece, paths.get(v.piece)!);
+      const k = voiceKey(v);
+      this.pieces.voices.set(k, b);
+      out.set(k, b);
+    }
+    return out;
+  }
+
+  /** Rendered single instrument notes (note pads). */
+  async noteBuffers(notes: { track: string; pitch: number; seconds?: number }[]): Promise<Map<string, AudioBuffer>> {
+    const out = new Map<string, AudioBuffer>();
+    if (!notes.length) return out;
+    const res = await this.app.client.tool<PiecesResult>("song_pieces", { notes, dry: false, wet: false, tracks: [] });
+    const paths = new Map(res.pieces.map((p) => [p.id, p.path]));
+    for (const n of res.note_voices ?? []) out.set(`${n.track}:${n.pitch}`, await this.buffer(n.piece, paths.get(n.piece)!));
+    return out;
   }
 
   // ------------------------------------------------------------ transport / listening
@@ -789,6 +866,22 @@ export class EditorStore {
     return ok;
   }
 
+  /** "Pedile al agente" about something outside the timeline (WP17: a take or a pad). */
+  async askAbout(text: string, selection: { label: string; take?: string; pad?: { bank: string; key: string; name?: string } }): Promise<boolean> {
+    if (!text.trim()) return false;
+    const ev: CommentEvent = {
+      ts: new Date().toISOString(),
+      type: "comment",
+      text: text.trim(),
+      selection,
+      ...(this.state.revision ? { song_revision: this.state.revision } : {}),
+      version: null,
+    };
+    const ok = await this.app.append(ev);
+    if (ok) this.app.toast("Listo: se lo dejé al agente, apuntando a eso.", "ok");
+    return ok;
+  }
+
   /** Song hash (diagnostics). */
   songKey(): string {
     return this.state.song ? stable(this.state.song) : "";
@@ -808,6 +901,8 @@ export interface PiecesResult {
   pieces: { id: string; path: string; kind: string; frames: number; duration_s: number }[];
   materials: { chop?: string | null; sample?: string | null; clip_warp?: unknown; start: number; length: number; stretch: number; pitch: number; tail_frames: number; base: boolean; piece: string }[];
   oneshots: Record<string, string>;
+  voices?: (SoundJson & { piece: string })[];
+  note_voices?: { track: string; pitch: number; seconds: number; piece: string }[];
   tracks: { id: string; kind: string; dry_stem?: string | null; wet?: string | null; wet_render_s?: number | null; error?: string | null }[];
   render_s: number;
   approximations: string[];

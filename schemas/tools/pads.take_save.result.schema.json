@@ -1,0 +1,141 @@
+{
+  "$defs": {
+    "TakeQuantize": {
+      "additionalProperties": false,
+      "description": "Non-destructive quantise of a take (applied on read/commit).\n\n``strength`` 0..1 moves each hit that fraction of the way to the nearest\ngrid point; ``swing`` 0..1 delays the odd (off) points of a straight grid\nby ``swing * step / 3`` (the song's pattern swing; 1 = full triplet feel;\ntriplet grids ignore it).",
+      "properties": {
+        "grid": {
+          "default": "off",
+          "enum": [
+            "off",
+            "1/16",
+            "1/8",
+            "1/8t",
+            "1/16t"
+          ],
+          "title": "Grid",
+          "type": "string"
+        },
+        "strength": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Strength",
+          "type": "number"
+        },
+        "swing": {
+          "default": 0.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Swing",
+          "type": "number"
+        }
+      },
+      "title": "TakeQuantize",
+      "type": "object"
+    },
+    "TakeSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "bpm": {
+          "title": "Bpm",
+          "type": "number"
+        },
+        "commits": {
+          "default": 0,
+          "title": "Commits",
+          "type": "integer"
+        },
+        "created_at": {
+          "format": "date-time",
+          "title": "Created At",
+          "type": "string"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "length_beats": {
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "loop_beats": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loop Beats"
+        },
+        "n_events": {
+          "title": "N Events",
+          "type": "integer"
+        },
+        "name": {
+          "title": "Name",
+          "type": "string"
+        },
+        "origin_beat": {
+          "title": "Origin Beat",
+          "type": "number"
+        },
+        "pads": {
+          "description": "Pad names played.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Pads",
+          "type": "array"
+        },
+        "quantize": {
+          "$ref": "#/$defs/TakeQuantize"
+        },
+        "status": {
+          "title": "Status",
+          "type": "string"
+        },
+        "updated_at": {
+          "format": "date-time",
+          "title": "Updated At",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "status",
+        "bpm",
+        "length_beats",
+        "origin_beat",
+        "n_events",
+        "quantize",
+        "created_at",
+        "updated_at"
+      ],
+      "title": "TakeSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "take": {
+      "$ref": "#/$defs/TakeSummary"
+    }
+  },
+  "required": [
+    "take"
+  ],
+  "title": "TakeSaveResult",
+  "type": "object"
+}

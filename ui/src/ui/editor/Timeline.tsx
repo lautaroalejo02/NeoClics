@@ -7,7 +7,7 @@ import { hitTest, pitchAt, rowAt, type Target } from "../../editor/hit";
 import { useEditor, useEditorStore } from "../../editor/react";
 import { drawTimes } from "../../editor/perf";
 import type { HitSel, Selection } from "../../editor/selection";
-import { BEATS_PER_BAR, clipBaseLength, clipStart0, passBeats, patternHits, trackById } from "../../editor/song";
+import { BEATS_PER_BAR, clipBaseLength, clipStart0, hitSound, passBeats, patternHits, trackById, type SoundJson } from "../../editor/song";
 import { SNAP_BEATS, beatToX, clamp, layoutRows, snapBeat, xToBeat, zoomAt } from "../../editor/timeline";
 
 interface DragState {
@@ -30,7 +30,7 @@ interface DragState {
 
 const MOVE_PX = 4;
 
-export function Timeline({ onAudition }: { onAudition: (sample: string, gain?: number) => void }) {
+export function Timeline({ onAudition }: { onAudition: (sound: string | SoundJson, gain?: number) => void }) {
   const editor = useEditorStore();
   const song = useEditor((s) => s.song)!;
   const view = useEditor((s) => s.view);
@@ -407,7 +407,7 @@ export function Timeline({ onAudition }: { onAudition: (sample: string, gain?: n
         const beat = isFree ? t.beat : (t.bar - 1) * BEATS_PER_BAR + (t.step * BEATS_PER_BAR) / (trackById(song, t.track)?.pattern?.steps_per_bar ?? 16);
         if (editor.apply(addHit(song, t.track, t.lane, beat, isFree ? null : { bar: t.bar, step: t.step }, e.ctrlKey || e.metaKey ? 0.6 : 1))) {
           const lane = trackById(song, t.track)?.pattern?.lanes[t.lane];
-          if (lane) onAudition(lane.sample, e.ctrlKey || e.metaKey ? 0.6 : 1);
+          if (lane) onAudition(hitSound(lane, lane.sample ?? null), e.ctrlKey || e.metaKey ? 0.6 : 1);
         }
         return;
       }

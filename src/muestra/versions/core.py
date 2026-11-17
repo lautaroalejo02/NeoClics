@@ -100,6 +100,7 @@ VERSIONED_PATHS = (
     "muestra.toml",
     "ears.toml",  # optional ears thresholds/reference (WP6): part of the version
     "feedback.jsonl",
+    "pads",  # WP17: pad banks + recorded takes (never rewound by restore)
     "docs",
     ".gitignore",
     ".gitattributes",

@@ -47,12 +47,30 @@ export interface ClipJson {
   instances?: Record<string, InstanceJson>;
 }
 
+/** A slice of a chop or of a source played as a lane sound (WP17, schemas.song.LaneSlice). */
+export interface SliceJson {
+  chop?: string | null;
+  source?: string | null;
+  stem?: string | null;
+  start_downbeat?: number | null;
+  start_beats?: number;
+  length_beats: number;
+  speed?: "project" | "source";
+  warp?: WarpJson | null;
+}
+
 export interface LaneJson {
-  sample: string;
+  /** a file; exactly one of sample / slice (WP17) */
+  sample?: string | null;
+  slice?: SliceJson | null;
   steps?: string;
   gain_db?: number;
   pan?: number;
   overrides?: Record<string, string>;
+  /** WP17: sampler tuning (resampled), reverse, choke group 1-16 */
+  pitch_semitones?: number;
+  reverse?: boolean;
+  choke?: number | null;
 }
 
 export interface FreeHitJson {
@@ -60,6 +78,8 @@ export interface FreeHitJson {
   lane: string;
   velocity?: number;
   sample?: string | null;
+  /** WP17 gate: cut after this many beats */
+  length_beats?: number | null;
 }
 
 export interface PatternJson {
@@ -184,8 +204,14 @@ export interface DrumHit {
   step: number | null;
   /** pattern.hits index for free hits */
   index: number | null;
-  sample: string;
+  /** the file it plays; null = the lane's slice (WP17) */
+  sample: string | null;
+  /** WP17: 0-based beat where the sound is cut (gate or choke), 3 ms fade; null = plays out */
+  cut0: number | null;
 }
+
+/** WP17: fade (ms) of a gated or choked hit, starting at its cut point (schemas.song.CUT_FADE_MS). */
+export const CUT_FADE_MS = 3;
 
 function laneVelocities(p: PatternJson, lane: LaneJson): (number | null)[] {
   const v = parseSteps(lane.steps);
@@ -223,7 +249,7 @@ export function patternHits(song: SongJson, track: TrackJson): DrumHit[] {
         if (v == null || ov.has(songBar)) continue;
         const beat = bar0 * BEATS_PER_BAR + index * step + (index % 2 ? swing : 0);
         if (lo - 1e-9 <= beat && beat < hi - 1e-9) {
-          out.push({ beat0: beat, lane: name, velocity: v, origin: "pattern", bar: songBar, step: index % spb, index: null, sample: lane.sample });
+          out.push({ beat0: beat, lane: name, velocity: v, origin: "pattern", bar: songBar, step: index % spb, index: null, sample: lane.sample ?? null, cut0: null });
         }
       }
     }
@@ -233,7 +259,7 @@ export function patternHits(song: SongJson, track: TrackJson): DrumHit[] {
         if (v == null) return;
         const beat = (songBar - 1) * BEATS_PER_BAR + s * step + (s % 2 ? swing : 0);
         if (lo - 1e-9 <= beat && beat < hi - 1e-9) {
-          out.push({ beat0: beat, lane: name, velocity: v, origin: "override", bar: songBar, step: s, index: null, sample: lane.sample });
+          out.push({ beat0: beat, lane: name, velocity: v, origin: "override", bar: songBar, step: s, index: null, sample: lane.sample ?? null, cut0: null });
         }
       });
     }
@@ -250,10 +276,84 @@ export function patternHits(song: SongJson, track: TrackJson): DrumHit[] {
       bar: Math.floor(beat / BEATS_PER_BAR + 1e-9) + 1,
       step: null,
       index: i,
-      sample: h.sample || lane.sample,
+      sample: h.sample || lane.sample || null,
+      cut0: h.length_beats != null ? beat + h.length_beats : null,
     });
   });
-  return out.sort((a, b) => a.beat0 - b.beat0 || (a.lane < b.lane ? -1 : a.lane > b.lane ? 1 : 0));
+  out.sort((a, b) => a.beat0 - b.beat0 || (a.lane < b.lane ? -1 : a.lane > b.lane ? 1 : 0));
+  return applyChokes(p, out);
+}
+
+/** Cut each hit at the next STRICTLY later hit of its lane's choke group (mirror of _apply_chokes). */
+export function applyChokes(p: PatternJson, hits: DrumHit[]): DrumHit[] {
+  const groups = new Map<string, number>();
+  for (const [name, lane] of Object.entries(p.lanes)) if (lane.choke) groups.set(name, lane.choke);
+  if (!groups.size) return hits;
+  const byGroup = new Map<number, number[]>();
+  hits.forEach((h, i) => {
+    const g = groups.get(h.lane);
+    if (g != null) {
+      const l = byGroup.get(g) ?? [];
+      l.push(i);
+      byGroup.set(g, l);
+    }
+  });
+  const out = hits.slice();
+  for (const idx of byGroup.values()) {
+    for (let k = 0; k < idx.length; k++) {
+      const i = idx[k];
+      let later: number | null = null;
+      for (let j = k + 1; j < idx.length; j++) {
+        if (out[idx[j]].beat0 > out[i].beat0 + 1e-9) {
+          later = out[idx[j]].beat0;
+          break;
+        }
+      }
+      if (later != null && (out[i].cut0 == null || later < out[i].cut0!)) out[i] = { ...out[i], cut0: later };
+    }
+  }
+  return out;
+}
+
+/** A lane/pad sound without gain/pan (editor.pieces SoundSpec). */
+export interface SoundJson {
+  sample?: string | null;
+  slice?: SliceJson | null;
+  pitch_semitones?: number;
+  reverse?: boolean;
+}
+
+function normWarp(w: WarpJson | null | undefined): unknown {
+  return w ? { mode: w.mode ?? "resample", pitch_semitones: w.pitch_semitones ?? 0, formants: w.formants ?? null } : null;
+}
+
+export function normSlice(s: SliceJson | null | undefined): unknown {
+  if (!s) return null;
+  return {
+    chop: s.chop ?? null,
+    source: s.source ?? null,
+    stem: s.stem ?? null,
+    start_downbeat: s.start_downbeat ?? null,
+    start_beats: s.start_beats ?? 0,
+    length_beats: s.length_beats,
+    speed: s.speed ?? "project",
+    warp: normWarp(s.warp),
+  };
+}
+
+/** True when the sound is a plain file (its buffer is the song.pieces one-shot). */
+export function plainSound(s: SoundJson): boolean {
+  return !!s.sample && !s.slice && !s.pitch_semitones && !s.reverse;
+}
+
+/** Key of a rendered voice (song.pieces voices) — same for the request and the echo. */
+export function voiceKey(s: SoundJson): string {
+  return stable({ sample: s.sample ?? null, slice: normSlice(s.slice), pitch: s.pitch_semitones ?? 0, reverse: !!s.reverse });
+}
+
+/** The sound one hit of a lane plays. */
+export function hitSound(lane: LaneJson, hitSample: string | null): SoundJson {
+  return { sample: hitSample, slice: hitSample ? null : (lane.slice ?? null), pitch_semitones: lane.pitch_semitones ?? 0, reverse: !!lane.reverse };
 }
 
 /** Velocities of one SONG bar of a lane (override, else the tiled pattern). */

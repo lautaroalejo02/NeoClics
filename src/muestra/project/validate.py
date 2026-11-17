@@ -322,7 +322,8 @@ def _check_files_exist(project: Project, song: Song) -> list[Issue]:
                     check_ref(clip.sample, f"tracks[{ti}].clips[{ci}].sample")
         if track.pattern:
             for lane, spec in track.pattern.lanes.items():
-                check_ref(spec.sample, f"tracks[{ti}].pattern.lanes.{lane}.sample")
+                if spec.sample is not None:
+                    check_ref(spec.sample, f"tracks[{ti}].pattern.lanes.{lane}.sample")
             for hi, hit in enumerate(track.pattern.hits):
                 if hit.sample is not None:
                     check_ref(hit.sample, f"tracks[{ti}].pattern.hits[{hi}].sample")
@@ -410,11 +411,18 @@ def _check_chops_vs_analysis(project: Project, song: Song) -> list[Issue]:
         return analyses[source_id]
 
     source_ids = {s.id for s in song.sources}
-    for ci, chop in enumerate(song.chops):
+    targets = [(chop, f"chops[{ci}]") for ci, chop in enumerate(song.chops)]
+    by_id = {c.id: c for c in song.chops}
+    for ti, track in enumerate(song.tracks):
+        for lane, spec in (track.pattern.lanes if track.pattern else {}).items():
+            # WP17: a slice lane is checked as the chop it renders through
+            derived = spec.slice.as_chop(by_id) if spec.slice is not None else None
+            if derived is not None:
+                targets.append((derived, f"tracks[{ti}].pattern.lanes.{lane}.slice"))
+    for chop, base in targets:
         if chop.source not in source_ids:
             continue  # already reported by Song.check
         analysis = get_analysis(chop.source)
-        base = f"chops[{ci}]"
         if analysis is None:
             issues.append(
                 Issue(

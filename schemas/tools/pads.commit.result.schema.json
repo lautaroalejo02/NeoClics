@@ -1,0 +1,103 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "changes": {
+      "description": "Spanish, from song.edit.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
+    "dropped": {
+      "title": "Dropped",
+      "type": "integer"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "hits": {
+      "title": "Hits",
+      "type": "integer"
+    },
+    "lanes": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "description": "Pad key -> lane it plays on.",
+      "title": "Lanes",
+      "type": "object"
+    },
+    "messages": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Messages",
+      "type": "array"
+    },
+    "new_lanes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "New Lanes",
+      "type": "array"
+    },
+    "new_track": {
+      "title": "New Track",
+      "type": "boolean"
+    },
+    "notes": {
+      "title": "Notes",
+      "type": "integer"
+    },
+    "ops": {
+      "items": {
+        "additionalProperties": true,
+        "type": "object"
+      },
+      "title": "Ops",
+      "type": "array"
+    },
+    "repeat": {
+      "title": "Repeat",
+      "type": "integer"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Revision"
+    },
+    "span_beats": {
+      "title": "Span Beats",
+      "type": "number"
+    },
+    "track": {
+      "title": "Track",
+      "type": "string"
+    }
+  },
+  "required": [
+    "ops",
+    "track",
+    "new_track",
+    "lanes",
+    "hits",
+    "notes",
+    "dropped",
+    "repeat",
+    "span_beats"
+  ],
+  "title": "CommitResult",
+  "type": "object"
+}

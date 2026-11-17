@@ -1,0 +1,168 @@
+{
+  "$defs": {
+    "Warp": {
+      "additionalProperties": false,
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
+      "properties": {
+        "formants": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Preserve formants when pitch_semitones != 0. Default: on for stem: vocals only (measured: it colours instruments and drums).",
+          "title": "Formants"
+        },
+        "mode": {
+          "default": "resample",
+          "enum": [
+            "resample",
+            "stretch"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "pitch_semitones": {
+          "default": 0.0,
+          "maximum": 24.0,
+          "minimum": -24.0,
+          "title": "Pitch Semitones",
+          "type": "number"
+        }
+      },
+      "title": "Warp",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "by": {
+      "default": "beat",
+      "enum": [
+        "beat",
+        "half",
+        "transients"
+      ],
+      "title": "By",
+      "type": "string"
+    },
+    "chop": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Slice this chop (or a part of it).",
+      "title": "Chop"
+    },
+    "length_beats": {
+      "anyOf": [
+        {
+          "exclusiveMinimum": 0,
+          "maximum": 64,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Length Beats"
+    },
+    "max_slices": {
+      "default": 16,
+      "maximum": 48,
+      "minimum": 1,
+      "title": "Max Slices",
+      "type": "integer"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Or slice a region of this source.",
+      "title": "Source"
+    },
+    "speed": {
+      "default": "project",
+      "enum": [
+        "project",
+        "source"
+      ],
+      "title": "Speed",
+      "type": "string"
+    },
+    "start_beats": {
+      "default": 0.0,
+      "description": "Chop: beats into the chop; source: beats from the downbeat.",
+      "title": "Start Beats",
+      "type": "number"
+    },
+    "start_downbeat": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Source regions only.",
+      "title": "Start Downbeat"
+    },
+    "stem": {
+      "default": "mix",
+      "enum": [
+        "drums",
+        "bass",
+        "vocals",
+        "other",
+        "mix"
+      ],
+      "title": "Stem",
+      "type": "string"
+    },
+    "warp": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Warp"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "SliceParams",
+  "type": "object"
+}
