@@ -242,15 +242,30 @@ def _same_path(a: Path | str, b: Path | str) -> bool:
     return os.path.normcase(os.path.realpath(a)) == os.path.normcase(os.path.realpath(b))
 
 
+@dataclass(frozen=True)
+class _Repo:
+    """Where a project's repo lives (one ``rev-parse`` call)."""
+
+    top: Path
+    git_dir: Path
+    branch: str | None = None  # refs/heads/<name>; None when detached / not asked
+
+
+def _repo_info(root: Path) -> _Repo | None:
+    proc = _git(root, "rev-parse", "--show-toplevel", "--absolute-git-dir", check=False)
+    if proc.returncode != 0:
+        return None
+    lines = _text(proc.stdout).splitlines()
+    return _Repo(Path(lines[0]), Path(lines[1])) if len(lines) >= 2 else None
+
+
 def git_toplevel(root: Path) -> Path | None:
     """The top level of the repo containing ``root``; None if not in a repo
     (or git is missing)."""
     if shutil.which("git") is None:
         return None
-    proc = _git(root, "rev-parse", "--show-toplevel", check=False)
-    if proc.returncode != 0:
-        return None
-    return Path(_text(proc.stdout).strip())
+    info = _repo_info(root)
+    return info.top if info else None
 
 
 def _git_dir(root: Path) -> Path:
@@ -271,39 +286,41 @@ _BUSY_MARKERS = (
 )
 
 
-def require_repo_readable(root: Path) -> None:
+def require_repo_readable(root: Path) -> _Repo:
     """Guard reads: git installed and the project folder is the top level of
     its own repo (never a parent's)."""
     if shutil.which("git") is None:
         raise _git_missing()
-    top = git_toplevel(root)
-    if top is None:
+    info = _repo_info(root)
+    if info is None:
         raise MuestraError.one(
             "not_git_repo",
             f"{root} is not a git repository.",
             hint="A Muestra project is its own git repo. Run 'git init' inside the "
             "project folder (project.create does this for new projects).",
         )
-    if not _same_path(top, root):
+    if not _same_path(info.top, root):
         raise MuestraError.one(
             "not_git_repo",
-            f"{root} is inside the repository {top}, not at its top level.",
+            f"{root} is inside the repository {info.top}, not at its top level.",
             hint="Versioning only runs when the project folder is the top level of its "
             "OWN git repo; Muestra will not commit into a parent repository. Run "
             "'git init' inside the project folder.",
         )
+    return info
 
 
-def require_own_repo(root: Path, *, need_branch: bool = True) -> None:
+def require_own_repo(root: Path, *, need_branch: bool = True) -> _Repo:
     """Guard every write: the project folder must be the top level of its
     own healthy git repo.
 
     Refuses (structured errors with fix hints): git not installed, folder
     not a repo or only *inside* another repo, locked index, a rebase/merge/
     cherry-pick in progress, and (``need_branch``) a detached HEAD.
+    Returns the repo info (including the branch ref).
     """
-    require_repo_readable(root)
-    gd = _git_dir(root)
+    info = require_repo_readable(root)
+    gd = info.git_dir
     if (gd / "index.lock").exists():
         raise MuestraError.one(
             "repo_locked",
@@ -319,13 +336,15 @@ def require_own_repo(root: Path, *, need_branch: bool = True) -> None:
                 hint="Finish or abort it first (git rebase --abort / git merge --abort / "
                 "git cherry-pick --abort), then retry.",
             )
-    if need_branch and _branch_ref(root) is None:
+    branch = _branch_ref(root)
+    if need_branch and branch is None:
         raise MuestraError.one(
             "detached_head",
             "The project repo is on a detached HEAD.",
             hint="Check out a branch first (e.g. 'git switch main' or 'git switch -c work'); "
             "commits made on a detached HEAD are orphaned by the next checkout.",
         )
+    return _Repo(info.top, info.git_dir, branch)
 
 
 def _branch_ref(root: Path) -> str | None:
@@ -342,12 +361,21 @@ def _head_sha(root: Path) -> str | None:
 def _identity_config(root: Path) -> tuple[str, ...]:
     """``user.name``/``user.email`` fallbacks, ONLY for what isn't configured
     (config or env); never mutates the repo's config."""
+    have: set[str] = set()
+    if os.environ.get("GIT_AUTHOR_NAME") and os.environ.get("GIT_COMMITTER_NAME"):
+        have.add("user.name")
+    if os.environ.get("GIT_AUTHOR_EMAIL") and os.environ.get("GIT_COMMITTER_EMAIL"):
+        have.add("user.email")
+    if have != {"user.name", "user.email"}:
+        proc = _git(root, "config", "--get-regexp", r"^user\.(name|email)$", check=False)
+        for line in _text(proc.stdout).splitlines():
+            key, _, value = line.partition(" ")
+            if value.strip():
+                have.add(key.lower())
     cfg: list[str] = []
-    name_env = os.environ.get("GIT_AUTHOR_NAME") and os.environ.get("GIT_COMMITTER_NAME")
-    mail_env = os.environ.get("GIT_AUTHOR_EMAIL") and os.environ.get("GIT_COMMITTER_EMAIL")
-    if not name_env and not _git_out(root, "config", "--get", "user.name", check=False):
+    if "user.name" not in have:
         cfg.append(f"user.name={GIT_IDENTITY[0]}")
-    if not mail_env and not _git_out(root, "config", "--get", "user.email", check=False):
+    if "user.email" not in have:
         cfg.append(f"user.email={GIT_IDENTITY[1]}")
     return tuple(cfg)
 
@@ -762,20 +790,38 @@ def _temp_index(root: Path, head: str | None) -> Iterator[dict[str, str]]:
         shutil.rmtree(td, ignore_errors=True)
 
 
-def _stage_versioned(root: Path, env: dict[str, str]) -> None:
-    """Stage the working-tree state of every versioned path into the temp index."""
-    for path in VERSIONED_PATHS:
-        proc = _git(root, "add", "-A", "--", path, env=env, check=False)
-        if proc.returncode == 0:
-            continue
-        err = _text(proc.stderr).lower()
-        if "did not match any files" in err or "ignored by one of your .gitignore" in err:
-            continue
-        raise _git_failure(("add", "-A", "--", path), proc)
+def _has_files(path: Path) -> bool:
+    if path.is_file():
+        return True
+    return path.is_dir() and any(f.is_file() for f in path.rglob("*"))
+
+
+def _stage_versioned(root: Path, env: dict[str, str] | None, head: str | None) -> None:
+    """Stage the working-tree state of every versioned path (additions,
+    edits AND deletions) into the index selected by ``env``."""
+    present = [p for p in VERSIONED_PATHS if _has_files(root / p)]
+    absent = [p for p in VERSIONED_PATHS if p not in present]
+    if present:
+        proc = _git(root, "add", "-A", "--", *present, env=env, check=False)
+        if proc.returncode != 0:
+            err = _text(proc.stderr).lower()
+            if "ignored by one of your .gitignore" not in err:
+                raise _git_failure(("add", "-A", "--", *present), proc)
+            for path in present:  # an ignored path must not block the others
+                one = _git(root, "add", "-A", "--", path, env=env, check=False)
+                if one.returncode != 0 and "ignored by" not in _text(one.stderr).lower():
+                    raise _git_failure(("add", "-A", "--", path), one)
+    if absent and head:  # recorded deletions of paths that exist in HEAD
+        _git(root, "rm", "-r", "--cached", "-q", "--ignore-unmatch", "--", *absent, env=env)
 
 
 def _commit_versioned(
-    root: Path, message: str, *, allow_empty: bool
+    root: Path,
+    message: str,
+    *,
+    allow_empty: bool,
+    ref: str | None = None,
+    ident: tuple[str, ...] | None = None,
 ) -> tuple[str | None, str | None]:
     """Commit the working-tree state of :data:`VERSIONED_PATHS` on the current
     branch, using a private index.
@@ -783,9 +829,9 @@ def _commit_versioned(
     Returns ``(new_sha, previous_head)``; ``new_sha`` is None when nothing
     changed and ``allow_empty`` is false. The branch is advanced with a
     compare-and-swap, so a concurrent commit makes this fail instead of
-    being overwritten.
+    being overwritten. ``ref``/``ident`` may be passed in to save git calls.
     """
-    ref = _branch_ref(root)
+    ref = ref or _branch_ref(root)
     if ref is None:
         raise MuestraError.one(
             "detached_head",
@@ -793,9 +839,9 @@ def _commit_versioned(
             hint="Check out a branch first (e.g. 'git switch main').",
         )
     head = _head_sha(root)
-    ident = _identity_config(root)
+    ident = _identity_config(root) if ident is None else ident
     with _temp_index(root, head) as env:
-        _stage_versioned(root, env)
+        _stage_versioned(root, env, head)
         tree = _git_out(root, "write-tree", env=env)
         if head and not allow_empty:
             head_tree = _git_out(root, "rev-parse", f"{head}^{{tree}}")
@@ -838,8 +884,15 @@ def commit_all(
     return sha or head or ""
 
 
-def tag_version(repo: Path, version: str, message: str | None = None, commit: str = "HEAD") -> None:
+def tag_version(
+    repo: Path,
+    version: str,
+    message: str | None = None,
+    commit: str = "HEAD",
+    ident: tuple[str, ...] | None = None,
+) -> None:
     """Create the annotated tag ``vNNN`` on ``commit`` (default HEAD)."""
+    ident = _identity_config(repo) if ident is None else ident
     _git(
         repo,
         "tag",
@@ -849,7 +902,7 @@ def tag_version(repo: Path, version: str, message: str | None = None, commit: st
         version,
         commit,
         input=(message or version).encode("utf-8"),
-        config=(*_identity_config(repo), *_signing_off()),
+        config=(*ident, *_signing_off()),
     )
 
 
@@ -869,8 +922,18 @@ def init_repo(path: Path) -> None:
     ga = path / ".gitattributes"
     if not ga.exists():
         ga.write_bytes(_GITATTRIBUTES.encode("utf-8"))
-    sha, _ = _commit_versioned(path, "Initial muestra project\n", allow_empty=True)
-    assert sha is not None
+    _stage_versioned(path, None, None)
+    _git(
+        path,
+        "commit",
+        "-q",
+        "--allow-empty",
+        "--no-verify",
+        "-F",
+        "-",
+        input=b"Initial muestra project\n",
+        config=(*_identity_config(path), *_signing_off()),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -878,7 +941,7 @@ def init_repo(path: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
-def suggest_parent(project: Project) -> str | None:
+def suggest_parent(project: Project, tags: dict[str, str] | None = None) -> str | None:
     """The version the next render descends from.
 
     Walks HEAD's first-parent history for the most recent *version commit*
@@ -899,8 +962,8 @@ def suggest_parent(project: Project) -> str | None:
                 return info.restored_from
             if info.version:
                 return info.version
-    tags = sorted(version_tags(root))
-    return tags[-1] if tags else None
+    names = sorted(version_tags(root) if tags is None else tags)
+    return names[-1] if names else None
 
 
 # ---------------------------------------------------------------------------
@@ -944,7 +1007,7 @@ def record_version(
             value=parent,
             hint="Pass None to derive the parent automatically.",
         )
-    require_own_repo(root)
+    repo = require_own_repo(root)
     if not project.song_path.is_file():
         raise MuestraError.one(
             "file_not_found",
@@ -952,7 +1015,8 @@ def record_version(
             path=SONG_FILE,
             hint="Create song.yaml before rendering.",
         )
-    if _tag_exists(root, version):
+    tags = version_tags(root)
+    if version in tags:
         raise MuestraError.one(
             "version_exists",
             f"Tag {version} already exists.",
@@ -961,15 +1025,16 @@ def record_version(
             f"If the tag was made by hand and is wrong, delete it with 'git tag -d {version}'.",
         )
     if parent is None:
-        parent = suggest_parent(project)
+        parent = suggest_parent(project, tags)
     message = build_commit_message(
         version, summary=summary, request=request, agent=agent, parent=parent
     )
-    sha, previous = _commit_versioned(root, message, allow_empty=True)
+    ident = _identity_config(root)
+    sha, previous = _commit_versioned(root, message, allow_empty=True, ref=repo.branch, ident=ident)
     assert sha is not None
     subject = message.split("\n", 1)[0]
     try:
-        tag_version(root, version, subject, commit=sha)
+        tag_version(root, version, subject, commit=sha, ident=ident)
     except MuestraError:
         ref = _branch_ref(root)
         if ref and previous:  # undo our commit so a failed tag leaves no stray version
@@ -1034,9 +1099,10 @@ def restore_files(project: Project, version: str) -> RestoreOutcome:
             value=version,
             hint="Use ids like 'v001' (see versions.list).",
         )
-    require_own_repo(root)
+    repo = require_own_repo(root)
     data, source = snapshot_bytes(project, version)
     commit = version_tags(root).get(version)
+    ident = _identity_config(root)
     warnings: list[str] = []
     before_song = project.song_path.read_bytes() if project.song_path.is_file() else None
 
@@ -1046,6 +1112,8 @@ def restore_files(project: Project, version: str) -> RestoreOutcome:
         f"muestra: snapshot before restoring {version}\n\n"
         f"Muestra-Agent: muestra\nMuestra-Snapshot-For: {version}\n",
         allow_empty=False,
+        ref=repo.branch,
+        ident=ident,
     )
     pre_restore = snap_sha or previous
 
@@ -1087,7 +1155,7 @@ def restore_files(project: Project, version: str) -> RestoreOutcome:
     body = (
         f"muestra: restore {version}\n\nMuestra-Restored-From: {version}\nMuestra-Agent: muestra\n"
     )
-    restore_sha, _ = _commit_versioned(root, body, allow_empty=True)
+    restore_sha, _ = _commit_versioned(root, body, allow_empty=True, ref=repo.branch, ident=ident)
     assert restore_sha is not None
     return RestoreOutcome(
         version=version,
