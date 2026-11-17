@@ -279,6 +279,7 @@ export class AudioEngine {
   private previewKey: string | null = null;
   private previewStart = 0;
   private previewRegion: { start: number; end: number } | null = null;
+  private previewLoop = true;
   private previewCache = new Map<string, Promise<AudioBuffer>>();
 
   private listeners = new Set<() => void>();
@@ -1010,7 +1011,7 @@ export class AudioEngine {
    * `region` (seconds inside the file) loops a sub-range — used to audition
    * start/length nudges that stay inside the rendered preview.
    */
-  async playPreview(key: string, path: string, region: { start: number; end: number } | null = null): Promise<void> {
+  async playPreview(key: string, path: string, region: { start: number; end: number } | null = null, loop = true): Promise<void> {
     this.unlock();
     const ctx = this.ctx;
     if (!ctx || !this.master) return;
@@ -1040,9 +1041,22 @@ export class AudioEngine {
     g.connect(this.master);
     const s = ctx.createBufferSource();
     s.buffer = buf;
-    s.loop = true;
-    s.loopStart = start;
-    s.loopEnd = end;
+    s.loop = loop;
+    if (loop) {
+      s.loopStart = start;
+      s.loopEnd = end;
+    } else {
+      // one-shot (a draft render): ends by itself and frees the player
+      s.onended = () => {
+        if (this.previewSrc !== s) return;
+        this.previewSrc = null;
+        this.previewRegion = null;
+        this.previewKey = null;
+        setTimeout(() => g.disconnect(), 50);
+        this.previewGain = null;
+        this.emit();
+      };
+    }
     s.connect(g);
     const T = ctx.currentTime + LOOKAHEAD_S;
     g.gain.setValueAtTime(0, ctx.currentTime);
@@ -1053,6 +1067,7 @@ export class AudioEngine {
     this.previewGain = g;
     this.previewStart = T;
     this.previewRegion = { start, end };
+    this.previewLoop = loop;
     this.emit();
   }
 
@@ -1060,7 +1075,7 @@ export class AudioEngine {
   getPreviewPosition(): number | null {
     if (!this.previewSrc || !this.ctx || !this.previewRegion) return null;
     const r = this.previewRegion;
-    return playheadAt(r.start, this.ctx.currentTime - this.previewStart, r, r.end);
+    return playheadAt(r.start, this.ctx.currentTime - this.previewStart, this.previewLoop ? r : null, r.end);
   }
 
   stopPreview(): void {

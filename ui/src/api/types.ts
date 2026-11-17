@@ -315,6 +315,23 @@ export interface SongGetResult {
 }
 
 // ---------- muestra-api read endpoints (docs/server.md) ----------
+/** Playable audio that is NOT a version (WP14 finding 4): a draft render
+ *  (partial / experimental, never versioned) or a preview the agent made
+ *  (source grid check, chop candidate). Proposed shape, see ui/API-NEEDS.md. */
+export interface DraftInfo {
+  id: string;
+  /** project-relative, under renders/ or cache/previews/ (served by /files) */
+  path: string;
+  created_at?: string | null;
+  label?: string | null;
+  /** [start, end) 1-indexed bars when it is a partial render */
+  range_bars?: [number, number] | null;
+  duration_s?: number | null;
+  /** draft (default) | grid | chop | preview */
+  kind?: "draft" | "grid" | "chop" | "preview";
+  source_id?: string | null;
+}
+
 /** GET /project, as the server sends it. */
 export interface ProjectView {
   project_path: string;
@@ -325,6 +342,9 @@ export interface ProjectView {
   analyses?: Record<string, Analysis>;
   feedback_cursor?: number;
   issues?: unknown[];
+  /** optional (WP14 backend change): non-versioned draft renders and previews */
+  drafts?: unknown;
+  previews?: unknown;
 }
 
 /** The UI's boot summary, mapped from ProjectView in client.ts. */
@@ -337,6 +357,7 @@ export interface ProjectSummary {
   metas?: Record<VersionId, RenderMeta>;
   metrics?: Record<VersionId, Metrics | null>;
   analyses?: Record<string, Analysis>;
+  drafts?: DraftInfo[];
 }
 
 /** GET /waveform?path=&points=N (server shape). */
@@ -372,7 +393,9 @@ export type WsEventType =
   | "version.created"
   | "candidates.created"
   | "feedback.appended"
-  | "song.changed";
+  | "song.changed"
+  | "draft.created"
+  | "drafts.changed";
 
 export interface WsEvent {
   type: WsEventType;

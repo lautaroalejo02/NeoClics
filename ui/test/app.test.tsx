@@ -286,6 +286,36 @@ describe("App against the mock", () => {
     });
   });
 
+  describe("drafts and previews (WP14 finding 4)", () => {
+    it("no drafts exposed → no area (today's server)", async () => {
+      await boot();
+      expect(screen.queryByTestId("drafts")).toBeNull();
+    });
+
+    it("lists a draft from /project, marked as not a version, playable with the same engine", async () => {
+      await fetch(`${mock.url}/debug/draft`, { method: "POST" });
+      const { engine, user } = await boot();
+      const area = await screen.findByTestId("drafts");
+      expect(area.textContent).toContain("Borradores y previews");
+      expect(area.textContent).toContain("no es una versión");
+      expect(area.textContent).toContain("compases 1–2");
+      // it is not in the version list
+      expect(screen.getByTestId("versions").querySelectorAll("[data-testid^='version-']")).toHaveLength(4);
+      await user.click(screen.getByTestId("play-draft-d001"));
+      const call = engine.calls.find((c) => c[0] === "playPreview");
+      expect(call?.[1]).toBe("draft:d001");
+    });
+
+    it("a draft announced live (draft.created) appears without reloading", async () => {
+      const { store } = await boot({ ws: true });
+      await waitFor(() => expect(store.state.ws).toBe("open"), { timeout: 5000 });
+      expect(screen.queryByTestId("drafts")).toBeNull();
+      await fetch(`${mock.url}/debug/draft?label=Probando%20el%20bombo`, { method: "POST" });
+      expect((await screen.findByTestId("drafts", {}, { timeout: 4000 })).textContent).toContain("Probando el bombo");
+      store.destroy();
+    });
+  });
+
   it("oídos: alarms in Spanish, clickable to jump", async () => {
     const { engine, user } = await boot();
     await user.keyboard("2"); // v002 has positioned alarms

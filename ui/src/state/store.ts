@@ -4,11 +4,12 @@
 // never depends on React re-renders. The engine and the client are
 // injected (component tests pass a fake engine and a client on the mock).
 
-import { MuestraClient, ApiError } from "../api/client";
+import { MuestraClient, ApiError, normalizeDrafts } from "../api/client";
 import type {
   Analysis,
   ChopAdjust,
   ChopsChooseResult,
+  DraftInfo,
   ChopCandidateSet,
   FeedbackEvent,
   Job,
@@ -113,6 +114,8 @@ export interface AppState {
   chopSets: ChopCandidateSet[];
   /** chops declared in song.yaml (suggests the chop id on a manual choose) */
   songChops: { id: string; source: string }[];
+  /** playable non-version audio (draft renders, previews); empty when the server has none */
+  drafts: DraftInfo[];
   /** latest manual chop choice per candidate set */
   chopOutcome: Record<string, ChopOutcome>;
   /** versions.diff(parent, v) musical description, fetched when a row opens. */
@@ -220,6 +223,7 @@ export class Store {
       chopSets: [],
       songChops: [],
       chopOutcome: {},
+      drafts: [],
       diffs: {},
       analyses: {},
       jobs: {},
@@ -363,7 +367,7 @@ export class Store {
     const noAudio = versions.filter((v) => !metas[v.version] || noRender.has(v.version)).map(enrich);
     versions = versions.filter((v) => metas[v.version] && !noRender.has(v.version)).map(enrich);
     for (const v of versions) this.engine.register(specOf(metas[v.version]));
-    this.set({ title: title ?? this.state.title, versions, noAudio, metas, metrics });
+    this.set({ title: title ?? this.state.title, versions, noAudio, metas, metrics, ...(summary?.drafts ? { drafts: summary.drafts } : {}) });
     await Promise.all([this.loadFeedback(), this.loadChops(summary?.analyses)]);
     if (!this.state.active && versions.length) {
       const latest = versions[versions.length - 1].version;
@@ -508,6 +512,18 @@ export class Store {
       }
       case "candidates.created":
         void this.loadChops().then(() => this.toast("El agente propuso candidatos de chop nuevos", "info"));
+        break;
+      case "draft.created": {
+        // an upsert keyed by id
+        const [d] = normalizeDrafts([e.data], "draft");
+        if (d) this.set({ drafts: [d, ...this.state.drafts.filter((x) => x.id !== d.id)] });
+        break;
+      }
+      case "drafts.changed":
+        void this.client
+          .getSummary()
+          .then((s) => s && this.set({ drafts: s.drafts ?? [] }))
+          .catch(() => undefined);
         break;
       case "song.changed":
         void this.client
@@ -939,6 +955,18 @@ export class Store {
       this.setOutcome({ ...o, status: "commented", message: "Listo: le dejé tu elección al agente como comentario.", advice: null, canComment: false });
     }
     return ok;
+  }
+
+  // ------------------------------------------------------------ drafts
+
+  /** Play a draft / preview with the same engine (one-shot, not a version). */
+  async playDraft(d: DraftInfo): Promise<void> {
+    const key = `draft:${d.id}`;
+    if (this.engine.getSnapshot().preview === key) {
+      this.engine.stopPreview();
+      return;
+    }
+    await this.engine.playPreview(key, d.path, null, false);
   }
 
   // ------------------------------------------------------------ prefs

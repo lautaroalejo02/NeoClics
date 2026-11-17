@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import YAML from "yaml";
 import { seedVersions, renderNext } from "./versions.mjs";
-import { decodeWav } from "./wav.mjs";
+import { decodeWav, encodeWav } from "./wav.mjs";
 import { makeAjv, compile } from "./schema.mjs";
 
 
@@ -211,6 +211,26 @@ function readMetrics(v) {
   }
 }
 
+// non-versioned draft renders (POST /debug/draft): playable audio under
+// cache/previews/drafts/, announced in GET /project and by draft.created.
+const drafts = [];
+
+function makeDraft(label) {
+  const n = drafts.length + 1;
+  const id = `d${String(n).padStart(3, "0")}`;
+  const src = readMeta("v002");
+  const wav = decodeWav(fs.readFileSync(path.join(PROJECT, src.mix)));
+  const bars = 2;
+  const frames = Math.min(wav.frames, Math.round(bars * 4 * (60 / src.bpm) * wav.sampleRate));
+  const out = { ...wav, frames, data: wav.data.map((ch) => ch.slice(0, frames)) };
+  const rel = `cache/previews/drafts/${id}.wav`;
+  fs.mkdirSync(path.join(PROJECT, "cache/previews/drafts"), { recursive: true });
+  fs.writeFileSync(path.join(PROJECT, rel), encodeWav(out, "pcm24"));
+  const d = { id, path: rel, created_at: new Date().toISOString(), label: label ?? "Probando el bajo (compases 1-2)", range_bars: [1, 1 + bars], duration_s: frames / wav.sampleRate, kind: "draft" };
+  drafts.push(d);
+  return d;
+}
+
 // versions whose renders/ folder was deleted (POST /debug/delete-renders): the
 // real versions.list still knows them (git tags), with rendered=false.
 const ghosts = new Map();
@@ -352,7 +372,7 @@ function projectView() {
   } catch {
     /* no song */
   }
-  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [] };
+  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [], ...(drafts.length ? { drafts } : {}) };
 }
 
 const peaksCache = new Map();
@@ -458,6 +478,11 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/debug/received") return send(res, 200, received);
   if (pathname === "/debug/render" && req.method === "POST") return send(res, 200, startRender(Number(url.searchParams.get("ms") ?? RENDER_MS)));
   if (pathname === "/debug/separate" && req.method === "POST") return send(res, 200, startSeparate("src1", Number(url.searchParams.get("ms") ?? 45_000)));
+  if (pathname === "/debug/draft" && req.method === "POST") {
+    const d = makeDraft(url.searchParams.get("label") ?? undefined);
+    broadcast("draft.created", d);
+    return send(res, 200, d);
+  }
   if (pathname === "/debug/delete-renders" && req.method === "POST") {
     for (const v of (url.searchParams.get("versions") ?? "").split(",").filter(Boolean)) {
       const rec = listVersions().versions.find((x) => x.version === v);
@@ -476,6 +501,7 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/debug/reset" && req.method === "POST") {
     chooseMode = "ok";
     ghosts.clear();
+    drafts.length = 0;
     freshProject();
     peaksCache.clear();
     return send(res, 200, { ok: true });

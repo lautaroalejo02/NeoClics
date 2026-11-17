@@ -6,6 +6,7 @@ import { useTick } from "../hooks/hooks";
 import { useApp, useEngine, useStore } from "../state/react";
 import { alarmCounts, clockTime, commentCounts, latestRatings, readableDiff, timeAgo, versionTree } from "../state/derive";
 import * as I from "./icons";
+import { DraftsArea } from "./Drafts";
 
 export function VersionsPanel() {
   const store = useStore();
@@ -258,6 +259,7 @@ export function VersionsPanel() {
           })}
         </ol>
       )}
+      <DraftsArea />
     </section>
   );
 }

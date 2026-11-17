@@ -5,6 +5,7 @@
 
 import type {
   Analysis,
+  DraftInfo,
   ChopAdjust,
   ChopsChooseResult,
   ChopsListResult,
@@ -54,6 +55,8 @@ const WS_TYPES: ReadonlySet<string> = new Set<WsEventType>([
   "candidates.created",
   "feedback.appended",
   "song.changed",
+  "draft.created",
+  "drafts.changed",
 ]);
 
 /** Resolve the API base URL: `?api=` query param, then VITE_MUESTRA_API,
@@ -331,5 +334,32 @@ export function summaryFromProjectView(view: ProjectView): ProjectSummary {
     metas,
     metrics,
     analyses: view.analyses ?? {},
+    drafts: normalizeDrafts(view.drafts, "draft").concat(normalizeDrafts(view.previews, "preview")),
   };
+}
+
+/** Tolerant reader for the optional `drafts` / `previews` arrays: anything
+ *  that is not a list of objects with a string `path` is ignored, so the UI
+ *  works unchanged against a server that does not send them yet. */
+export function normalizeDrafts(raw: unknown, defaultKind: NonNullable<DraftInfo["kind"]>): DraftInfo[] {
+  if (!Array.isArray(raw)) return [];
+  const out: DraftInfo[] = [];
+  for (const r of raw) {
+    if (!r || typeof r !== "object") continue;
+    const o = r as Record<string, unknown>;
+    if (typeof o.path !== "string" || !o.path) continue;
+    const kind = ["draft", "grid", "chop", "preview"].includes(String(o.kind)) ? (o.kind as DraftInfo["kind"]) : defaultKind;
+    const rb = Array.isArray(o.range_bars) && o.range_bars.length === 2 && o.range_bars.every((n) => typeof n === "number") ? (o.range_bars as [number, number]) : null;
+    out.push({
+      id: typeof o.id === "string" && o.id ? o.id : o.path,
+      path: o.path,
+      created_at: typeof o.created_at === "string" ? o.created_at : null,
+      label: typeof o.label === "string" ? o.label : null,
+      range_bars: rb,
+      duration_s: typeof o.duration_s === "number" && Number.isFinite(o.duration_s) ? o.duration_s : null,
+      kind,
+      source_id: typeof o.source_id === "string" ? o.source_id : null,
+    });
+  }
+  return out;
 }
