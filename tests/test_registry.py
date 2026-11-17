@@ -81,7 +81,15 @@ def test_run_tool_unknown_and_bad_params():
     assert r.errors[0].path == "source_id"
 
 
-def test_run_tool_not_implemented(tmp_path):
+def test_run_tool_not_implemented(tmp_path, monkeypatch):
+    # independent of which WP stubs remain: swap in a stub implementation
+    import dataclasses
+
+    def stub(_params):
+        raise NotImplementedError("WPx")
+
+    spec = dataclasses.replace(REGISTRY["ears.analyze"], func=stub)
+    monkeypatch.setitem(REGISTRY, "ears.analyze", spec)
     r = run_tool("ears.analyze", {"project": str(tmp_path), "version": "v001"})
     assert not r.ok and r.errors[0].code == "not_implemented"
 
