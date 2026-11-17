@@ -64,3 +64,102 @@ Spanish. Alarms with `at_s` are drawn on the waveform and are clickable.
   (stems play directly). Nothing is re-rendered.
 - The "pendiente de leer por el agente" badge is derived: an event is
   pending until a version with a later `created_at` exists.
+
+---
+
+# WP14 additions (UI audit fixes) — assumptions for the integrator
+
+Everything below lives in `ui/src/api/client.ts` (+ `api/token.ts`) and is
+**defensive**: the UI works unchanged against today's server, and picks the
+new behaviour up as soon as the backend sends it. Nothing here needs a UI
+change when the backend lands, unless a shape differs from what is written.
+
+## 1. `chops.choose` (finding 2)
+
+Backend plan: the human's choice is always recorded and the call succeeds.
+The UI reads, **all optional** (`ChopsChooseResult` in `types.ts`):
+
+| field | meaning | UI |
+|---|---|---|
+| `chop.id` or `chop_id` | chop id actually written | if it differs from the requested one: "Quedó guardado como chop «c1_2» (no pisé «c1»)" |
+| `requested_chop_id` | what was asked | informational |
+| `rescaled` (`true` or `{clip, repeat_from, repeat_to}`) | a clip's `repeat` was rescaled to keep its span | "Ajusté la repetición del clip (repetición 8 → 5)…" |
+| `recorded` | the `chop_choice` event is on disk | informational |
+| `message`, `notes[]`, `warnings[]` | backend text, any language | shown as secondary lines |
+
+Errors: `ApiError.issues[].code` is mapped to Spanish in `text/es.ts`
+(`clip_overrun`, `clip_position`, `chop_overrun`, `stale_candidates`,
+`ref_not_found`, `grid_mismatch`, `invalid_value`, `out_of_range`,
+`duplicate_id`, `file_not_found`, `invalid_audio`, `project_locked`,
+`not_implemented`, `internal_error`, …). The backend's English text is kept
+as "Detalle técnico". If the call fails the UI reloads `feedback.read`; if a
+`chop_choice` for that candidate appeared it says the choice is not lost,
+else it offers one click "Dejárselo al agente como comentario" (a normal
+`comment` event through `feedback.append`).
+
+## 2. Versions without audio (finding 3)
+
+Uses `versions.list` (already real, WP5) in addition to `GET /project`:
+`rendered`, `rerenderable`, `request`, `summary`, `parent`, `created_at`,
+`liked`. A version is playable iff it is in `/project` (has `meta.json`) and
+`rendered !== false`; every other listed version is shown greyed out with
+"Sin audio: pedile al agente que la regenere (render de vNNN)" and a copy
+button. If `versions.list` fails the UI behaves as before.
+
+## 3. Drafts and previews (finding 4) — PROPOSED shape
+
+Optional fields of `GET /project` (and `/project/summary`):
+
+```jsonc
+"drafts":   [ { "id": "d001",                       // stable key (upsert)
+                "path": "renders/_drafts/d001.wav",  // under renders/ or cache/previews/ (served by /files)
+                "created_at": "2026-11-17T10:00:00Z",
+                "label": "Probando el bajo",         // free text
+                "range_bars": [5, 9],                // [start, end) 1-indexed, if partial
+                "duration_s": 7.5 } ],
+"previews": [ { "id": "grid-src1", "path": "cache/previews/src1/grid.wav",
+                "kind": "grid" | "chop" | "preview", "source_id": "src1" } ]
+```
+
+Only `path` is required per entry; malformed entries are ignored. Live
+updates: websocket event `draft.created` (`data` = one draft object, an
+upsert by `id`) and `drafts.changed` (`data` = `{}`, the UI re-reads
+`/project`). Playback is one-shot through the same engine
+(`engine.playPreview(key, path, null, false)`), never as a version, never in
+A/B. The area is hidden when the server exposes nothing.
+
+## 4. Access token for non-loopback use (finding 6)
+
+* The page takes `?token=…` from its URL on first load, keeps it in
+  `sessionStorage` (survives reloads of the tab), and removes it from the
+  address bar with `history.replaceState`.
+* **HTTP**: every request (tools, `/project`, `/waveform`, `/files`, `/jobs`)
+  carries `Authorization: Bearer <token>` **and** `X-Muestra-Token: <token>`
+  (`TOKEN_HEADERS` in `client.ts`; drop either one there if the backend only
+  wants one).
+* **WebSocket**: `/events?token=<token>` (browsers cannot set headers on a
+  WebSocket).
+* **401 or 403** from any request → a Spanish screen: open the link that
+  `muestra serve` prints. A stale stored token is forgotten.
+* No token in the URL and none stored → nothing is sent and nothing changes
+  (loopback keeps working as before). The static UI (`/`, assets) should be
+  servable without the token, otherwise the page itself cannot load to read it
+  from the URL.
+* Assumed: the token is accepted from the header **or** the query on
+  WebSocket; if the backend wants it as a cookie, the browser sends that
+  automatically (same origin).
+
+## 5. Alarm codes (finding 5)
+
+Spanish titles + explanations exist for every code in `src/muestra/ears/*.py`
+(list in `ui/test/es.test.ts`, `EARS_CODES`). A new ears code shows the generic
+"Aviso de los oídos del agente" + the backend's own `message` until a row is
+added to `ALARMS` in `ui/src/text/es.ts`. The backend's `message` (Spanish)
+is always shown first.
+
+## 6. Stem mode (finding 1) — nothing needed from the API
+
+Client side only. AudioWorklet needs a **secure context**: from a phone over
+plain `http://192.168.x.y:8765` the worklet does not exist, and the app uses
+the native fallback (DynamicsCompressor + hard-bounded WaveShaper). Serving
+over HTTPS (or `localhost`) gives the better limiter.
