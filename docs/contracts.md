@@ -154,6 +154,7 @@ version id → `record_version` (WP5) → render audio → write `meta.json`
 <project>/
   .git/  .gitignore
   muestra.toml  song.yaml  feedback.jsonl
+  ears.toml                # optional (WP6): spectral reference + thresholds
   sources/  midi/
   renders/vNNN/{mix.wav, song.yaml, stems/<track>.wav,
                 stems/<track>.<lane>.wav, meta.json, metrics.json}
@@ -390,14 +391,31 @@ reorders `tracks` / `tracks.<id>.fx` (full grammar: `docs/versions.md`),
 
 | field | shape | covers |
 |---|---|---|
-| `loudness` | `integrated_lufs, true_peak_dbtp, clipping, clipped_samples` | loudness/peak/clipping |
-| `spectral` | `bands_hz` + `mix` + `tracks{}` of `{low_db,mid_db,high_db}`; fixed bands 20–250 / 250–4k / 4k–20k Hz | band balance mix+track |
-| `low_end_masking` | `band_hz` (40–150), `energy_db{track}`, `dominant_track` | kick/bass/sample masking |
-| `alignment` | `tracks{track: {mean_offset_ms,max_abs_offset_ms,n_transients}}`, `max_abs_offset_ms` | grid alignment |
-| `tonal` | `estimated KeyEstimate?`, `target_key`, `tonic_match`, `mode_match`, `in_key` | key coherence |
-| `clicks` | `count`, `events[{track,at_s,severity}]` | chop-edge clicks |
-| `style_similarity?` | `model`, `references[{reference,score}]`, `mean_score` | optional CLAP/MERT |
-| `alarms` | `[{code,severity∈info|warn|error,message,track?,at_s?}]` | computed heads-ups |
+| `loudness` | `integrated_lufs, true_peak_dbtp, clipping, clipped_samples` + (WP6) `sample_peak_dbfs, short_term_max_lufs, lra_lu, target_lufs, target_delta_lu, plr_db, crest_factor_db` | loudness/peak/clipping/dynamics |
+| `spectral` | `bands_hz` + `mix` + `tracks{}` of `{low_db,mid_db,high_db}`; fixed bands 20–250 / 250–4k / 4k–20k Hz + (WP6) `detail_bands_hz` (7 nested bands), `mix_detail_db` (shares), `tracks_detail_db`, `reference`, `deviation_db` | band balance mix+track vs a reference tilt |
+| `low_end_masking` | `band_hz` (40–150), `energy_db{track}`, `dominant_track` + (WP6) `kick`, `pairs[]`, `collisions[{at_s,bar,beat,track,kick_db,track_db,margin_db}]`, `sidechain[{track,depth,expected_dip_db,measured_dip_db,recovery_ms,ducking,…}]` | kick/bass/sample masking + sidechain audible |
+| `alignment` | `tracks{track: {mean_offset_ms,max_abs_offset_ms,n_transients}}`, `max_abs_offset_ms` + (WP6) per track `basis, median_offset_ms, mad_ms, p90_abs_offset_ms, drift_ms, pulse_share, offbeat_offset_ms, histogram_ms, flagged[], clips[]` and `lanes{"<track>.<lane>"}` | grid alignment |
+| `tonal` | `estimated KeyEstimate?`, `target_key`, `tonic_match`, `mode_match`, `in_key` + (WP6) `compatible`, `source`, `tracks{}`, `detune[]`, `bass_vs_sample[]` | key coherence + detune |
+| `clicks` | `count`, `events[{track,at_s,severity}]` + (WP6) `bar, beat, edge, clip, chop, ratio, level_db` per event | chop-edge / seam clicks |
+| `style_similarity?` | `model`, `references[{reference,score}]`, `mean_score` | optional CLAP/MERT (hook only in v1) |
+| `alarms` | `[{code,severity∈info|warn|error,message,track?,at_s?}]` + (WP6) `bar, beat, lane, clip, chop, value, threshold, unit, count, where[], fix` | computed heads-ups |
+| `technical?` (WP6) | `dc_offset_db, stereo_correlation, low_band_correlation, low_band_mono_loss_db, tracks{peak/rms/dc/audible_share/muted}, silent_tracks, inaudible_tracks` | extras |
+| `summary` (WP6) | compact Spanish text: 1 headline + ≤5 alarm lines | inline in tool results |
+| `skipped`, `analysis_time_s`, `ears_version` (WP6) | checks that could not run (and why), timing, analyzer version | honesty/debug |
+
+WP6 additions are all optional/defaulted (see decisions 2026-11-17 WP6).
+`severity: error` is the "problem" level. `message` is one line of
+Spanish in musical terms; `fix` is a concrete `song.yaml` change written
+with the automation-target path grammar (`tracks.sample.fx.hp.cutoff_hz`).
+Methods, thresholds and limits: `docs/ears.md`. Optional per-project
+config: `ears.toml` (`[spectral]` reference profile, `[thresholds]`).
+`MetricsDelta` (`ears.compare`): `lufs_delta`, `true_peak_delta_db`,
+`plr_delta_db`, `loudness∈louder|quieter|same`, `low_delta_db`,
+`high_delta_db`, `brightness∈brighter|darker|same`,
+`low_end∈heavier|lighter|same`, `track_level_delta_db{}`,
+`alarms_fixed|alarms_introduced|alarms_kept[{code,severity,track,message}]`,
+`notes[]` — b relative to a; alarms match on `(code, track)`, info
+excluded.
 
 ## `feedback.jsonl` → `FeedbackEvent` (spec 7.5)
 
@@ -521,5 +539,5 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py |
 | `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta`, `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
-| `ears.analyze` | `muestra.ears.tools` | WP6 |
+| `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary`; compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

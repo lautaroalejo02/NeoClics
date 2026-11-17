@@ -2,7 +2,7 @@
   "$defs": {
     "Alarm": {
       "additionalProperties": false,
-      "description": "A computed heads-up for the agent (\"metrics are alarms\").",
+      "description": "A computed heads-up for the agent (\"metrics are alarms\").\n\n``message`` is a one-line explanation in Spanish, in musical terms;\n``fix`` a concrete suggested song.yaml change. ``error`` = problem.",
       "properties": {
         "at_s": {
           "anyOf": [
@@ -17,11 +17,107 @@
           "default": null,
           "title": "At S"
         },
+        "bar": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "1-indexed song bar of at_s.",
+          "title": "Bar"
+        },
+        "beat": {
+          "anyOf": [
+            {
+              "minimum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "1-indexed beat in the bar.",
+          "title": "Beat"
+        },
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clip ref, e.g. 'tracks.sample.clips[0]'.",
+          "title": "Clip"
+        },
         "code": {
           "description": "Stable machine code, e.g. 'clipping'.",
           "minLength": 1,
           "title": "Code",
           "type": "string"
+        },
+        "count": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Occurrences, when repeated.",
+          "title": "Count"
+        },
+        "fix": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Suggested song.yaml change.",
+          "title": "Fix"
+        },
+        "lane": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lane"
         },
         "message": {
           "minLength": 1,
@@ -37,6 +133,19 @@
           "title": "Severity",
           "type": "string"
         },
+        "threshold": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Threshold that was crossed.",
+          "title": "Threshold"
+        },
         "track": {
           "anyOf": [
             {
@@ -50,6 +159,40 @@
           ],
           "default": null,
           "title": "Track"
+        },
+        "unit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Unit of value/threshold, e.g. 'ms'.",
+          "title": "Unit"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Measured value.",
+          "title": "Value"
+        },
+        "where": {
+          "description": "Some occurrences (capped), earliest first.",
+          "items": {
+            "$ref": "#/$defs/AlarmLocation"
+          },
+          "title": "Where",
+          "type": "array"
         }
       },
       "required": [
@@ -60,9 +203,93 @@
       "title": "Alarm",
       "type": "object"
     },
+    "AlarmLocation": {
+      "additionalProperties": false,
+      "properties": {
+        "at_s": {
+          "minimum": 0.0,
+          "title": "At S",
+          "type": "number"
+        },
+        "bar": {
+          "description": "1-indexed song bar.",
+          "minimum": 1,
+          "title": "Bar",
+          "type": "integer"
+        },
+        "beat": {
+          "description": "1-indexed beat inside the bar.",
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at_s",
+        "bar",
+        "beat"
+      ],
+      "title": "AlarmLocation",
+      "type": "object"
+    },
+    "AlignmentEvent": {
+      "additionalProperties": false,
+      "description": "A transient notably off the grid.",
+      "properties": {
+        "at_s": {
+          "minimum": 0.0,
+          "title": "At S",
+          "type": "number"
+        },
+        "bar": {
+          "minimum": 1,
+          "title": "Bar",
+          "type": "integer"
+        },
+        "beat": {
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clip ref, e.g. 'tracks.sample.clips[0]'.",
+          "title": "Clip"
+        },
+        "offset_ms": {
+          "description": "Detected onset minus grid/expected time, ms.",
+          "title": "Offset Ms",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at_s",
+        "bar",
+        "beat",
+        "offset_ms"
+      ],
+      "title": "AlignmentEvent",
+      "type": "object"
+    },
     "AlignmentReport": {
       "additionalProperties": false,
       "properties": {
+        "lanes": {
+          "additionalProperties": {
+            "$ref": "#/$defs/TrackAlignment"
+          },
+          "description": "Per drum lane, keyed '<track>.<lane>'.",
+          "title": "Lanes",
+          "type": "object"
+        },
         "max_abs_offset_ms": {
           "minimum": 0.0,
           "title": "Max Abs Offset Ms",
@@ -87,6 +314,55 @@
       "title": "AlignmentReport",
       "type": "object"
     },
+    "BassVsSample": {
+      "additionalProperties": false,
+      "description": "Bass notes (from the song) against the sample's measured pitch content.",
+      "properties": {
+        "bass_track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Bass Track",
+          "type": "string"
+        },
+        "best_fit": {
+          "title": "Best Fit",
+          "type": "number"
+        },
+        "best_shift_semitones": {
+          "description": "Transposition of the bass that fits best.",
+          "title": "Best Shift Semitones",
+          "type": "integer"
+        },
+        "clash_share": {
+          "description": "Share of bass note time on pitch classes a semitone from a strong sample pitch class and absent from it.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Clash Share",
+          "type": "number"
+        },
+        "fit": {
+          "description": "Correlation of bass pitch classes with the sample chroma.",
+          "title": "Fit",
+          "type": "number"
+        },
+        "sample_track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Sample Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "bass_track",
+        "sample_track",
+        "fit",
+        "best_shift_semitones",
+        "best_fit",
+        "clash_share"
+      ],
+      "title": "BassVsSample",
+      "type": "object"
+    },
     "ClickEvent": {
       "additionalProperties": false,
       "description": "A suspected click/discontinuity at a chop or clip edge.",
@@ -95,6 +371,103 @@
           "minimum": 0.0,
           "title": "At S",
           "type": "number"
+        },
+        "bar": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Bar"
+        },
+        "beat": {
+          "anyOf": [
+            {
+              "minimum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Beat"
+        },
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "clip": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clip ref, e.g. 'tracks.sample.clips[0]'.",
+          "title": "Clip"
+        },
+        "edge": {
+          "anyOf": [
+            {
+              "enum": [
+                "clip_start",
+                "clip_end",
+                "loop_seam",
+                "other"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Edge"
+        },
+        "level_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Size of the jump, dBFS.",
+          "title": "Level Db"
+        },
+        "ratio": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Discontinuity size vs local signal activity.",
+          "title": "Ratio"
         },
         "severity": {
           "maximum": 1.0,
@@ -144,6 +517,165 @@
         "count"
       ],
       "title": "ClickReport",
+      "type": "object"
+    },
+    "ClipOffset": {
+      "additionalProperties": false,
+      "description": "Median onset offset of one clip instance (clip tracks).",
+      "properties": {
+        "at_s": {
+          "minimum": 0.0,
+          "title": "At S",
+          "type": "number"
+        },
+        "bar": {
+          "minimum": 1,
+          "title": "Bar",
+          "type": "integer"
+        },
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "clip": {
+          "description": "Clip ref, e.g. 'tracks.sample.clips[0]'.",
+          "title": "Clip",
+          "type": "string"
+        },
+        "n_onsets": {
+          "minimum": 0,
+          "title": "N Onsets",
+          "type": "integer"
+        },
+        "offset_ms": {
+          "title": "Offset Ms",
+          "type": "number"
+        },
+        "repeat_index": {
+          "description": "0-based repeat instance.",
+          "minimum": 0,
+          "title": "Repeat Index",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "clip",
+        "repeat_index",
+        "at_s",
+        "bar",
+        "offset_ms",
+        "n_onsets"
+      ],
+      "title": "ClipOffset",
+      "type": "object"
+    },
+    "DetuneCheck": {
+      "additionalProperties": false,
+      "description": "Pitch of a resampled chop vs the 12-TET grid.\n\n``expected_shift_semitones`` = 12*log2(project_bpm/local_bpm) +\nwarp.pitch_semitones (from the song snapshot + analysis.json);\n``expected_detune_cents`` is its distance to the nearest semitone.\n``measured_cents`` is measured on the rendered stem relative to\n``reference_cents`` (the tuning of the other tonal tracks, 0 = A440).",
+      "properties": {
+        "chop": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Chop",
+          "type": "string"
+        },
+        "expected_detune_cents": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Detune Cents"
+        },
+        "expected_shift_semitones": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Shift Semitones"
+        },
+        "local_bpm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Local Bpm"
+        },
+        "measured_cents": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Measured Cents"
+        },
+        "mode": {
+          "enum": [
+            "resample",
+            "stretch"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "reference_cents": {
+          "default": 0.0,
+          "title": "Reference Cents",
+          "type": "number"
+        },
+        "relative_cents": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "measured_cents - reference_cents (what is heard).",
+          "title": "Relative Cents"
+        },
+        "track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track",
+        "chop",
+        "mode"
+      ],
+      "title": "DetuneCheck",
       "type": "object"
     },
     "DiffEntry": {
@@ -206,19 +738,113 @@
       "properties": {
         "clipped_samples": {
           "default": 0,
+          "description": "Samples at |x| >= 0.9999.",
           "minimum": 0,
           "title": "Clipped Samples",
           "type": "integer"
         },
         "clipping": {
+          "description": "True when the mix has flat-topped full-scale runs.",
           "title": "Clipping",
           "type": "boolean"
         },
+        "crest_factor_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "20*log10(sample peak / RMS) of the mix.",
+          "title": "Crest Factor Db"
+        },
         "integrated_lufs": {
+          "description": "ITU-R BS.1770-4 gated integrated loudness.",
           "title": "Integrated Lufs",
           "type": "number"
         },
+        "lra_lu": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Loudness range (EBU Tech 3342) in LU; None if render < 3 s. Loops legitimately have a small LRA: reported, never alarmed.",
+          "title": "Lra Lu"
+        },
+        "plr_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Peak-to-loudness ratio: true_peak_dbtp - integrated_lufs. Low values mean an over-compressed (brick-walled) master.",
+          "title": "Plr Db"
+        },
+        "sample_peak_dbfs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample Peak Dbfs"
+        },
+        "short_term_max_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Max short-term (3 s) loudness; None if render < 3 s.",
+          "title": "Short Term Max Lufs"
+        },
+        "target_delta_lu": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "integrated_lufs - target_lufs.",
+          "title": "Target Delta Lu"
+        },
+        "target_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "master.target_lufs, when set.",
+          "title": "Target Lufs"
+        },
         "true_peak_dbtp": {
+          "description": "4x-oversampled true peak (BS.1770-4 Annex 2).",
           "title": "True Peak Dbtp",
           "type": "number"
         }
@@ -229,6 +855,60 @@
         "clipping"
       ],
       "title": "Loudness",
+      "type": "object"
+    },
+    "LowEndCollision": {
+      "additionalProperties": false,
+      "description": "A kick hit where another track is about as loud as the kick in 40-150 Hz.",
+      "properties": {
+        "at_s": {
+          "minimum": 0.0,
+          "title": "At S",
+          "type": "number"
+        },
+        "bar": {
+          "minimum": 1,
+          "title": "Bar",
+          "type": "integer"
+        },
+        "beat": {
+          "description": "1-indexed beat inside the bar.",
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "kick_db": {
+          "description": "Kick level in the band during the hit window.",
+          "title": "Kick Db",
+          "type": "number"
+        },
+        "margin_db": {
+          "description": "track_db - kick_db (>= -collision margin).",
+          "title": "Margin Db",
+          "type": "number"
+        },
+        "track": {
+          "description": "Track whose low band collides with the kick.",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        },
+        "track_db": {
+          "description": "Other track's level in the same window.",
+          "title": "Track Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "at_s",
+        "bar",
+        "beat",
+        "track",
+        "kick_db",
+        "track_db",
+        "margin_db"
+      ],
+      "title": "LowEndCollision",
       "type": "object"
     },
     "LowEndMasking": {
@@ -251,6 +931,14 @@
             }
           ],
           "title": "Band Hz",
+          "type": "array"
+        },
+        "collisions": {
+          "description": "Colliding kick hits (capped list, worst first).",
+          "items": {
+            "$ref": "#/$defs/LowEndCollision"
+          },
+          "title": "Collisions",
           "type": "array"
         },
         "dominant_track": {
@@ -278,9 +966,72 @@
           },
           "title": "Energy Db",
           "type": "object"
+        },
+        "kick": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Kick source used, e.g. 'drums.kick' (track.lane).",
+          "title": "Kick"
+        },
+        "pairs": {
+          "items": {
+            "$ref": "#/$defs/LowEndPair"
+          },
+          "title": "Pairs",
+          "type": "array"
+        },
+        "sidechain": {
+          "description": "Measured ducking per sidechain fx in the song.",
+          "items": {
+            "$ref": "#/$defs/SidechainCheck"
+          },
+          "title": "Sidechain",
+          "type": "array"
         }
       },
       "title": "LowEndMasking",
+      "type": "object"
+    },
+    "LowEndPair": {
+      "additionalProperties": false,
+      "description": "Per-track summary of the kick-vs-track low-band comparison.",
+      "properties": {
+        "collisions": {
+          "minimum": 0,
+          "title": "Collisions",
+          "type": "integer"
+        },
+        "kick_hits": {
+          "minimum": 0,
+          "title": "Kick Hits",
+          "type": "integer"
+        },
+        "median_margin_db": {
+          "description": "Median (track - kick) dB over all kick hits.",
+          "title": "Median Margin Db",
+          "type": "number"
+        },
+        "track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track",
+        "kick_hits",
+        "collisions",
+        "median_margin_db"
+      ],
+      "title": "LowEndPair",
       "type": "object"
     },
     "Metrics": {
@@ -296,8 +1047,34 @@
         "alignment": {
           "$ref": "#/$defs/AlignmentReport"
         },
+        "analysis_time_s": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Analysis Time S"
+        },
         "clicks": {
           "$ref": "#/$defs/ClickReport"
+        },
+        "ears_version": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Analyzer version string.",
+          "title": "Ears Version"
         },
         "loudness": {
           "$ref": "#/$defs/Loudness"
@@ -311,6 +1088,14 @@
           "title": "Schema Version",
           "type": "integer"
         },
+        "skipped": {
+          "description": "Checks that could not run on this render, and why.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Skipped",
+          "type": "array"
+        },
         "spectral": {
           "$ref": "#/$defs/SpectralReport"
         },
@@ -318,6 +1103,23 @@
           "anyOf": [
             {
               "$ref": "#/$defs/StyleSimilarity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "summary": {
+          "default": "",
+          "description": "Compact Spanish summary (a handful of lines) for inline display in the render tool result; details live in the other fields.",
+          "title": "Summary",
+          "type": "string"
+        },
+        "technical": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TechnicalReport"
             },
             {
               "type": "null"
@@ -566,6 +1368,111 @@
       "title": "RenderTrackMeta",
       "type": "object"
     },
+    "SidechainCheck": {
+      "additionalProperties": false,
+      "description": "Measured ducking of a sidechained track stem around its key triggers.",
+      "properties": {
+        "depth": {
+          "description": "Configured fx depth.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Depth",
+          "type": "number"
+        },
+        "ducking": {
+          "description": "True when the dip is clearly audible.",
+          "title": "Ducking",
+          "type": "boolean"
+        },
+        "expected_dip_db": {
+          "description": "-20*log10(1 - depth), capped at 40.",
+          "minimum": 0.0,
+          "title": "Expected Dip Db",
+          "type": "number"
+        },
+        "fx_id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fx Id"
+        },
+        "key_lane": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key Lane"
+        },
+        "key_track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Key Track",
+          "type": "string"
+        },
+        "measured_dip_db": {
+          "description": "Depth of the trigger-averaged gain dip on the stem, dB.",
+          "title": "Measured Dip Db",
+          "type": "number"
+        },
+        "n_triggers": {
+          "minimum": 0,
+          "title": "N Triggers",
+          "type": "integer"
+        },
+        "recovery_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time after the trigger until the averaged level is back within 1 dB of the pre-trigger level.",
+          "title": "Recovery Ms"
+        },
+        "release_ms": {
+          "description": "Configured release_ms.",
+          "exclusiveMinimum": 0.0,
+          "title": "Release Ms",
+          "type": "number"
+        },
+        "track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track",
+        "key_track",
+        "depth",
+        "release_ms",
+        "expected_dip_db",
+        "measured_dip_db",
+        "n_triggers",
+        "ducking"
+      ],
+      "title": "SidechainCheck",
+      "type": "object"
+    },
     "SpectralBalance": {
       "additionalProperties": false,
       "description": "Mean band energy in dB for the fixed bands (see BAND_EDGES_HZ).",
@@ -594,6 +1501,40 @@
       "title": "SpectralBalance",
       "type": "object"
     },
+    "SpectralReference": {
+      "additionalProperties": false,
+      "description": "Reference spectral tilt the mix is compared against (NOT flat).\n\n``levels_db`` gives the expected level of each detail band relative\nto the others (any common offset; it is normalised to shares of the\ntotal power before comparing). Configurable per project in\n``ears.toml`` (docs/ears.md).",
+      "properties": {
+        "levels_db": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Detail band -> relative expected level, dB.",
+          "title": "Levels Db",
+          "type": "object"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "tolerance_db": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Detail band -> allowed |deviation| before a warn, dB.",
+          "title": "Tolerance Db",
+          "type": "object"
+        }
+      },
+      "required": [
+        "name",
+        "levels_db",
+        "tolerance_db"
+      ],
+      "title": "SpectralReference",
+      "type": "object"
+    },
     "SpectralReport": {
       "additionalProperties": false,
       "properties": {
@@ -614,8 +1555,52 @@
           "title": "Bands Hz",
           "type": "object"
         },
+        "detail_bands_hz": {
+          "additionalProperties": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Detail Bands Hz",
+          "type": "object"
+        },
+        "deviation_db": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Detail band -> mix share minus reference share, dB (positive = more energy than the reference).",
+          "title": "Deviation Db",
+          "type": "object"
+        },
         "mix": {
           "$ref": "#/$defs/SpectralBalance"
+        },
+        "mix_detail_db": {
+          "additionalProperties": {
+            "type": "number"
+          },
+          "description": "Detail band -> share of the mix's total power, dB (<= 0).",
+          "title": "Mix Detail Db",
+          "type": "object"
+        },
+        "reference": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SpectralReference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
         },
         "tracks": {
           "patternProperties": {
@@ -627,6 +1612,22 @@
             "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
           },
           "title": "Tracks",
+          "type": "object"
+        },
+        "tracks_detail_db": {
+          "description": "Per track stem: detail band -> band power, dB (absolute, comparable across tracks).",
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "additionalProperties": {
+                "type": "number"
+              },
+              "type": "object"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks Detail Db",
           "type": "object"
         }
       },
@@ -719,9 +1720,103 @@
       "title": "StyleSimilarity",
       "type": "object"
     },
+    "TechnicalReport": {
+      "additionalProperties": false,
+      "description": "Mono compatibility, DC offset, silent/inaudible tracks.",
+      "properties": {
+        "dc_offset_db": {
+          "description": "Worst-channel DC offset of the mix, dBFS.",
+          "title": "Dc Offset Db",
+          "type": "number"
+        },
+        "inaudible_tracks": {
+          "items": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "title": "Inaudible Tracks",
+          "type": "array"
+        },
+        "low_band_correlation": {
+          "description": "L/R correlation below 150 Hz (mono compatibility).",
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Low Band Correlation",
+          "type": "number"
+        },
+        "low_band_mono_loss_db": {
+          "description": "Level lost below 150 Hz when summed to mono (0 = none).",
+          "title": "Low Band Mono Loss Db",
+          "type": "number"
+        },
+        "silent_tracks": {
+          "items": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "title": "Silent Tracks",
+          "type": "array"
+        },
+        "stereo_correlation": {
+          "maximum": 1.0,
+          "minimum": -1.0,
+          "title": "Stereo Correlation",
+          "type": "number"
+        },
+        "tracks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/TrackLevel"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "dc_offset_db",
+        "stereo_correlation",
+        "low_band_correlation",
+        "low_band_mono_loss_db"
+      ],
+      "title": "TechnicalReport",
+      "type": "object"
+    },
     "TonalReport": {
       "additionalProperties": false,
       "properties": {
+        "bass_vs_sample": {
+          "items": {
+            "$ref": "#/$defs/BassVsSample"
+          },
+          "title": "Bass Vs Sample",
+          "type": "array"
+        },
+        "compatible": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True when the estimate shares the target's scale (same key or its relative major/minor).",
+          "title": "Compatible"
+        },
+        "detune": {
+          "items": {
+            "$ref": "#/$defs/DetuneCheck"
+          },
+          "title": "Detune",
+          "type": "array"
+        },
         "estimated": {
           "anyOf": [
             {
@@ -758,6 +1853,23 @@
           "default": null,
           "title": "Mode Match"
         },
+        "source": {
+          "anyOf": [
+            {
+              "enum": [
+                "tonal_stems",
+                "mix"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What 'estimated' was computed from.",
+          "title": "Source"
+        },
         "target_key": {
           "anyOf": [
             {
@@ -783,6 +1895,18 @@
           ],
           "default": null,
           "title": "Tonic Match"
+        },
+        "tracks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/TrackTonal"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks",
+          "type": "object"
         }
       },
       "title": "TonalReport",
@@ -792,6 +1916,51 @@
       "additionalProperties": false,
       "description": "How far this track's transients sit off the project grid.",
       "properties": {
+        "basis": {
+          "default": "beats",
+          "description": "'events' = matched to the song's own hits/notes; 'beats' = onsets within 1/8 beat of a quarter note (clip tracks).",
+          "enum": [
+            "events",
+            "beats"
+          ],
+          "title": "Basis",
+          "type": "string"
+        },
+        "clips": {
+          "items": {
+            "$ref": "#/$defs/ClipOffset"
+          },
+          "title": "Clips",
+          "type": "array"
+        },
+        "drift_ms": {
+          "default": 0.0,
+          "description": "Fitted offset change across one clip instance (or the render), ms.",
+          "title": "Drift Ms",
+          "type": "number"
+        },
+        "flagged": {
+          "items": {
+            "$ref": "#/$defs/AlignmentEvent"
+          },
+          "title": "Flagged",
+          "type": "array"
+        },
+        "histogram_ms": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Offset distribution vs the nearest 16th: bin label -> count.",
+          "title": "Histogram Ms",
+          "type": "object"
+        },
+        "mad_ms": {
+          "default": 0.0,
+          "description": "Median absolute deviation, ms.",
+          "minimum": 0.0,
+          "title": "Mad Ms",
+          "type": "number"
+        },
         "max_abs_offset_ms": {
           "minimum": 0.0,
           "title": "Max Abs Offset Ms",
@@ -801,10 +1970,49 @@
           "title": "Mean Offset Ms",
           "type": "number"
         },
+        "median_offset_ms": {
+          "default": 0.0,
+          "title": "Median Offset Ms",
+          "type": "number"
+        },
         "n_transients": {
           "minimum": 0,
           "title": "N Transients",
           "type": "integer"
+        },
+        "offbeat_offset_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Median offset of onsets near the off-beat 16ths (swing), ms.",
+          "title": "Offbeat Offset Ms"
+        },
+        "p90_abs_offset_ms": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "P90 Abs Offset Ms",
+          "type": "number"
+        },
+        "pulse_share": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fraction of quarter notes that carry an onset (clip tracks). Low = no clear pulse: offsets are not trusted.",
+          "title": "Pulse Share"
         }
       },
       "required": [
@@ -813,6 +2021,109 @@
         "n_transients"
       ],
       "title": "TrackAlignment",
+      "type": "object"
+    },
+    "TrackLevel": {
+      "additionalProperties": false,
+      "properties": {
+        "audible_share": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Fraction of the track's active frames where it is within the audibility margin of the rest of the mix in some band.",
+          "title": "Audible Share"
+        },
+        "dc_offset_db": {
+          "title": "Dc Offset Db",
+          "type": "number"
+        },
+        "muted": {
+          "default": false,
+          "title": "Muted",
+          "type": "boolean"
+        },
+        "peak_dbfs": {
+          "title": "Peak Dbfs",
+          "type": "number"
+        },
+        "rms_dbfs": {
+          "title": "Rms Dbfs",
+          "type": "number"
+        }
+      },
+      "required": [
+        "peak_dbfs",
+        "rms_dbfs",
+        "dc_offset_db"
+      ],
+      "title": "TrackLevel",
+      "type": "object"
+    },
+    "TrackTonal": {
+      "additionalProperties": false,
+      "properties": {
+        "best_shift_semitones": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Transposition (-6..+6) that best fits the target key; 0 = in key.",
+          "title": "Best Shift Semitones"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeyEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "out_of_key_share": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of chroma energy outside the target key's scale.",
+          "title": "Out Of Key Share"
+        },
+        "tuning_cents": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Deviation of the track's partials from A440 12-TET, cents.",
+          "title": "Tuning Cents"
+        }
+      },
+      "title": "TrackTonal",
       "type": "object"
     }
   },
