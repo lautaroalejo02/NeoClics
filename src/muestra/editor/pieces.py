@@ -71,6 +71,11 @@ class SongPiecesParams(ProjectScoped):
     )
     dry: bool = Field(default=True, description="Materials, one-shots and instrument dry stems.")
     wet: bool = Field(default=False, description="Per-track renders with fx (seconds).")
+    samples: list[str] = Field(
+        default_factory=list,
+        description="Extra one-shots to prepare (library:// or project paths), e.g. to "
+        "audition a sound before using it.",
+    )
 
 
 class Piece(ContractModel):
@@ -336,6 +341,20 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
                     )
                     audio = fade(decode(project, path, sr)[0], sr, 1, start=False)
                     oneshots[ref] = add(_write_piece(project, "shot", audio, sr))
+
+    for ref in p.samples:
+        if ref in oneshots:
+            continue
+        try:
+            path = (
+                library.resolve(project, ref)
+                if ref.startswith("library://")
+                else project.resolve(ref)
+            )
+        except MuestraError:
+            continue
+        audio = fade(decode(project, path, sr)[0], sr, 1, start=False)
+        oneshots[ref] = add(_write_piece(project, "shot", audio, sr))
 
     for track in wanted:
         entry = TrackPieces(id=track.id, kind=_kind(track))

@@ -1319,6 +1319,17 @@ export class AudioEngine {
     return { channels: [out.getChannelData(0).slice(), out.getChannelData(1).slice()], sampleRate: sr };
   }
 
+  /** dB that level-matches a version's pre-master stem sum to its mastered mix
+   *  (the editor plays a pre-master sum too). Loads the version's stems. */
+  async stemMatchDb(version: VersionId): Promise<number | null> {
+    if (!this.specs.has(version)) return null;
+    await this.prepare(version, { stems: true });
+    const d = this.decks.get(version);
+    if (!d) return null;
+    await this.loadStems(d);
+    return d.stemMatch ? 20 * Math.log10(d.stemMatch) : null;
+  }
+
   /** The live player (diagnostics/tests). */
   get editorPlayer(): ArrangementPlayer | null {
     return this.editor;

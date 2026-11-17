@@ -132,6 +132,9 @@ export interface CommentEvent {
   at_s?: number | null;
   track?: string | null;
   text: string;
+  /** WP16: what was selected in the editor ("Pedile al agente") */
+  selection?: Record<string, unknown> & { label?: string; track?: string; start_beat?: number; end_beat?: number };
+  song_revision?: string;
 }
 export interface ABChoiceEvent {
   ts: string;
