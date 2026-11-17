@@ -37,9 +37,9 @@ __all__ = ["measure_alignment"]
 _HIST_EDGES = [-1e9, -30.0, -15.0, -5.0, 5.0, 15.0, 30.0, 1e9]
 _HIST_LABELS = ["<-30", "-30..-15", "-15..-5", "-5..5", "5..15", "15..30", ">30"]
 MAX_FLAGGED = 8
-#: flux-peak onsets precede the attack by ~2.3 ms on dense sampled material
-#: (measured on the corpus: -2.1..-2.6 ms with MAD < 1 ms); added back.
-FLUX_BIAS_MS = 2.3
+#: flux-peak onsets precede the attack by ~0.5 ms on dense sampled material
+#: (corpus, 22.05-48 kHz: -0.3..-0.6 ms, MAD < 1 ms); added back.
+FLUX_BIAS_MS = 0.5
 
 
 def _hist(offsets_ms: np.ndarray) -> dict[str, int]:

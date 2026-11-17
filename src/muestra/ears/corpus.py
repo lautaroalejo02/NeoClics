@@ -69,7 +69,8 @@ class Defects:
     low_phase: bool = False  # bass in opposite polarity on the right channel
     kick_late_ms: float = 0.0  # kick one-shot with leading silence
     inaudible_pad: bool = False  # pad 45 dB down
-    over_compress: bool = False  # master pushed to -5 LUFS through the limiter
+    over_compress: bool = False  # master squashed: +14 dB into a soft clipper
+    applied_depth: float | None = None  # sidechain depth actually applied (0.6 declared)
 
 
 @dataclass
@@ -336,6 +337,8 @@ def generate(spec: CorpusSpec, root: Path, version: str = "v001") -> Path:
     sc_depth_applied = 0.0 if (d.missing_sidechain or d.no_sidechain) else 0.6
     if d.weak_sidechain:
         sc_depth_applied = 0.3
+    if d.applied_depth is not None:
+        sc_depth_applied = d.applied_depth
     if sc_depth_applied > 0:
         sample *= _duck(n, sr, kick_times, sc_depth_applied, 1.0, 120.0)
     sample_st = _stereo(sample * 2.5 * 10 ** (-2 / 20))  # the sample leads the mix
