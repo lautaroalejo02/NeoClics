@@ -47,6 +47,49 @@
       "title": "GridAlternative",
       "type": "object"
     },
+    "GridBar": {
+      "additionalProperties": false,
+      "properties": {
+        "beat_count": {
+          "minimum": 0,
+          "title": "Beat Count",
+          "type": "integer"
+        },
+        "end_s": {
+          "exclusiveMinimum": 0,
+          "title": "End S",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "reliable": {
+          "title": "Reliable",
+          "type": "boolean"
+        },
+        "start_downbeat": {
+          "minimum": 1,
+          "title": "Start Downbeat",
+          "type": "integer"
+        },
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "reliable",
+        "reason",
+        "start_downbeat",
+        "beat_count"
+      ],
+      "title": "GridBar",
+      "type": "object"
+    },
     "GridCorrection": {
       "additionalProperties": false,
       "description": "How the effective grid (``beats_s``/``downbeats_s``) derives from the tracker.\n\nAll parameters are ABSOLUTE, relative to ``raw`` (the tracker output):\napplying the same correction twice is a no-op, and\n``tempo_factor: 1, downbeat_shift_beats: 0`` gives back the raw grid.",
@@ -165,6 +208,73 @@
         "reason"
       ],
       "title": "GridCorrection",
+      "type": "object"
+    },
+    "GridRegion": {
+      "additionalProperties": false,
+      "properties": {
+        "end_s": {
+          "exclusiveMinimum": 0,
+          "title": "End S",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "reliable": {
+          "title": "Reliable",
+          "type": "boolean"
+        },
+        "start_s": {
+          "minimum": 0,
+          "title": "Start S",
+          "type": "number"
+        }
+      },
+      "required": [
+        "start_s",
+        "end_s",
+        "reliable",
+        "reason"
+      ],
+      "title": "GridRegion",
+      "type": "object"
+    },
+    "GridReliability": {
+      "additionalProperties": false,
+      "properties": {
+        "bars": {
+          "items": {
+            "$ref": "#/$defs/GridBar"
+          },
+          "title": "Bars",
+          "type": "array"
+        },
+        "confidence": {
+          "description": "Reliable fraction of complete bars; heuristic.",
+          "maximum": 1,
+          "minimum": 0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "hint": {
+          "title": "Hint",
+          "type": "string"
+        },
+        "regions": {
+          "items": {
+            "$ref": "#/$defs/GridRegion"
+          },
+          "title": "Regions",
+          "type": "array"
+        }
+      },
+      "required": [
+        "confidence",
+        "hint"
+      ],
+      "title": "GridReliability",
       "type": "object"
     },
     "GridStep": {
@@ -450,6 +560,17 @@
       ],
       "default": null,
       "title": "Loudness Lufs"
+    },
+    "reliability": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GridReliability"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "sample_rate": {
       "exclusiveMinimum": 0,

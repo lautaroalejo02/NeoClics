@@ -13,7 +13,14 @@ from typing import Literal
 from pydantic import Field
 
 from ..schemas._base import ContractModel, IdStr, RelPath
-from ..schemas.analysis import Analysis, GridAlternative, KeyEstimate, Section, Stems
+from ..schemas.analysis import (
+    Analysis,
+    GridAlternative,
+    GridReliability,
+    KeyEstimate,
+    Section,
+    Stems,
+)
 from ..schemas.song import StemName
 from ..toolbase import ProjectScoped, ToolOutput
 
@@ -102,6 +109,7 @@ class AnalysisSummary(ContractModel):
     loudness_lufs: float | None = None
     stems: Stems | None = None
     separation_model: str | None = None
+    reliability: GridReliability | None = None
 
     @classmethod
     def of(cls, analysis: Analysis) -> AnalysisSummary:
@@ -211,6 +219,9 @@ def source_regrid(p: SourceRegridParams) -> SourceRegridResult:
 
 class SourcePreviewGridParams(ProjectScoped):
     source_id: IdStr
+    window_s: tuple[float, float] | None = Field(
+        default=None, description="Exact source time window [start, end]; uses the full-file grid."
+    )
     start_downbeat: int | None = Field(
         default=None, ge=1, description="Downbeat (current grid, 1-based) to start at; default 1."
     )
@@ -269,6 +280,7 @@ def source_preview_grid(p: SourcePreviewGridParams) -> SourcePreviewGridResult:
         project,
         p.source_id,
         start_downbeat=p.start_downbeat,
+        window_s=p.window_s,
         bars=p.bars,
         stem=p.stem,
         tempo_factor=p.tempo_factor,

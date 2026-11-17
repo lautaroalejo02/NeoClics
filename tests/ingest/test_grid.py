@@ -61,7 +61,7 @@ def test_piecewise_phase_follows_two_consistent_downbeats_only():
     # 2/4 reading (downbeat every 2 beats) -> regroup in 4; one stray downbeat ignored
     idx = list(range(0, 40, 2)) + [41] + list(range(44, 80, 2))
     raw = RawGrid(bpm_global=240, beats_s=beats.tolist(), downbeats_s=beats[idx].tolist())
-    _, downbeats = g.derive_grid(raw, beats_per_bar=4, downbeat_shift_beats=0, tempo_factor=1.0)
+    downbeats = beats[g.derive_downbeat_indices(beats, np.asarray(raw.downbeats_s))]
     got = [int(np.argmin(abs(beats - d))) for d in downbeats]
     assert all(i % 4 == 0 for i in got)
 

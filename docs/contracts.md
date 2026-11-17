@@ -1,5 +1,19 @@
 # Muestra contracts (as implemented, WP0.1)
 
+WP15 additions: `Analysis.reliability` / `AnalysisSummary.reliability` contain
+`confidence` (fraction of complete bars with consistent meter, not a probability),
+`bars[{start_downbeat,start_s,end_s,beat_count,reliable,reason}]`, contiguous
+`regions[{start_s,end_s,reliable,reason}]` including unverified intro/outro,
+and `hint`. Missing maps in old caches are derived when needed.
+`source.find_chops(allow_unreliable=false)` requires the entire candidate to
+lie in reliable regions, including with `at_s`; override is explicit. The
+default stem is `other` when available, else `mix`. Result adds `hint`.
+`source.preview_grid(window_s=[start,end])` uses the full-file grid for that
+exact window, without retracking. `chops.choose` and `song.validate` gain
+nonblocking `warnings[]`; choice also adds `requested_chop_id`, `recorded`,
+`rescaled` (boolean) and `notes[]` (agent follow-up). Analysis on the mix
+requires no separation; separating later attaches stems without moving beats.
+
 This is the authoritative reference for the data contracts in spec
 section 7 and the tool interface in section 8, **as actually
 implemented**. The pydantic models under `src/muestra/schemas/` are the

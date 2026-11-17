@@ -69,6 +69,13 @@
     "valid": {
       "title": "Valid",
       "type": "boolean"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
     }
   },
   "required": [

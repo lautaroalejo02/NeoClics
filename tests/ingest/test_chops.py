@@ -59,7 +59,7 @@ def test_real_renderer_seam_and_auto_no_feedback(rhythmic_project, monkeypatch):
 def test_unknown_section_missing_stem_and_invalid_adjust(rhythmic_project):
     project, source_id, _ = rhythmic_project
     with pytest.raises(MuestraError, match="No other stem"):
-        find(project, source_id, ChopQuery())
+        find(project, source_id, ChopQuery(stem="other"))
     with pytest.raises(MuestraError, match="Unknown section"):
         find(project, source_id, ChopQuery(stem="mix", section="chorus"))
     result, _ = find(project, source_id, ChopQuery(stem="mix", n=1, length_beats=4))

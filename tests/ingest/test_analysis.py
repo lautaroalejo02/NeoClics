@@ -53,9 +53,50 @@ def test_key_profile_and_silence():
     assert estimate_key(np.zeros((12, 10))) is None
 
 
-def test_inconsistent_meter_is_rejected_before_cache(rhythmic_project):
+def test_inconsistent_meter_is_cached_with_reliability(rhythmic_project):
     project, source_id, _ = rhythmic_project
     beats = np.arange(0.25, 17, 0.5)
-    with pytest.raises(MuestraError, match="four beats"):
-        analyze(project, source_id, tracker=lambda audio, sr: (beats, beats[::3]))
-    assert not project.path(f"cache/analysis/{source_id}.meta.json").exists()
+    result = analyze(project, source_id, tracker=lambda audio, sr: (beats, beats[::3]))
+    assert result.reliability.confidence == 0
+    assert not any(r.reliable for r in result.reliability.regions)
+    assert result.downbeats_s == beats[::3].tolist()
+    assert project.path(f"cache/analysis/{source_id}.meta.json").exists()
+
+
+def test_partial_grid_windows_use_full_analysis(rhythmic_project):
+    from muestra.ingest.chops import choose, find
+    from muestra.ingest.regrid import preview_grid
+    from muestra.ingest.storage import write_json
+    from muestra.project.tools import SongValidateParams, song_validate
+    from muestra.schemas.chops import ChopQuery
+
+    project, source_id, _ = rhythmic_project
+    beats = np.arange(0.25, 17, 0.5)
+    # Three irregular bars, then a stable run. No 75% acceptance gate.
+    downs = beats[[0, 3, 6, 9, 13, 17, 21, 25, 29, 33]]
+    result = analyze(project, source_id, tracker=lambda a, sr: (beats, downs))
+    assert 0 < result.reliability.confidence < 0.75
+    found, _ = find(project, source_id, ChopQuery(stem="mix", length_beats=4, n=2))
+    assert all(c.start_s >= downs[3] for c in found.candidates)
+    previews = preview_grid(project, source_id, window_s=(1.2, 4.2))
+    assert previews[0].start_s == 1.2
+    assert previews[0].end_s == 4.2
+    assert load_analysis(project, source_id).beats_s == result.beats_s
+    doubtful, _ = find(
+        project,
+        source_id,
+        ChopQuery(stem="mix", at_s=0.25, length_beats=4, n=1, allow_unreliable=True),
+    )
+    _, _, _, outcome = choose(project, doubtful.candidates[0].id, "c1", "manual", None)
+    assert outcome["warnings"]
+    validated = song_validate(SongValidateParams(project=str(project.root)))
+    assert validated.valid and validated.warnings
+    # Attaching separated stems must not invoke the tracker or alter the grid.
+    from muestra.ingest.separation import _activate
+
+    write_json(project.path("cache/test.json"), {})
+    _activate(project, source_id, {"stems": {"other": result.file}, "model": "test"})
+    attached = load_analysis(project, source_id)
+    assert attached.stems.other == result.file
+    assert attached.beats_s == result.beats_s
+    assert attached.reliability == result.reliability

@@ -58,6 +58,7 @@ class ChopQuery(ContractModel):
     """Echo of the ``source.find_chops`` request that produced the set."""
 
     section: str | None = None
+    allow_unreliable: bool = False
     stem: StemName | None = None
     length_beats: float | None = Field(default=None, gt=0.0)
     n: int = Field(default=3, ge=1)

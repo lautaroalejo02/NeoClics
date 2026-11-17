@@ -152,9 +152,11 @@ def mmss(seconds: float) -> str:
 
 
 def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandidateSet, Path]:
+    from .reliability import reliable_window
+
     analysis = load_analysis(project, source_id)
     original_fingerprint = fingerprint(project, source_id, analysis)
-    stem = query.stem or "other"
+    stem = query.stem or ("other" if analysis.stems and analysis.stems.other else "mix")
     audio, sr = decode(stem_path(project, analysis, stem))
     vocal = None
     if stem == "other" and analysis.stems and analysis.stems.vocals:
@@ -197,7 +199,9 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
         if timing is None:
             return None
         start, end = timing
-        if strict and not regular(index, length):
+        if not query.allow_unreliable and not reliable_window(analysis, start, end):
+            return None
+        if strict and not query.allow_unreliable and not regular(index, length):
             return None
         if window and not (start >= window[0] - slack and end <= window[1] + slack):
             return None
@@ -247,7 +251,8 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
             "no_candidates",
             f"No audible loops fit the section, time window and beat grid{where}.",
             hint="Try a shorter length_beats, a wider window_s, another section, "
-            "at_s for an exact spot, or stem='mix'.",
+            "at_s for an exact spot, stem='mix', or allow_unreliable=true after "
+            "checking source.preview_grid(window_s=[start, end]).",
         )
     with project_lock(project):
         if (
@@ -514,4 +519,11 @@ def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust:
             "message": message,
             "agent_todo": agent_todo,
         }
+        from .reliability import chop_warning
+
+        timing = chop_times(
+            analysis, chop.start_downbeat, chop.length_beats, chop.start_offset_beats
+        )
+        warning = chop_warning(analysis, *timing)
+        outcome["warnings"] = [warning] if warning else []
         return candidate_set, chop, path, outcome

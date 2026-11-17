@@ -148,6 +148,9 @@ def regrid(
             history=history[-20:],
         )
         after = g.apply_correction(before, correction)
+        from .reliability import assess_reliability
+
+        after.reliability = assess_reliability(after)
         outcome = RegridOutcome(analysis=after, before=before)
 
         # ---- song.yaml chops on this source: keep the same audio, report every move
@@ -373,6 +376,7 @@ def preview_grid(
     source_id: str,
     *,
     start_downbeat: int | None = None,
+    window_s: tuple[float, float] | None = None,
     bars: int = 8,
     stem: str = "mix",
     tempo_factor: float | None = None,
@@ -388,6 +392,13 @@ def preview_grid(
     ``alternatives`` adds one file per listed alternative interpretation.
     """
     analysis = load_analysis(project, source_id)
+    if window_s is not None and not 0 <= window_s[0] < window_s[1] <= analysis.duration_s:
+        raise MuestraError.one(
+            "invalid_range",
+            "window_s must lie inside the source.",
+            path="window_s",
+            hint="Use [start_s, end_s] from source.analyze.",
+        )
     if stem == "mix":
         ref = analysis.file
     else:
@@ -454,7 +465,7 @@ def preview_grid(
             path="start_downbeat",
             hint=f"Pick a value in [1, {len(analysis.downbeats_s)}].",
         )
-    anchor_s = analysis.downbeats_s[anchor_index - 1]
+    anchor_s = window_s[0] if window_s else analysis.downbeats_s[anchor_index - 1]
     results = []
     for label, f, ph, sh, bpb, applied in variants:
         beats, downbeats = g.derive_grid(
@@ -466,7 +477,9 @@ def preview_grid(
         end = float(downbeats[stop_index]) if stop_index > k else float(beats[-1])
         if stop_index - k < bars:
             end = min(analysis.duration_s, end + 60 / g.grid_bpm(beats) * bpb)
-        pre = min(start, 0.25)
+        if window_s is not None:
+            start, end = window_s
+        pre = 0 if window_s else min(start, 0.25)
         a, b = round((start - pre) * sr), min(len(audio), round(end * sr))
         mixed = g.overlay_clicks(audio[a:b], sr, beats, downbeats, start_s=start - pre)
         n = min(len(mixed), round(0.005 * sr))

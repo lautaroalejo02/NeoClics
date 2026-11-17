@@ -156,6 +156,27 @@ class GridCorrection(ContractModel):
     history: list[GridStep] = Field(default_factory=list)
 
 
+class GridRegion(ContractModel):
+    start_s: float = Field(ge=0)
+    end_s: float = Field(gt=0)
+    reliable: bool
+    reason: str
+
+
+class GridBar(GridRegion):
+    start_downbeat: int = Field(ge=1)
+    beat_count: int = Field(ge=0)
+
+
+class GridReliability(ContractModel):
+    confidence: float = Field(
+        ge=0, le=1, description="Reliable fraction of complete bars; heuristic."
+    )
+    bars: list[GridBar] = Field(default_factory=list)
+    regions: list[GridRegion] = Field(default_factory=list)
+    hint: str
+
+
 class Analysis(ContractModel):
     schema_version: Literal[0] = 0
     source_id: IdStr
@@ -171,6 +192,7 @@ class Analysis(ContractModel):
     loudness_lufs: float | None = None
     stems: Stems | None = None
     separation_model: str | None = None
+    reliability: GridReliability | None = None
     grid: GridCorrection | None = Field(
         default=None,
         description="Beat-grid correction over the tracker output (WP12). beats_s, "

@@ -812,3 +812,23 @@ that field)**; schemas regenerated (`uv run python -m muestra.schemas.export`).
     of non-reversible colouring on instruments/drums (0.3–0.6 dB without).
     `CACHE_ABI` → `render-5`. Pitch-shifted non-vocal chops in existing songs
     sound slightly different after this change.
+
+## 2026-11-17 — WP15: partial grid reliability and mix-first analysis
+
+- Meter inconsistency no longer rejects a recording. `Analysis.reliability`
+  adds per-bar evidence, contiguous time regions, an overall reliable-bar
+  fraction (heuristic, not musical beat accuracy), and an actionable `hint`.
+  Native irregular downbeats are preserved. Rebuilt half/double grids require
+  support in raw tracker bars; local intervals may vary by at most a factor
+  of 1.4 within a reliable bar. Intro/outro fragments remain unverified.
+- `source.find_chops(allow_unreliable=false)` filters the whole candidate,
+  including with `at_s`. Without stems the default is `mix`. Time-window
+  operations reuse the full analysis. Standalone imported files have no
+  inferred parent; use `window_s`/`at_s` on the original instead of cutting
+  and retracking an excerpt.
+- `source.preview_grid(window_s=[start,end])` auditions an exact window.
+  `chops.choose` and `song.validate` return nonblocking reliability warnings.
+  Choice adds `requested_chop_id`, `rescaled`, `recorded`, and `notes` for UI
+  compatibility alongside the WP13 fields.
+- Analyze the unseparated mix first. Separation attaches stems to that cached
+  analysis without changing its grid or needing another inference pass.

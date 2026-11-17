@@ -257,6 +257,9 @@ def analyze(
             analysis.stems = Stems(**separated["stems"]) if separated else None
             analysis.separation_model = separated.get("model")
             analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range)
+            from .reliability import assess_reliability
+
+            analysis.reliability = assess_reliability(analysis)
             write_json(cache, analysis.model_dump(mode="json"))
             report(progress, 1, "Analysis ready (cache)")
             return analysis
@@ -268,15 +271,6 @@ def analyze(
         report(progress, 0.15, "Tracking beats and downbeats with Beat This! final0")
         beats, downbeats = validate_grid(*(tracker or neural_beats)(audio, sr), duration)
         consistency = meter_consistency(beats, downbeats)
-        if consistency is not None and consistency < 0.75:
-            raise MuestraError.one(
-                "grid_mismatch",
-                f"Only {consistency:.0%} of inferred bars contain four beats; "
-                "the recording's meter or downbeat grid is uncertain.",
-                hint="Muestra v0 requires 4/4. Audition the click overlay with "
-                "muestra.ingest.validation; use a verified 4/4 excerpt. "
-                "No speculative grid was cached.",
-            )
         intervals = np.diff(beats)
         bpm = float(60 / np.median(intervals))
         if not 0 < bpm < 400:
@@ -304,6 +298,9 @@ def analyze(
         # Tempo octave inside the plausible range (the tracker often counts eighths
         # on old records); sections are snapped to the CORRECTED downbeats.
         analysis = g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE)
+        from .reliability import assess_reliability
+
+        analysis.reliability = assess_reliability(analysis)
         analysis.sections = detect_sections(
             times, spectrum, chroma, np.asarray(analysis.downbeats_s), duration
         )

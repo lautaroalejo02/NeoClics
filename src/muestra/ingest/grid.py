@@ -140,9 +140,14 @@ def derive_grid(
             "The corrected grid has fewer than two beats.",
             hint="Use a longer source or keep tempo_factor 1.",
         )
-    idx = derive_downbeat_indices(
-        beats, raw_downbeats, shift=downbeat_shift_beats, beats_per_bar=beats_per_bar
-    )
+    if tempo_factor == 1.0 and beats_per_bar == 4:
+        # Preserve local meter breaks; rebuilding would hide unreliable regions.
+        idx = _anchors(beats, raw_downbeats) + downbeat_shift_beats
+        idx = idx[(idx >= 0) & (idx < len(beats))]
+    else:
+        idx = derive_downbeat_indices(
+            beats, raw_downbeats, shift=downbeat_shift_beats, beats_per_bar=beats_per_bar
+        )
     if not len(idx):
         raise MuestraError.one(
             "grid_mismatch",
