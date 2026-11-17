@@ -95,13 +95,20 @@ if (mode === "perf") {
 }
 
 if (mode === "fidelity") {
-  // The working song must equal the latest version (no edits): compare per track.
-  const res = await p.evaluate(async () => {
+  // Reference: a fresh draft render of the working song (same engine), per-track stems.
+  const job = await (await fetch(url + "/tools/render", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ draft: true, analyze: false }) })).json();
+  let result = null;
+  for (let i = 0; i < 600 && !result; i++) {
+    const j = await (await fetch(url + "/jobs/" + job.job_id)).json();
+    if (j.status === "done") result = j.result.data;
+    else if (j.status === "failed") throw new Error(JSON.stringify(j.result));
+    else await new Promise((r) => setTimeout(r, 500));
+  }
+  const draft = { version: result.draft_id, tracks: result.meta.tracks, sample_rate: result.meta.sample_rate };
+  const res = await p.evaluate(async (meta) => {
     const m = window.__muestra;
     const ed = m.editor;
-    const versions = m.store.state.versions;
-    const v = versions[versions.length - 1].version;
-    const meta = m.store.state.metas[v];
+    const v = meta.version;
     m.engine.setEditorLevel(0);
     const bands = [[20, 120], [120, 500], [500, 2000], [2000, 6000], [6000, 16000]];
     const spectrum = (x, sr) => {
@@ -150,6 +157,8 @@ if (mode === "fidelity") {
     const results = [];
     for (const forceDry of [false, true]) {
       for (const tr of meta.tracks) {
+        const kind = ed.state.song.tracks.find((t) => t.id === tr.id);
+        if (forceDry && kind?.instrument) continue; // an instrument has no dry form: it plays its last render
         const res = await fetch(`/files/${tr.stem}`);
         const off = new OfflineAudioContext(2, 1, meta.sample_rate);
         const ref = await off.decodeAudioData(await res.arrayBuffer());
@@ -178,7 +187,7 @@ if (mode === "fidelity") {
       }
     }
     return { version: v, results };
-  });
+  }, draft);
   console.log(`browser mix vs ${res.version} stems (track soloed, no master, bus bypassed); bands 20-120/120-500/500-2k/2k-6k/6k-16k Hz`);
   for (const r of res.results) console.log(`${r.mode.padEnd(14)} ${r.track.padEnd(8)} level ${String(r.levelDiffDb).padStart(6)} dB  residual ${String(r.residualDb).padStart(6)} dB  bands ${r.bandDiffDb.join(" / ")}`);
 }

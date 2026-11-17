@@ -106,7 +106,17 @@ function holdAt(p: AudioParam, t: number): void {
   }
 }
 
+/** Glide to `v` (no zipper noise); a node that has never been set jumps
+ *  straight there (no leak from the default gain of 1 at a fresh start). */
+const touched = new WeakSet<AudioParam>();
 function smooth(p: AudioParam, v: number, now: number): void {
+  if (!touched.has(p)) {
+    touched.add(p);
+    p.cancelScheduledValues(0);
+    p.value = v;
+    p.setValueAtTime(v, now);
+    return;
+  }
   holdAt(p, now);
   p.setTargetAtTime(v, now, 0.006);
 }
@@ -600,11 +610,23 @@ export class ArrangementPlayer {
     for (const t of this.arr.tracks) {
       const n = this.trackNodes(t);
       const wantWet = t.wet;
-      // dry path level: muted while the wet stem plays
-      holdAt(n.dryOut.gain, now);
-      n.dryOut.gain.linearRampToValueAtTime(wantWet ? 0 : Math.SQRT1_2, now + XF_S);
-      holdAt(n.wetOut.gain, now);
-      n.wetOut.gain.linearRampToValueAtTime(wantWet ? 1 : 0, now + XF_S);
+      // dry path level: muted while the wet stem plays (a crossfade while
+      // playing; set outright when a run starts)
+      if (fresh) {
+        for (const [g, v] of [
+          [n.dryOut.gain, wantWet ? 0 : Math.SQRT1_2],
+          [n.wetOut.gain, wantWet ? 1 : 0],
+        ] as const) {
+          g.cancelScheduledValues(0);
+          g.value = v;
+          g.setValueAtTime(v, now);
+        }
+      } else {
+        holdAt(n.dryOut.gain, now);
+        n.dryOut.gain.linearRampToValueAtTime(wantWet ? 0 : Math.SQRT1_2, now + XF_S);
+        holdAt(n.wetOut.gain, now);
+        n.wetOut.gain.linearRampToValueAtTime(wantWet ? 1 : 0, now + XF_S);
+      }
       this.syncStem(t.id, "wet", wantWet ? t.wet : null, n.wetOut, now, fresh);
       this.syncStem(t.id, "dry", !wantWet ? t.dryStem : null, n.dryIn, now, fresh);
     }
@@ -629,7 +651,9 @@ export class ArrangementPlayer {
     const g = this.ctx.createGain();
     src.connect(g);
     g.connect(dest);
-    const when = Math.max(at, this.ctx.currentTime + 0.005);
+    // a fresh run starts every stem exactly at the run start (sample-locked);
+    // a stem swapped in during playback starts just ahead of the clock
+    const when = fresh ? at : Math.max(at, this.ctx.currentTime + 0.005);
     const pos = this.position(when);
     g.gain.setValueAtTime(fresh ? 1 : 0, when);
     if (!fresh) g.gain.linearRampToValueAtTime(1, when + XF_S);
