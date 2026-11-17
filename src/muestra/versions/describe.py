@@ -30,7 +30,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 from ..schemas.song import BEATS_PER_BAR, parse_automation_target, parse_steps
-from .diff import align_items, clip_score, fx_alignment, note_score, same
+from .diff import CLIPS, NOTES, align_items, fx_alignment, same
 
 if TYPE_CHECKING:
     from ..schemas.song import Song
@@ -86,6 +86,14 @@ def _val(leaf: str, v: Any) -> str:
 
 def _plural(n: float, one: str, many: str) -> str:
     return one if abs(n - 1) < _EPS else many
+
+
+def _beats(n: float) -> str:
+    if abs(n - 0.5) < _EPS:
+        return "medio beat"
+    if abs(n - 1) < _EPS:
+        return "un beat"
+    return f"{_n(n)} beats"
 
 
 def _semitones(n: float) -> str:
@@ -648,9 +656,7 @@ class _Describer:
             elif k == "start_offset_beats":
                 d = _f(vb) - _f(va)
                 word = "Atrasé" if d > 0 else "Adelanté"
-                out.append(
-                    f"{word} el inicio del chop {cid} {_n(abs(d))} {_plural(abs(d), 'beat', 'beats')}"
-                )
+                out.append(f"{word} el inicio del chop {cid} {_beats(abs(d))}")
             elif k == "length_beats":
                 word = "Alargué" if _f(vb) > _f(va) else "Acorté"
                 out.append(f"{word} el chop {cid} de {_n(va)} a {_n(vb)} beats")
@@ -816,7 +822,7 @@ class _Describer:
         return f"el chop {c['chop']}" if c.get("chop") else f"el sample {_base(c.get('sample'))}"
 
     def _clips(self, tid: str, np: str, a: list[dict], b: list[dict]) -> list[str]:
-        al = align_items(a, b, clip_score)
+        al = align_items(a, b, CLIPS)
         out: list[str] = []
         added, removed = [b[i] for i in al.added], [a[i] for i in al.removed]
 
@@ -831,13 +837,13 @@ class _Describer:
             out.append(f"Agregué {len(added)} clips {_al(np)}")
         else:
             for c in added:
-                out.append(f"Agregué un clip de {self._clip_what(c)} {where(c)} {_del(np)}")
+                out.append(f"Agregué un clip {_del(self._clip_what(c))} {where(c)} {_del(np)}")
         if len(removed) > 3:
             out.append(f"Saqué {len(removed)} clips {_del(np)}")
         else:
             for c in removed:
                 out.append(
-                    f"Saqué un clip de {self._clip_what(c)} del compás {c['at_bar']} {_del(np)}"
+                    f"Saqué un clip {_del(self._clip_what(c))} del compás {c['at_bar']} {_del(np)}"
                 )
         for ia, ib in al.modified(a, b):
             out += self._clip_change(np, a[ia], b[ib])
@@ -851,27 +857,27 @@ class _Describer:
             if same(va, vb):
                 continue
             if k == "at_bar":
-                out.append(f"Moví el clip de {what} del compás {va} al {vb} {_del(np)}")
+                out.append(f"Moví el clip {_del(what)} del compás {va} al {vb} {_del(np)}")
             elif k == "offset_beats":
                 d = _f(vb) - _f(va)
                 out.append(
-                    f"{'Atrasé' if d > 0 else 'Adelanté'} el clip de {what} {_n(abs(d))} "
-                    f"{_plural(abs(d), 'beat', 'beats')} {_del(np)}"
+                    f"{'Atrasé' if d > 0 else 'Adelanté'} el clip {_del(what)} "
+                    f"{_beats(abs(d))} {_del(np)}"
                 )
             elif k == "repeat":
                 out.append(
-                    f"El clip de {what} {_del(np)} ahora se repite {_n(vb)} {_plural(_f(vb), 'vez', 'veces')} (antes {_n(va)})"
+                    f"El clip {_del(what)} {_del(np)} ahora se repite {_n(vb)} {_plural(_f(vb), 'vez', 'veces')} (antes {_n(va)})"
                 )
             elif k == "length_beats":
                 word = "Alargué" if _f(vb) > _f(va) else "Acorté"
-                out.append(f"{word} el clip de {what} {_del(np)} de {_n(va)} a {_n(vb)} beats")
+                out.append(f"{word} el clip {_del(what)} {_del(np)} de {_n(va)} a {_n(vb)} beats")
             elif k in ("chop", "sample"):
                 out.append(
                     f"El clip del compás {y['at_bar']} {_del(np)} ahora usa {self._clip_what(y)} "
                     f"(antes {self._clip_what(x)})"
                 )
             else:
-                out.append(f"Cambié {k} del clip de {what} {_del(np)} de {_n(va)} a {_n(vb)}")
+                out.append(f"Cambié {k} del clip {_del(what)} {_del(np)} de {_n(va)} a {_n(vb)}")
         wa, wb = x.get("warp") or {}, y.get("warp") or {}
         for k in sorted(set(wa) | set(wb)):
             va, vb = wa.get(k), wb.get(k)
@@ -880,12 +886,12 @@ class _Describer:
             if k == "pitch_semitones":
                 d = _f(vb) - _f(va)
                 out.append(
-                    f"{'Subí' if d > 0 else 'Bajé'} el clip de {what} {_del(np)} {_semitones(d)}"
+                    f"{'Subí' if d > 0 else 'Bajé'} el clip {_del(what)} {_del(np)} {_semitones(d)}"
                 )
             elif k == "mode":
-                out.append(f"El clip de {what} {_del(np)} ahora usa warp {vb}")
+                out.append(f"El clip {_del(what)} {_del(np)} ahora usa warp {vb}")
             else:
-                out.append(f"Cambié {k} del warp del clip de {what} {_del(np)}")
+                out.append(f"Cambié {k} del warp del clip {_del(what)} {_del(np)}")
         return out
 
     # -- patterns / instruments / notes --------------------------------------------------
@@ -926,10 +932,13 @@ class _Describer:
         self, tid: str, np: str, at_bar: int, lane: str, x: dict, y: dict, spp_a: int, spp_b: int
     ) -> list[str]:
         out: list[str] = []
-        if x.get("steps") != y.get("steps") and not same(
-            parse_steps(x["steps"]), parse_steps(y["steps"])
-        ):
-            out += _steps_change(lane, tid, at_bar, x["steps"], y["steps"], spp_a, spp_b)
+        if x.get("steps") != y.get("steps"):
+            if same(parse_steps(x["steps"]), parse_steps(y["steps"])):
+                out.append(
+                    f"Reescribí el patrón {_del(_lane_np(lane))} con otra notación (suena igual)"
+                )
+            else:
+                out += _steps_change(lane, tid, at_bar, x["steps"], y["steps"], spp_a, spp_b)
         if x.get("sample") != y.get("sample"):
             out.append(
                 f"Cambié el sample {_del(_lane_np(lane))} de {_base(x['sample'])} a {_base(y['sample'])}"
@@ -980,7 +989,7 @@ class _Describer:
         return out
 
     def _notes(self, np: str, a: list[dict], b: list[dict]) -> list[str]:
-        al = align_items(a, b, note_score)
+        al = align_items(a, b, NOTES)
         out: list[str] = []
         mods = al.modified(a, b)
         trans: list[float] = []
@@ -1037,7 +1046,7 @@ class _Describer:
             bars = [_bar_of(_f(a[i]["beat"])) for i in al.removed]
             n = len(al.removed)
             out.append(
-                f"Saqué {n} {_plural(n, 'nota', 'notas')} {_del(np)} de {_bars_text(min(bars), max(bars))}"
+                f"Saqué {n} {_plural(n, 'nota', 'notas')} {_del(np)} {_del(_bars_text(min(bars), max(bars)))}"
             )
         return out
 

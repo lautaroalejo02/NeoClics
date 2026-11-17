@@ -47,20 +47,22 @@ if TYPE_CHECKING:
     from ..schemas.song import Song
 
 __all__ = [
+    "CLIPS",
+    "FX",
+    "NOTES",
     "Alignment",
     "FxAlignment",
+    "Matcher",
     "align_items",
-    "clip_score",
     "fx_alignment",
-    "note_score",
     "same",
     "song_diff",
 ]
 
 _EPS = 1e-9
-#: leftover pairs above this many comparisons skip fuzzy matching (huge
-#: note lists): they are reported as removed + added.
-_FUZZY_LIMIT = 90_000
+#: more candidate pairs than this (pathological input) skips fuzzy matching:
+#: the leftovers are then reported as removed + added.
+_CANDIDATE_LIMIT = 400_000
 
 
 # ---------------------------------------------------------------------------
@@ -126,17 +128,26 @@ class Alignment:
         return seq != sorted(seq)
 
 
-def align_items(
-    a: list[Any],
-    b: list[Any],
-    score: Callable[[Any, Any], int | None] | None = None,
-) -> Alignment:
+@dataclass(frozen=True)
+class Matcher:
+    """How to pair leftover items of one kind.
+
+    ``score(x, y)`` returns how alike two items are (higher = more alike) or
+    None when they must not pair; ``keys(x)`` returns blocking keys: only
+    items sharing a key are ever compared, so matching a 5000-note melody
+    stays near-linear instead of quadratic.
+    """
+
+    score: Callable[[Any, Any], int | None]
+    keys: Callable[[Any], list[Any]]
+
+
+def align_items(a: list[Any], b: list[Any], matcher: Matcher | None = None) -> Alignment:
     """Align two id-less lists.
 
     1. Identical items are paired (multiset semantics, earliest first).
-    2. Leftovers are paired greedily by ``score(x, y)`` (higher = more
-       alike; ``None`` = not allowed to pair), ties broken by index
-       distance. Without a ``score`` leftovers are never paired.
+    2. Leftovers are paired greedily by ``matcher.score`` (ties broken by
+       index distance). Without a matcher leftovers are never paired.
     """
     pairs: list[tuple[int, int]] = []
     by_key: dict[str, list[int]] = {}
@@ -151,13 +162,8 @@ def align_items(
             free_b.append(ib)
     free_a = sorted(ia for bucket in by_key.values() for ia in bucket)
 
-    if score is not None and free_a and free_b and len(free_a) * len(free_b) <= _FUZZY_LIMIT:
-        cands: list[tuple[int, int, int, int]] = []
-        for ia in free_a:
-            for ib in free_b:
-                s = score(a[ia], b[ib])
-                if s is not None:
-                    cands.append((-s, abs(ia - ib), ia, ib))
+    if matcher is not None and free_a and free_b:
+        cands = _candidates(a, b, free_a, free_b, matcher)
         cands.sort()
         used_a: set[int] = set()
         used_b: set[int] = set()
@@ -174,11 +180,34 @@ def align_items(
     return Alignment(pairs=pairs, removed=free_a, added=free_b)
 
 
+def _candidates(
+    a: list[Any], b: list[Any], free_a: list[int], free_b: list[int], m: Matcher
+) -> list[tuple[int, int, int, int]]:
+    index: dict[Any, list[int]] = {}
+    for ib in free_b:
+        for k in m.keys(b[ib]):
+            index.setdefault(k, []).append(ib)
+    seen: set[tuple[int, int]] = set()
+    out: list[tuple[int, int, int, int]] = []
+    for ia in free_a:
+        for k in m.keys(a[ia]):
+            for ib in index.get(k, ()):
+                if (ia, ib) in seen:
+                    continue
+                seen.add((ia, ib))
+                if len(seen) > _CANDIDATE_LIMIT:
+                    return []  # pathological input: report removed + added instead
+                sc = m.score(a[ia], b[ib])
+                if sc is not None:
+                    out.append((-sc, abs(ia - ib), ia, ib))
+    return out
+
+
 def _equal_fields(x: dict, y: dict) -> int:
     return sum(1 for k in set(x) | set(y) if same(x.get(k), y.get(k)))
 
 
-def clip_score(x: dict, y: dict) -> int | None:
+def _clip_score(x: dict, y: dict) -> int | None:
     """Clips pair up when they play the same material or sit at the same spot."""
     same_source = x.get("chop") == y.get("chop") and x.get("sample") == y.get("sample")
     same_spot = x.get("at_bar") == y.get("at_bar") and same(
@@ -189,7 +218,7 @@ def clip_score(x: dict, y: dict) -> int | None:
     return _equal_fields(x, y)
 
 
-def note_score(x: dict, y: dict) -> int | None:
+def _note_score(x: dict, y: dict) -> int | None:
     """Notes pair up when they start together (pitch/length/velocity edit) or
     keep pitch and length (moved in time)."""
     same_beat = same(x.get("beat"), y.get("beat"))
@@ -203,6 +232,24 @@ def _fx_score(x: dict, y: dict) -> int | None:
     if x.get("type") != y.get("type"):
         return None
     return _equal_fields(x, y)
+
+
+def _r(v: Any) -> Any:
+    return round(v, 6) if isinstance(v, float) else v
+
+
+CLIPS = Matcher(
+    _clip_score,
+    lambda c: [
+        ("src", c.get("chop"), c.get("sample")),
+        ("spot", c.get("at_bar"), _r(c.get("offset_beats"))),
+    ],
+)
+NOTES = Matcher(
+    _note_score,
+    lambda n: [("beat", _r(n.get("beat"))), ("pl", n.get("pitch"), _r(n.get("length_beats")))],
+)
+FX = Matcher(_fx_score, lambda f: [("type", f.get("type"))])
 
 
 @dataclass
@@ -229,7 +276,7 @@ def fx_alignment(a_fx: list[dict], b_fx: list[dict]) -> FxAlignment:
     added = [i for k, i in b_ids.items() if k not in a_ids]
     a_anon = [i for i, f in enumerate(a_fx) if not f.get("id")]
     b_anon = [i for i, f in enumerate(b_fx) if not f.get("id")]
-    al = align_items([a_fx[i] for i in a_anon], [b_fx[i] for i in b_anon], _fx_score)
+    al = align_items([a_fx[i] for i in a_anon], [b_fx[i] for i in b_anon], FX)
     pairs += [(a_anon[ia], b_anon[ib]) for ia, ib in al.pairs]
     removed += [a_anon[i] for i in al.removed]
     added += [b_anon[i] for i in al.added]
@@ -305,10 +352,10 @@ def _diff_aligned_list(
     path: str,
     a_items: list[dict],
     b_items: list[dict],
-    score: Callable[[Any, Any], int | None],
+    matcher: Matcher,
     out: list[DiffEntry],
 ) -> None:
-    al = align_items(a_items, b_items, score)
+    al = align_items(a_items, b_items, matcher)
     for ia, ib in al.modified(a_items, b_items):
         _walk(f"{path}[{ib}]", a_items[ia], b_items[ib], out)
     for ia in al.removed:
@@ -339,7 +386,7 @@ def _diff_track(tid: str, a: dict, b: dict, out: list[DiffEntry]) -> None:
 
     ca, cb = a.get("clips"), b.get("clips")
     if ca is not None and cb is not None:
-        _diff_aligned_list(f"{p}.clips", ca, cb, clip_score, out)
+        _diff_aligned_list(f"{p}.clips", ca, cb, CLIPS, out)
     elif not same(ca, cb):
         out.append(_entry(f"{p}.clips", ca, cb))
 
@@ -359,7 +406,7 @@ def _diff_track(tid: str, a: dict, b: dict, out: list[DiffEntry]) -> None:
 
     na, nb = a.get("notes"), b.get("notes")
     if na is not None and nb is not None:
-        _diff_aligned_list(f"{p}.notes", na, nb, note_score, out)
+        _diff_aligned_list(f"{p}.notes", na, nb, NOTES, out)
     elif not same(na, nb):
         out.append(_entry(f"{p}.notes", na, nb))
 
