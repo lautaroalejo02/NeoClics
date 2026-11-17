@@ -54,8 +54,16 @@
             }
           ],
           "default": null,
-          "description": "Ready-to-paste `pattern:` for a drum track (four-on-the-floor steps).",
+          "description": "Ready-to-paste `pattern:` for a drum track (the requested named pattern).",
           "title": "Pattern"
+        },
+        "patterns": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Named patterns of this kit -> what each one does (pass pattern=<name>).",
+          "title": "Patterns",
+          "type": "object"
         },
         "restrictions": {
           "description": "Licence restrictions of the kits the samples come from.",

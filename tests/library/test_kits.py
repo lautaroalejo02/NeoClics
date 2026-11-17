@@ -20,8 +20,8 @@ def bundled() -> StarterKits:
     return StarterKits.model_validate(json.loads(BUNDLED_KITS_FILE.read_text(encoding="utf-8")))
 
 
-def song_with(kit_name: str, kits: StarterKits) -> Song:
-    pattern = kit_pattern(kits.kits[kit_name])
+def song_with(kit_name: str, kits: StarterKits, name: str = "basic") -> Song:
+    pattern = kit_pattern(kits.kits[kit_name], name=name)
     return Song.model_validate(
         {
             "schema_version": 0,
@@ -54,27 +54,55 @@ def test_disco_01_follows_the_report_section_2_picks():
     assert lanes["crash"].endswith("roland-tr-8/crash-tr-8-crash-02.wav")
 
 
-@pytest.mark.parametrize("name", ["disco-01", "disco-808", "city-pop-80s", "acoustic-disco"])
-def test_every_starter_kit_validates_as_a_song_yaml_drum_track(name):
+KIT_NAMES = ["disco-01", "disco-808", "city-pop-80s", "acoustic-disco"]
+
+
+@pytest.mark.parametrize("name", KIT_NAMES)
+def test_every_named_pattern_of_every_kit_validates_as_a_song_yaml_drum_track(name):
     kits = bundled()
-    song = song_with(name, kits)
-    assert song.check() == []
-    track = song.tracks[0]
-    assert set(track.pattern.lanes) == set(kits.kits[name].lanes)
-    for lane in track.pattern.lanes.values():
-        assert lane.sample.startswith("library://kits/")
+    kit = kits.kits[name]
+    assert {"basic", "busy", "fill"} <= set(kit.patterns), name
+    for pattern in kit.patterns:
+        song = song_with(name, kits, pattern)
+        assert song.check() == [], (name, pattern)
+        track = song.tracks[0]
+        assert set(track.pattern.lanes) <= set(kit.lanes)
+        for lane in track.pattern.lanes.values():
+            assert lane.sample.startswith("library://kits/")
 
 
-def test_pattern_steps_are_four_on_the_floor_for_the_core_lanes():
+@pytest.mark.parametrize("name", KIT_NAMES)
+def test_basic_is_a_sane_future_funk_default(name):
+    """WP12 (skill finding 8): disco-01's pattern put a crash on every bar."""
+    lanes = kit_pattern(bundled().kits[name])["lanes"]
+    assert lanes["kick"]["steps"] == "x...x...x...x..."
+    back = [lanes[ln]["steps"] for ln in ("clap", "snare") if ln in lanes]
+    assert back and all(s == "....x.......x..." for s in back)
+    assert lanes["ohat"]["steps"] == "..x...x...x...x."
+    assert not {"crash", "perc", "cowbell", "conga", "tom", "shaker"} & set(lanes)
+
+
+@pytest.mark.parametrize("name", KIT_NAMES)
+def test_crash_only_at_the_start_of_a_phrase(name):
+    for pname, spec in bundled().kits[name].patterns.items():
+        crash = spec.steps.get("crash")
+        if crash is None:
+            continue
+        hits = [i for i, c in enumerate(crash.replace(" ", "")) if c not in ".-_"]
+        assert hits == [0] and spec.bars >= 4, (name, pname, hits)
+
+
+def test_fallback_steps_and_steps_per_bar_keep_musical_time():
     pat = kit_pattern(bundled().kits["disco-01"])
-    assert pat["lanes"]["kick"]["steps"] == "x...x...x...x..."
-    assert pat["lanes"]["clap"]["steps"] == "....x.......x..."
-    assert pat["lanes"]["ohat"]["steps"] == "..x...x...x...x."
     assert all(len(s) == 16 for s in DEFAULT_STEPS.values())
-    assert (
-        len(kit_pattern(bundled().kits["disco-01"], steps_per_bar=32)["lanes"]["kick"]["steps"])
-        == 32
-    )
+    assert "crash" not in DEFAULT_STEPS and "perc" not in DEFAULT_STEPS
+    k32 = kit_pattern(bundled().kits["disco-01"], steps_per_bar=32)["lanes"]["kick"]["steps"]
+    assert k32 == "x.......x.......x.......x......."  # still 4 kicks per bar
+    assert pat["lanes"]["kick"]["steps"] == "x...x...x...x..."
+    phrase = kit_pattern(bundled().kits["disco-01"], name="phrase")
+    assert phrase["bars"] == 4 and len(phrase["lanes"]["crash"]["steps"]) == 64
+    with pytest.raises(MuestraError, match="no pattern"):
+        kit_pattern(bundled().kits["disco-01"], name="nope")
 
 
 def test_the_committed_template_matches_its_json_schema_file():
@@ -216,3 +244,13 @@ def test_an_empty_first_root_does_not_hide_the_real_library_kits(tmp_path):
     listing = run_tool("library.kits", {"project": str(project.root)})
     avail = {k["name"]: k["available"] for k in listing.data["kits"]}
     assert avail["disco-01"] and not avail["disco-808"]
+
+
+@pytest.mark.parametrize("name", KIT_NAMES)
+def test_closed_and_open_hats_never_hit_the_same_step(name):
+    for pname, spec in bundled().kits[name].patterns.items():
+        ch, oh = spec.steps.get("chat"), spec.steps.get("ohat")
+        if not ch or not oh:
+            continue
+        both = [i for i, (a, b) in enumerate(zip(ch, oh, strict=True)) if a != "." and b != "."]
+        assert not both, (name, pname, both)

@@ -138,8 +138,10 @@ la tonalidad resultante. Cuentas y ejemplo resuelto en
 
 1. `library.kits` → kits curados (`disco-01` 909, `disco-808`, `city-pop-80s`,
    `acoustic-disco`); `library.kits name=disco-01` trae URIs, descripción medida y un
-   `pattern:` para pegar. Copiá solo los lanes que usás: el pattern de ejemplo pone un crash
-   en **todos** los compases y cencerro todo el tiempo.
+   `pattern:` para pegar (`basic`: bombo en negras, clap en 2 y 4, hat abierto a
+   contratiempo, cerrado suave). Otros: `pattern=busy` (más hats y percusión), `fill` (el
+   compás antes de una parte nueva: ponelo en un track con su ventana `at_bar`/`until_bar`) y
+   `phrase` (4 compases con un solo crash en el primer uno, para donde empieza una parte).
 2. Para cambiar una pieza, buscá por descriptores medidos: `library.search query="bombo
    corto punchy" type=kick clean_only=true`, o `similar_to=<uri>` + palabras ("menos boomy").
    Leé el `summary` de cada hit: `kick | 0.26s | pitch B1 (62 Hz) | decay 96 ms | ...`.

@@ -1,6 +1,6 @@
 {
   "schema_version": 0,
-  "note": "Curated for the owner's MuestraLibrary (kits/<pack>/... layout). NOBODY HAS LISTENED TO THESE: members were picked from measured features (unclipped, sensible level, tight decays, tuned kicks) and source reputation (REPORT.md section 2). Audition before committing; swap members by editing this file (copy it next to the samples as starter-kits.json). Levels differ between packs: set gain_db per lane.",
+  "note": "Curated for the owner's MuestraLibrary (kits/<pack>/... layout). NOBODY HAS LISTENED TO THESE: members were picked from measured features (unclipped, sensible level, tight decays, tuned kicks) and source reputation (REPORT.md section 2). Audition before committing; swap members by editing this file (copy it next to the samples as starter-kits.json). Levels differ between packs: set gain_db per lane. Each kit has named patterns (basic, busy, fill, phrase): library.kits pattern=<name> returns one ready to paste; crash only at the start of a phrase.",
   "kits": {
     "disco-01": {
       "description": "909-style four-on-the-floor kit: tight punchy kick, 909 clap on 2 & 4, metallic hats, off-beat open hat, cowbell, crash. Follows REPORT.md section 2.",
@@ -12,7 +12,51 @@
         "perc": "kits/tr808-musicradar/cowbell-cb/cowbell-e808-cb-02.wav",
         "crash": "kits/tr8-hardware-machines/roland-tr-8/crash-tr-8-crash-02.wav"
       },
-      "notes": "Kick: 0.26 s, ~62 Hz (B1), 96 ms decay, peak -0.1 dBFS (hot; trim ~2 dB). Longer 909 boom alternative: roland-tr-8/kick-tr-8-kick-03.wav. Snare alternative for the backbeat: essential-kits-musicradar/tr-909-kit/snare-tr-909-snare-01.wav. The TR-8 is a 909/808-modelled hardware unit, not a vintage 909."
+      "notes": "Kick: 0.26 s, ~62 Hz (B1), 96 ms decay, peak -0.1 dBFS (hot; trim ~2 dB). Longer 909 boom alternative: roland-tr-8/kick-tr-8-kick-03.wav. Snare alternative for the backbeat: essential-kits-musicradar/tr-909-kit/snare-tr-909-snare-01.wav. The TR-8 is a 909/808-modelled hardware unit, not a vintage 909.",
+      "patterns": {
+        "basic": {
+          "description": "Four-on-the-floor: bombo en negras, clap en 2 y 4, hat abierto a contratiempo, hat cerrado suave. Sin crash ni cencerro.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "clap": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "o...o...o...o..."
+          }
+        },
+        "busy": {
+          "description": "Más movimiento: hats cerrados en semicorcheas con fantasmas, cencerro suave al final del compás.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "clap": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "xo.oxo.oxo.oxo.o",
+            "perc": "...........o..o."
+          }
+        },
+        "fill": {
+          "description": "Compás de remate (el último antes de una parte nueva): bombo y clap empujan al final, los hats se cortan en el 4.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x.x.",
+            "clap": "....x.......x.xx",
+            "ohat": "..x...x...x.....",
+            "chat": "xo.oxo.oxo.o...."
+          }
+        },
+        "phrase": {
+          "description": "Frase de 4 compases con un crash solo en el uno del primer compás (pegalo donde empieza cada parte).",
+          "bars": 4,
+          "steps": {
+            "kick": "x...x...x...x... x...x...x...x... x...x...x...x... x...x...x...x...",
+            "clap": "....x.......x... ....x.......x... ....x.......x... ....x.......x...",
+            "ohat": "..x...x...x...x. ..x...x...x...x. ..x...x...x...x. ..x...x...x...x.",
+            "chat": "o...o...o...o... o...o...o...o... o...o...o...o... o...o...o...o...",
+            "crash": "x............... ................ ................ ................"
+          }
+        }
+      }
     },
     "disco-808": {
       "description": "808 flavour: short tuned 808 kick, tight 808 clap, 808 hats, cowbell and conga for the disco-percussion glue.",
@@ -24,7 +68,41 @@
         "cowbell": "kits/tr808-musicradar/cowbell-cb/cowbell-e808-cb-02.wav",
         "conga": "kits/tr808-musicradar/congas-hc-mc-lc/conga-hi-e808-hc-05.wav"
       },
-      "notes": "Kick: ~60 Hz (B1), 185 ms decay, peak -5.8 dBFS (headroom; raise gain_db). The long 808 booms are kick-e808-bd-long-*.wav. This pack is multi-sampled: many sibling takes exist per voice (search kit='tr808')."
+      "notes": "Kick: ~60 Hz (B1), 185 ms decay, peak -5.8 dBFS (headroom; raise gain_db). The long 808 booms are kick-e808-bd-long-*.wav. This pack is multi-sampled: many sibling takes exist per voice (search kit='tr808').",
+      "patterns": {
+        "basic": {
+          "description": "Four-on-the-floor 808: bombo en negras, clap en 2 y 4, hat abierto a contratiempo, hat cerrado suave.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "clap": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "o...o...o...o..."
+          }
+        },
+        "busy": {
+          "description": "Con percusión disco: conga sincopada y cencerro suave, hats en semicorcheas.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "clap": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "xo.oxo.oxo.oxo.o",
+            "conga": ".o.o..o..o.o..o.",
+            "cowbell": "...........o..o."
+          }
+        },
+        "fill": {
+          "description": "Remate: clap doble al final y conga que sube; hats cortados en el 4.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x.x.",
+            "clap": "....x.......x.xx",
+            "ohat": "..x...x...x.....",
+            "conga": ".o.o..o..o.oxoxo"
+          }
+        }
+      }
     },
     "city-pop-80s": {
       "description": "80s pop / LinnDrum-era feel: deep kick, gated-reverb snare layered with a clap, bright digital hats, toms for fills. (LinnDrum-ERA aesthetic from the SampleRadar 80s pack; it is NOT actual LinnDrum samples.)",
@@ -37,7 +115,43 @@
         "tom": "kits/80s-pop-drums/kit-b/tom-80pd-kitb-tom-mid.wav",
         "shaker": "kits/80s-pop-drums/kit-a/shaker-80pd-kita-shaker.wav"
       },
-      "notes": "Kick: ~37 Hz fundamental (very deep, peak -0.25 dBFS: hot, trim). Hats and shaker peak around -7 to -11 dBFS: raise their gain_db. The tom lane has silent default steps; program fills yourself. 31 more gated snares live in kits/80s-pop-drums/gated-snares/."
+      "notes": "Kick: ~37 Hz fundamental (very deep, peak -0.25 dBFS: hot, trim). Hats and shaker peak around -7 to -11 dBFS: raise their gain_db. The tom lane has silent default steps; program fills yourself. 31 more gated snares live in kits/80s-pop-drums/gated-snares/.",
+      "patterns": {
+        "basic": {
+          "description": "Four-on-the-floor con caja gated y clap juntos en 2 y 4, hat abierto a contratiempo, hat cerrado suave.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "snare": "....x.......x...",
+            "clap": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "o...o...o...o..."
+          }
+        },
+        "busy": {
+          "description": "Más empuje: hats en semicorcheas y shaker suave en todas las semicorcheas.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "snare": "....x.......x...",
+            "clap": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "xo.oxo.oxo.oxo.o",
+            "shaker": "oooooooooooooooo"
+          }
+        },
+        "fill": {
+          "description": "Remate ochentoso: toms en el 4 y caja doble; el bombo sigue en negras.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "snare": "....x.......x.x.",
+            "clap": "....x...........",
+            "ohat": "..x...x.........",
+            "tom": "..........x.xxx."
+          }
+        }
+      }
     },
     "acoustic-disco": {
       "description": "Dry close-miked acoustic kit for a live Studio-54 feel: short tight kick, snare backbeat, crisp hats, tambourine and a crash.",
@@ -49,7 +163,51 @@
         "perc": "kits/acoustic-drums-1000/kit-8-vinyl/tamb-cycdh-vinylk1-tamb.wav",
         "crash": "kits/hats-cymbals-gongs/accoustic/crash-02.wav"
       },
-      "notes": "Kick: ~59 Hz, 110 ms decay, peak -4.4 dBFS. Acoustic hits in this pack are generally quiet (many peak below -12 dBFS; these were picked for peaks above -7 dBFS). Mixed from two packs, so expect level/room differences. The REPORT's 909 disco-01 under a live kick is another option."
+      "notes": "Kick: ~59 Hz, 110 ms decay, peak -4.4 dBFS. Acoustic hits in this pack are generally quiet (many peak below -12 dBFS; these were picked for peaks above -7 dBFS). Mixed from two packs, so expect level/room differences. The REPORT's 909 disco-01 under a live kick is another option.",
+      "patterns": {
+        "basic": {
+          "description": "Disco tocado: bombo en negras, caja en 2 y 4, hat abierto a contratiempo, hat cerrado suave. Sin crash ni pandereta.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "snare": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "o...o...o...o..."
+          }
+        },
+        "busy": {
+          "description": "Con pandereta en 2 y 4 y hats en semicorcheas.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "snare": "....x.......x...",
+            "ohat": "..x...x...x...x.",
+            "chat": "xo.oxo.oxo.oxo.o",
+            "perc": "....o.......o..."
+          }
+        },
+        "fill": {
+          "description": "Remate: caja en semicorcheas en el último tiempo, hats cortados.",
+          "bars": 1,
+          "steps": {
+            "kick": "x...x...x...x...",
+            "snare": "....x.......xoxx",
+            "ohat": "..x...x...x.....",
+            "chat": "o...o...o......."
+          }
+        },
+        "phrase": {
+          "description": "Frase de 4 compases con un crash solo en el uno del primer compás.",
+          "bars": 4,
+          "steps": {
+            "kick": "x...x...x...x... x...x...x...x... x...x...x...x... x...x...x...x...",
+            "snare": "....x.......x... ....x.......x... ....x.......x... ....x.......x...",
+            "ohat": "..x...x...x...x. ..x...x...x...x. ..x...x...x...x. ..x...x...x...x.",
+            "chat": "o...o...o...o... o...o...o...o... o...o...o...o... o...o...o...o...",
+            "crash": "x............... ................ ................ ................"
+          }
+        }
+      }
     }
   }
 }

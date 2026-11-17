@@ -23,7 +23,8 @@ from __future__ import annotations
 
 from typing import Any, Literal
 
-from pydantic import AwareDatetime, Field, model_serializer
+from pydantic import AwareDatetime, Field, model_serializer, model_validator
+from pydantic_core import PydanticCustomError
 
 from ._base import ContractModel, KeyStr, LaneName, RelPath
 
@@ -33,6 +34,7 @@ __all__ = [
     "AudioFeatures",
     "IndexProblem",
     "KitLicense",
+    "KitPattern",
     "LibraryHit",
     "LibraryIndex",
     "LibraryIndexEntry",
@@ -226,6 +228,30 @@ class LibraryHit(ContractModel):
         }
 
 
+class KitPattern(ContractModel):
+    """A named starter pattern of a kit (16 steps per bar, step chars as in song.yaml)."""
+
+    description: str = ""
+    bars: int = Field(default=1, ge=1, le=16)
+    steps: dict[LaneName, str] = Field(
+        min_length=1,
+        description="Lane -> step string, 16 per bar (spaces ignored); lanes not listed "
+        "are left out of this pattern.",
+    )
+
+    @model_validator(mode="after")
+    def _lengths(self) -> KitPattern:
+        for lane, steps in self.steps.items():
+            n = len(steps.replace(" ", ""))
+            if n != 16 * self.bars:
+                raise PydanticCustomError(
+                    "pattern_length",
+                    "Pattern lane {lane}: {n} steps, expected {want} (16 per bar).",
+                    {"lane": lane, "n": n, "want": 16 * self.bars, "hint": "Fix the step string."},
+                )
+        return self
+
+
 class StarterKit(ContractModel):
     """One named drum kit: lane -> library-root-relative sample path."""
 
@@ -234,6 +260,23 @@ class StarterKit(ContractModel):
         min_length=1, description="Lane name -> sample path relative to the library root."
     )
     notes: str | None = None
+    patterns: dict[str, KitPattern] = Field(
+        default_factory=dict,
+        description="Named starter patterns (WP12): 'basic' (the default), 'busy', 'fill', "
+        "'phrase'... Each lane must be one of the kit's lanes.",
+    )
+
+    @model_validator(mode="after")
+    def _pattern_lanes(self) -> StarterKit:
+        for name, pattern in self.patterns.items():
+            unknown = set(pattern.steps) - set(self.lanes)
+            if unknown:
+                raise PydanticCustomError(
+                    "ref_not_found",
+                    "Pattern {name} uses lanes the kit does not have: {unknown}.",
+                    {"name": name, "unknown": sorted(unknown), "hint": "Use the kit's lanes."},
+                )
+        return self
 
 
 class StarterKits(ContractModel):

@@ -23,7 +23,7 @@ from ..toolbase import ProjectScoped, ToolOutput
 from .core import loaded_index, root_label
 from .discovery import ENV_VAR, default_library_path
 from .index import IndexReport, index_root, summarize
-from .kits import kit_pattern, kit_reports
+from .kits import kit_pattern, kit_reports, pattern_names
 from .search import search
 
 __all__ = [
@@ -339,6 +339,12 @@ class LibraryKitsParams(ProjectScoped):
         default=None, description="Kit to show in full; omit to list all starter kits."
     )
     steps_per_bar: int = Field(default=16, ge=4, le=64)
+    pattern: str = Field(
+        default="basic",
+        description="Named starter pattern to return (with name): 'basic' (four-on-the-floor, "
+        "clap/snare on 2 and 4, off-beat open hat), 'busy', 'fill' (the bar before a new "
+        "part), 'phrase' (4 bars, crash only on the first downbeat) when the kit has them.",
+    )
 
 
 class KitLane(ToolOutput):
@@ -363,7 +369,11 @@ class KitInfo(ToolOutput):
     )
     pattern: dict | None = Field(
         default=None,
-        description="Ready-to-paste `pattern:` for a drum track (four-on-the-floor steps).",
+        description="Ready-to-paste `pattern:` for a drum track (the requested named pattern).",
+    )
+    patterns: dict[str, str] = Field(
+        default_factory=dict,
+        description="Named patterns of this kit -> what each one does (pass pattern=<name>).",
     )
 
 
@@ -408,12 +418,26 @@ def library_kits(p: LibraryKitsParams) -> LibraryKitsResult:
                 ],
                 warnings=r.warnings,
                 restrictions=r.restrictions,
-                pattern=kit_pattern(r.kit, steps_per_bar=p.steps_per_bar) if p.name else None,
+                pattern=kit_pattern(r.kit, steps_per_bar=p.steps_per_bar, name=p.pattern)
+                if p.name
+                else None,
+                patterns={
+                    n: (r.kit.patterns[n].description if n in r.kit.patterns else "")
+                    for n in pattern_names(r.kit)
+                }
+                if p.name
+                else {},
             )
         )
     hint = None
     if not p.name:
         hint = "Pass name=<kit> to get the full lane list and a ready-to-paste pattern."
+    else:
+        hint = (
+            "Paste `pattern` under a drum track; other patterns: pattern=<name> "
+            "(see `patterns`). For the bar before a new part use 'fill' on its own track "
+            "window, and a crash only where a part starts ('phrase')."
+        )
     return LibraryKitsResult(kits=kits, hint=hint)
 
 
