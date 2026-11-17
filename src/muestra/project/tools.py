@@ -44,7 +44,7 @@ class ProjectCreateParams(ContractModel):
         if v != v.strip() or any(c in v for c in ("/", "\\", ":")) or v in (".", ".."):
             raise PydanticCustomError(
                 "invalid_name",
-                "Invalid project name {v!r}.",
+                "Invalid project name {v}.",
                 {"v": v, "hint": "Use a plain directory name (no path separators)."},
             )
         return v
@@ -134,8 +134,41 @@ class SongValidateResult(ToolOutput):
 
 def song_validate(p: SongValidateParams) -> SongValidateResult:
     """Validate song.yaml: structure, references, ids, automation targets,
-    clip/pattern lengths, and (with check_files) file existence plus
-    chop-grid consistency against cache/analysis/."""
+    clip/pattern lengths, sidechain cycles, and (with check_files) file
+    existence plus chop-grid consistency against cache/analysis/."""
     project = open_project(p.project)
     issues = validate_song(project, check_files=p.check_files)
     return SongValidateResult(valid=not issues, issues=issues)
+
+
+#: tools exported by this subpackage (collected by muestra.registry).
+TOOLS = [
+    (
+        "project.create",
+        project_create,
+        ProjectCreateParams,
+        ProjectCreateResult,
+        {"cli": ("project", "create")},
+    ),
+    (
+        "project.open",
+        project_open,
+        ProjectOpenParams,
+        ProjectOpenResult,
+        {"readonly": True, "cli": ("project", "open")},
+    ),
+    (
+        "song.get",
+        song_get,
+        SongGetParams,
+        SongGetResult,
+        {"readonly": True, "cli": ("song", "get")},
+    ),
+    (
+        "song.validate",
+        song_validate,
+        SongValidateParams,
+        SongValidateResult,
+        {"readonly": True, "cli": ("song", "validate")},
+    ),
+]

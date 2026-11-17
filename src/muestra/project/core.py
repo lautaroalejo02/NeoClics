@@ -1,10 +1,18 @@
 """Project folder: the 7.1 layout, muestra.toml, path resolution, id allocation.
 
+A Muestra project folder is its own git repo (created by
+:func:`create_project` via ``muestra.versions.core.init_repo``).
+``renders/`` and ``cache/`` are entirely git-ignored — what git versions
+is ``song.yaml``, ``midi/``, ``muestra.toml``, ``feedback.jsonl`` and
+``docs/`` (plus ``sources/`` and ``library/``, which stay tracked).
+
 No global state: every function takes a project path or :class:`Project`.
 """
 
 from __future__ import annotations
 
+import os
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,8 +23,10 @@ from pydantic import ValidationError
 
 from ..errors import MuestraError, issues_from_validation_error
 from ..schemas._base import is_library_uri
-from ..schemas.config import ProjectConfig
+from ..schemas.config import LibraryConfig, ProjectConfig
 from ..schemas.song import Song
+from ..versions.core import init_repo
+from ..versions.core import next_version_id as _next_version_id
 
 __all__ = [
     "Project",
@@ -53,8 +63,12 @@ PROJECT_DIRS = (
     "docs",
 )
 
+#: renders/ and cache/ are entirely git-ignored: audio, meta.json and
+#: metrics.json are derived data. The version commit carries song.yaml,
+#: midi/, muestra.toml, feedback.jsonl and docs/.
 _GITIGNORE = """\
 # muestra project
+renders/
 cache/
 .venv/
 __pycache__/
@@ -137,55 +151,107 @@ class Project:
         return self.root / "cache"
 
     def library_dirs(self) -> list[Path]:
-        """Configured library dirs, absolute, in search order."""
+        """Configured library roots, absolute, in search order."""
         dirs: list[Path] = []
-        for entry in self.config.library:
+        for entry in self.config.library.roots:
             p = Path(entry)
             dirs.append(p if p.is_absolute() else (self.root / p).resolve())
         return dirs
 
     def resolve(self, ref: str, *, must_exist: bool = True) -> Path:
-        """Resolve a FileRef (project-relative path or library:// URI)."""
+        """Resolve a FileRef (project-relative path or library:// URI).
+
+        When the file exists, each path component's case is compared
+        exactly against the directory listing, so a project authored on a
+        case-insensitive filesystem (Windows, default macOS) still
+        validates on a case-sensitive one.
+        """
         if is_library_uri(ref):
             return self.resolve_library(ref, must_exist=must_exist)
-        p = self.root / ref
-        if must_exist and not p.exists():
-            raise MuestraError.one(
-                "file_not_found",
-                f"File {ref!r} does not exist in the project.",
-                value=ref,
-                hint=f"Expected it at {p}. Check the path or import the file.",
-            )
+        p = self.root / Path(ref)
+        if must_exist:
+            _require_exists(self.root, ref, p)
         return p
 
     def resolve_library(self, uri: str, *, must_exist: bool = True) -> Path:
-        """Resolve 'library://<path>' against configured library dirs, in order."""
+        """Resolve 'library://<path>' against configured library roots, in order."""
         rest = uri[len("library://") :]
         dirs = self.library_dirs()
         if not dirs:
             raise MuestraError.one(
                 "invalid_uri",
-                f"Cannot resolve {uri!r}: no library dirs are configured.",
+                f"Cannot resolve {uri!r}: no library roots are configured.",
                 value=uri,
-                hint="Add a 'library' entry to muestra.toml.",
+                hint="Add a 'roots' entry under [library] in muestra.toml.",
             )
         for d in dirs:
             candidate = d / rest
             if candidate.exists():
+                _check_case(d, rest, uri)
                 return candidate
         if must_exist:
             raise MuestraError.one(
                 "file_not_found",
-                f"{uri!r} was not found in any configured library dir.",
+                f"{uri!r} was not found in any configured library root.",
                 value=uri,
-                hint="Check the URI, or add the file to a library dir: "
+                hint="Check the URI, or add the file to a library root: "
                 + ", ".join(str(d) for d in dirs),
             )
         return dirs[0] / rest
 
 
+def _first_case_mismatch(root: Path, rel: str) -> tuple[str, str] | None:
+    """First path component whose case differs from the directory listing.
+
+    Returns ``(written, actual)`` or None. Used so a project authored on
+    a case-insensitive filesystem still validates on a case-sensitive
+    one — the written name must match the listing exactly.
+    """
+    cur = root
+    for seg in rel.replace("\\", "/").split("/"):
+        if not cur.is_dir():
+            return None
+        try:
+            names = os.listdir(cur)
+        except OSError:
+            return None
+        if seg in names:
+            cur = cur / seg
+            continue
+        lowered = {n.lower(): n for n in names}
+        if seg.lower() in lowered:
+            return seg, lowered[seg.lower()]
+        return None
+    return None
+
+
+def _check_case(root: Path, rel: str, ref: str) -> None:
+    mismatch = _first_case_mismatch(root, rel)
+    if mismatch is not None:
+        written, actual = mismatch
+        raise MuestraError.one(
+            "case_mismatch",
+            f"Path {ref!r}: component {written!r} does not match {actual!r} on disk.",
+            value=ref,
+            hint="Match the exact case of each path component; this keeps "
+            "the project portable to case-sensitive filesystems.",
+        )
+
+
+def _require_exists(root: Path, ref: str, p: Path) -> None:
+    if not p.exists():
+        raise MuestraError.one(
+            "file_not_found",
+            f"File {ref!r} does not exist in the project.",
+            value=ref,
+            hint=f"Expected it at {p}. Check the path or import the file.",
+        )
+    _check_case(root, ref.replace("\\", "/"), ref)
+
+
 def create_project(path: Path, config: ProjectConfig | None = None) -> Project:
-    """Create the 7.1 folder structure at ``path`` (must not exist or be empty)."""
+    """Create the 7.1 folder structure at ``path`` (must not exist or be empty),
+    then ``git init`` it — a Muestra project is its own git repo."""
     path = path.resolve()
     if path.exists() and any(path.iterdir()):
         raise MuestraError.one(
@@ -197,7 +263,7 @@ def create_project(path: Path, config: ProjectConfig | None = None) -> Project:
     for d in PROJECT_DIRS:
         (path / d).mkdir(parents=True, exist_ok=True)
 
-    cfg = config or ProjectConfig(library=["library"])
+    cfg = config or ProjectConfig(library=LibraryConfig(roots=["library"]))
     project = Project(root=path, config=cfg)
     save_config(project, cfg)
 
@@ -226,6 +292,7 @@ def create_project(path: Path, config: ProjectConfig | None = None) -> Project:
     (path / FEEDBACK_FILE).write_text("", encoding="utf-8")
     (path / "docs" / "decisions.md").write_text(_DECISIONS_MD, encoding="utf-8")
     (path / ".gitignore").write_text(_GITIGNORE, encoding="utf-8")
+    init_repo(path)
     return project
 
 
@@ -251,6 +318,8 @@ def allocate_id(prefix: str, taken: set[str], *, width: int = 0) -> str:
     """First free id: prefix+n zero-padded to ``width`` (0 = no padding).
 
     ``allocate_id('src', {...})`` -> 'src1'; ``width=3`` -> 'src001'.
+    Used for source ids only — version and candidate-set ids follow the
+    max+1 rule (ids are never reused; gaps are never filled).
     """
     n = 1
     while f"{prefix}{n:0{width}d}" in taken:
@@ -264,17 +333,18 @@ def next_source_id(song: Song) -> str:
 
 
 def next_version_id(project: Project) -> str:
-    """Next render version id: 'v001', 'v002', ... (from renders/ dir names)."""
-    taken = (
-        {p.name for p in project.renders_dir.iterdir() if p.is_dir()}
-        if project.renders_dir.is_dir()
-        else set()
-    )
-    return allocate_id("v", taken, width=3)
+    """Next render version id: max(vNNN) + 1 across git tags, renders/
+    and feedback.jsonl — never reused. Delegates to versions.core."""
+    return _next_version_id(project)
 
 
 def next_set_id(project: Project, source_id: str) -> str:
-    """Next chop-candidate set id: 'cs001', ... (from cache/chops/<source_id>/)."""
+    """Next chop-candidate set id: 'cs001', ... as max(csNNN) + 1 over
+    cache/chops/<source_id>/ — ids are never reused, gaps never filled."""
     d = project.cache_dir / "chops" / source_id
-    taken = {p.stem for p in d.glob("*.json")} if d.is_dir() else set()
-    return allocate_id("cs", taken, width=3)
+    nums = [
+        int(m.group(1))
+        for p in (d.glob("*.json") if d.is_dir() else [])
+        if (m := re.match(r"cs(\d+)$", p.stem))
+    ]
+    return f"cs{(max(nums) + 1) if nums else 1:03d}"

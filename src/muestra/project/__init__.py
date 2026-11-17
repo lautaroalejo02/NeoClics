@@ -22,10 +22,13 @@ from .validate import (
     analysis_path,
     chop_times,
     dump_song,
+    edit_song_document,
     load_analysis,
     load_song,
+    load_song_document,
     save_analysis,
     save_song,
+    save_song_document,
     validate_song,
 )
 
@@ -41,10 +44,12 @@ __all__ = [
     "chop_times",
     "create_project",
     "dump_song",
+    "edit_song_document",
     "is_project_dir",
     "load_analysis",
     "load_config",
     "load_song",
+    "load_song_document",
     "next_set_id",
     "next_source_id",
     "next_version_id",
@@ -52,5 +57,6 @@ __all__ = [
     "save_analysis",
     "save_config",
     "save_song",
+    "save_song_document",
     "validate_song",
 ]
