@@ -10,6 +10,7 @@ from ..project.core import FEEDBACK_FILE, open_project
 from ..schemas._base import ContractModel
 from ..schemas.feedback import FeedbackEvent
 from ..toolbase import ProjectScoped, ToolOutput
+from .digest import event_line
 from .store import EVENT_ADAPTER, append_event, read_events, utcnow
 
 __all__ = [
@@ -63,6 +64,11 @@ class FeedbackReadResult(ToolOutput):
         default_factory=list,
         description="feedback.jsonl lines that were skipped (path + line + hint).",
     )
+    digest: list[str] = Field(
+        default_factory=list,
+        description="One readable line per event (WP16): requests about an editor selection "
+        "say what was pointed at and the song.edit op that acts on it.",
+    )
 
 
 def feedback_read(p: FeedbackReadParams) -> FeedbackReadResult:
@@ -77,6 +83,7 @@ def feedback_read(p: FeedbackReadParams) -> FeedbackReadResult:
         count=len(page.events),
         latest_ts=latest,
         next_cursor=page.next_cursor,
+        digest=[event_line(e) for e in page.events],
         skipped=[
             SkippedFeedbackLine(path=s.path, line=s.line, message=s.message, hint=s.hint)
             for s in page.skipped

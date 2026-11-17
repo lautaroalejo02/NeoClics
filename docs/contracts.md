@@ -1,5 +1,33 @@
 # Muestra contracts (as implemented, WP0.1)
 
+WP16 per-event control and editor (all additive; decisions 2026-11-17 WP16).
+`PatternLane.overrides{<song bar>: <steps_per_bar chars>}` replaces one bar of a lane;
+`PatternLane.steps` may be omitted (rests). `Pattern.hits[{beat (1-indexed song
+beat), lane, velocity=1 (0,1], sample?}]` are free-timed (no swing). `Clip` adds
+`instances{<1-based pass>: {mute, gain_db, pitch_semitones, reverse}}`,
+`length_beats` on chop clips (pass length; default chop length − trim),
+`trim_start_beats` (−128..4096), `stretch` (0.25..4, keeps pitch; a pass plays
+`length_beats/stretch` beats of material), `gain_db`, `reverse`,
+`fade_in_ms`/`fade_out_ms` (an explicit fade never seam-joins that edge). Expansion:
+`schemas.song.pattern_hits`/`clip_passes`/`lane_bar_steps`. Diff paths
+`…lanes.<l>.overrides.<bar>`, `…pattern.hits[i]`, `…clips[i].instances.<n>.<f>`.
+Tools: `song.edit{ops, base_revision?, dry_run}` → `{changes, revision,
+base_revision, rebased, changed, applied, inverse, song}`; ops `set/unset/insert/
+remove/move/document` + `hit/add_hits/split_clip/duplicate_clip/add_point/revert_to`,
+id-path grammar of `versions.diff` (`editor/paths.py`), optional `expect`; errors
+`invalid_path`, `edit_conflict`, `edit_rejected` (+ the validator issues), Spanish
+messages. `song.state{against?}` (readonly) → `{revision, base_version, dirty,
+changes[], summary, song}`. `song.pieces{revision?, tracks?, dry, wet}` →
+`{revision, sample_rate, bpm, length_bars, frames, duration_s, pieces[{id, path,
+kind, frames, duration_s}], materials[{chop|sample, start, length, stretch, pitch,
+tail_frames, base, piece}], oneshots{ref: piece}, tracks[{id, kind, dry_stem?, wet?,
+wet_render_s?, error?}], render_s, approximations[]}`; `stale_revision` when the file
+moved. `CommentEvent` adds `selection{label, track?, lane?, start_beat?, end_beat?,
+clips[{clip, instance?}], hits[{lane, bar, step?, beat, index?}], notes[{index, beat,
+pitch, phrase?}], automation?, points[], chop?, source?, source_s?, paths[],
+excerpt?}` and `song_revision?`; `feedback.read` adds `digest[]`. Remote (LAN) write
+tools add `song.edit`, `song.pieces`.
+
 WP15 drafts: `render(draft=true, range_bars?, analyze?)` publishes under
 `renders/d-<12 hex>/` without a commit, tag or version allocation. Result
 `version` is null and `draft_id` is the identifier. `analyze` defaults to false
@@ -696,5 +724,6 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. WP12: `library.kits` takes `pattern=<name>` and returns the kit's `patterns{name: description}`. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
 | `versions.prune` | `muestra.versions.tools` | WP13: dry run by default; `{dry_run, remove[{version,bytes}], keep[{version,bytes,reasons}], freed_bytes, cache_files, cache_freed_bytes, disk, hint}`; rules in `docs/versions.md` "Disk use". `versions.list` adds `disk` and per-record `size_bytes`; `GET /project` adds `disk` |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); WP12: `versions.get` returns `metrics_summary` + `metrics_path` by default, the full `metrics` and `song_yaml` only with `detail=true`; restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta` (ears notes), `metrics_compare` (ears `MetricsDelta`), `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
+| `song.edit`, `song.state`, `song.pieces` | `muestra.editor.tools` | WP16: see the paragraph at the top; `docs/render.md` "Editor pieces" |
 | `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary` (WP12: `metrics` only with `detail=true`); compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

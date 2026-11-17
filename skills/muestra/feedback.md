@@ -7,6 +7,36 @@
   versión; `track` = el track que tenía en solo/seleccionado (puede no ser el culpable).
 - `ab_choice` `{a, b, winner}`: comparó en la misma posición y eligió.
 - `chop_choice` `{candidate_id, adjust?}`: eligió otro chop en la UI; ya está en `song.yaml`.
+- `comment` con `selection` (WP16, "Pedile al agente" en el editor): un pedido sobre
+  EXACTAMENTE esos elementos. Ver abajo.
+
+`digest` trae una línea legible por evento (por MCP es lo que ves primero); los pedidos
+sobre una selección dicen qué señaló, dónde, y la op de `song.edit` que lo saca.
+
+## Pedidos sobre una selección del editor
+
+El humano ahora ve y toca el arreglo en el browser (vista "Arreglo"): mueve clips, saca
+golpes, recorta, y eso ya está en `song.yaml` (cambios sin guardar = sin versión todavía;
+`song.state` te dice cuáles, en castellano). Cuando selecciona algo y te escribe ("sacá
+esto", "que esto suene más filtrado", "repetí este corte pero al revés"), el evento trae:
+
+- `selection.label` ("bombo · compás 7, tiempo 3"), `track`, `lane`, `start_beat`/`end_beat`
+  (beats 1-indexados de la canción, fin exclusivo);
+- `hits[{lane, bar, step, beat, index}]` (golpes: `step` 0-based en el compás; `index` si es
+  un golpe suelto de `pattern.hits`), `clips[{clip, instance}]` (índice 0-based del clip y
+  pasada 1-based), `notes[{index, beat, pitch, phrase?}]`, `automation` + `points`,
+  `chop`/`source`/`source_s` (vista de la fuente);
+- `paths`: las rutas de `song.edit` de lo seleccionado, y `excerpt`: cómo estaba;
+- `song_revision`: la revisión de `song.state` que estaba mirando. Si la tuya es otra, la
+  canción cambió después (otra edición suya o tuya): ubicá los elementos por `excerpt`.
+
+Actuá sobre eso y nada más: `song.edit` con esas rutas (`{op: set, path:
+"tracks.sample.clips[0].instances.3", value: {reverse: true}}`, `{op: hit, ...}`,
+`{op: add_hits, ...}`), o editando el YAML con las formas de [song-yaml.md](song-yaml.md)
+(`overrides`, `hits`, `instances`, `trim_start_beats`, `length_beats`, `stretch`). Después
+renderizá (`render`, o `render(draft=true)` para que lo compare): la UI marca el pedido como
+atendido cuando aparece una versión más nueva. En el `summary` nombrá lo que señaló ("saqué
+el bombo del compás 7 que marcaste").
 
 ## Ubicar un comentario
 

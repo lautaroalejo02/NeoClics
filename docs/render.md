@@ -306,3 +306,25 @@ tests); `uv run ruff check`: **0 findings**; `uv run ruff format --check`:
 **74 files already formatted**. The example-song golden tolerance regression
 uses the extended fixture stems and fixture-audio instrument fake, while
 independent R3 computations and repeated PCM24 exports are compared exactly.
+
+
+## Editor pieces and per-event control (WP16)
+
+- Drum lanes play `pattern_hits(song, track)`: the tiled steps (same arithmetic as
+  before, so existing songs are bit-identical), per-bar `overrides` (one bar of steps,
+  swing applies) and free `hits` (exact beat, the lane's gain/pan, optional own sample).
+- Clips play `clip_passes(song, track)`. A plain pass reuses the cached chop as before.
+  Otherwise `pass_audio` takes material beats `[trim_start, trim_start +
+  length/stretch)` of the chop at project tempo (right of the chop: the record
+  continuing at the same warp rate via `chop_audio`'s tail; left of it: the chop
+  re-warped extended to the left), time-stretches it with Rubber Band keeping pitch
+  when `stretch != 1`, applies the pass pitch, reverses it (a reversed pass fades
+  `fade_ms` at both edges: it has no natural continuation) and its gain. Muted passes
+  are absent; their neighbours fade to/from silence at that edge.
+- `song.pieces` exports what the browser editor needs (see `muestra.editor.pieces`).
+  The wet stem of a track is `render_audio` of the song reduced to that track and its
+  sidechain keys, no master, the track at 0 dB/centre/unmuted. Through the browser
+  fader (gain, pan relative to centre) it equals the version's stem within 1e-5
+  (`tests/editor/test_pieces.py`). The browser mix does NOT reproduce the master chain
+  (master fx, `target_lufs` loudness loop, safety limiter): the editor says "vista
+  previa del editor" and one key plays a draft render of the current state.
