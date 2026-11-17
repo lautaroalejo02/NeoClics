@@ -24,6 +24,12 @@ dependencies = [
 
 # WP1 (ingest: separation + analysis)
 ingest = [
+    "demucs-infer>=4.4.0,<5",
+    "audio-separator[cpu]>=0.48.0,<0.49",
+    "beat-this>=1.1.0,<2",
+    "pyloudnorm>=0.2.0,<0.3",
+    "psutil>=7.2,<8",
+    "audioread>=3.0,<4",
 ]
 
 # WP2 (renderer)

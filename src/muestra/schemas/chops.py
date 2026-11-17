@@ -71,10 +71,7 @@ class CandidateScore(ContractModel):
 class ChopCandidate(ContractModel):
     """One proposed loop, aligned to a real downbeat of the source."""
 
-    id: str = Field(
-        pattern=r"^cand\d+$",
-        description="Local id inside the set: 'cand1', 'cand2', ...",
-    )
+    id: CandidateIdStr = Field(description="Global id: 'csNNN/candN'.")
     source_id: IdStr
     stem: StemName
     start_downbeat: int = Field(ge=1, description="1-based index into downbeats_s.")

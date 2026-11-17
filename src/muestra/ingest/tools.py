@@ -1,4 +1,4 @@
-"""Tool stubs owned by WP1 (ingest): source.* and chops.choose /
+"""Tools owned by WP1 (ingest): source.* and chops.choose /
 chops.list.
 
 WP1 implements these; WP0 only fixes the typed interface. Candidate
@@ -13,6 +13,7 @@ wholesale rewrite, so comments, ordering and omitted defaults survive.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Literal
 
 from pydantic import Field
@@ -63,7 +64,15 @@ class SourceImportResult(ToolOutput):
 def source_import(p: SourceImportParams) -> SourceImportResult:
     """Copy an audio file into sources/ and register it in song.yaml
     (ruamel round-trip edit — comments and ordering survive)."""
-    raise NotImplementedError(_WP)
+    from ..project import open_project
+    from .storage import import_source
+
+    project = open_project(Path(p.project))
+    source_id, rel = import_source(project, Path(p.path).expanduser().resolve(), p.source_id)
+    files = [rel, "sources/.muestra-sources.json"]
+    if project.song_path.exists():
+        files.append("song.yaml")
+    return SourceImportResult(source_id=source_id, file=rel, files=files)
 
 
 class SourceSeparateParams(ProjectScoped):
@@ -84,7 +93,13 @@ class SourceSeparateResult(ToolOutput):
 
 def source_separate(p: SourceSeparateParams) -> SourceSeparateResult:
     """Separate a source into stems under cache/stems/<source_id>/ (cached)."""
-    raise NotImplementedError(_WP)
+    from ..project import open_project
+    from .separation import separate
+
+    stems, model, cached = separate(open_project(Path(p.project)), p.source_id, p.model)
+    return SourceSeparateResult(
+        source_id=p.source_id, stems=stems, model=model, cached=cached, files=list(stems.values())
+    )
 
 
 class SourceAnalyzeParams(ProjectScoped):
@@ -100,7 +115,14 @@ class SourceAnalyzeResult(ToolOutput):
 def source_analyze(p: SourceAnalyzeParams) -> SourceAnalyzeResult:
     """Generate cache/analysis/<source_id>.json (BPM, key, beats, downbeats,
     sections, loudness)."""
-    raise NotImplementedError(_WP)
+    from ..project import open_project
+    from .analysis import analyze
+
+    analysis = analyze(open_project(Path(p.project)), p.source_id)
+    rel = f"cache/analysis/{p.source_id}.json"
+    return SourceAnalyzeResult(
+        source_id=p.source_id, analysis_path=rel, analysis=analysis, files=[rel]
+    )
 
 
 class SourceFindChopsParams(ProjectScoped):
@@ -110,7 +132,7 @@ class SourceFindChopsParams(ProjectScoped):
     )
     stem: StemName | None = Field(default=None, description="Stem to chop (default: 'other').")
     length_beats: float | None = Field(
-        default=None, gt=0, description="Loop length in beats (default: 8)."
+        default=None, gt=0, description="Loop length in beats (default: compare 1/2/4/8 bars)."
     )
     n: int = Field(default=3, ge=1, description="Number of candidates to propose.")
 
@@ -128,7 +150,22 @@ def source_find_chops(p: SourceFindChopsParams) -> SourceFindChopsResult:
     """Propose n loop candidates aligned to real downbeats, render a short
     preview of each, record the agent's auto pick + justification, and
     persist the set to cache/chops/ for the UI (spec 3 step 4, mode dual)."""
-    raise NotImplementedError(_WP)
+    from ..project import open_project
+    from ..schemas.chops import ChopQuery
+    from .chops import find
+
+    project = open_project(Path(p.project))
+    query = ChopQuery(section=p.section, stem=p.stem, length_beats=p.length_beats, n=p.n)
+    candidate_set, path = find(project, p.source_id, query)
+    rel = path.relative_to(project.root).as_posix()
+    previews = [c.preview for c in candidate_set.candidates if c.preview]
+    return SourceFindChopsResult(
+        set_id=candidate_set.set_id,
+        set=candidate_set,
+        set_path=rel,
+        previews=previews,
+        files=[rel, *previews],
+    )
 
 
 class ChopsChooseParams(ProjectScoped):
@@ -157,7 +194,17 @@ def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
     adjusted) and write it into song.yaml as ``chop_id`` via a ruamel
     round-trip edit; marks the set as chosen. Manual choices are
     recorded in feedback.jsonl."""
-    raise NotImplementedError(_WP)
+    from ..project import open_project
+    from .chops import choose
+
+    project = open_project(Path(p.project))
+    candidate_set, chop, path = choose(project, p.candidate_id, p.chop_id, p.mode, p.adjust)
+    files = ["song.yaml", path.relative_to(project.root).as_posix()]
+    if p.mode == "manual":
+        files.append("feedback.jsonl")
+    return ChopsChooseResult(
+        set_id=candidate_set.set_id, candidate_id=p.candidate_id, chop=chop, files=files
+    )
 
 
 class ChopsListParams(ProjectScoped):
@@ -174,7 +221,15 @@ class ChopsListResult(ToolOutput):
 
 def chops_list(p: ChopsListParams) -> ChopsListResult:
     """List persisted chop-candidate sets (optionally for one source)."""
-    raise NotImplementedError(_WP)
+    from ..project import open_project
+    from .chops import read_set, set_paths
+
+    project = open_project(Path(p.project))
+    paths = set_paths(project, p.source_id)
+    return ChopsListResult(
+        sets=[read_set(path) for path in paths],
+        files=[path.relative_to(project.root).as_posix() for path in paths],
+    )
 
 
 #: tools exported by this subpackage (collected by muestra.registry).

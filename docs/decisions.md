@@ -290,3 +290,29 @@ says so.
 - **R11 events**: `schemas/api.py` defines the models only; the
   file-watching producer is WP7's API server (no WP-owned module exists
   for it yet).
+
+## 2026-11-17 — WP1: candidate IDs and implementation ambiguities
+
+User-authorized correction: `ChopCandidate.id` now uses `CandidateIdStr`,
+matching existing R5 and contracts.md (global `csNNN/candN`). The old local
+`candN` validator and fixture contradicted that ruling. Regenerated affected
+JSON schemas and migrated the example candidate IDs. No new wire format or
+contract change; existing binding R5 is implemented.
+
+WP1 allocates candidate set IDs over all sources (including interrupted
+preview directories): the shared `next_set_id` is source-local, while the
+public candidate ID has no source component. Without that extra scan,
+`chops.choose(cs001/cand1)` would be ambiguous across two sources.
+
+Other differences between prose and shared models remain unchanged:
+`Analysis.stems` is optional in the Python schema, so analysis can precede
+separation; `ChopChoiceEvent` has no `set_id` field, so feedback records the
+global candidate ID, from which the set is recoverable. `Chop.start_offset_beats`
+allows ±4096 in the model (prose says ±64); WP1 follows the shared model and
+checks actual grid bounds. These are flagged for integration, not silently
+patched in another WP's schema.
+
+The explicit WP1 request to compare 1/2/4/8-bar candidates supersedes the stub's
+description of a fixed default of eight beats; `length_beats=None` searches
+4/8/16/32 beats. The parameter/result shapes are unchanged. Algorithm choices,
+licences, CPU measurements and remaining limitations are in `docs/ingest.md`.
