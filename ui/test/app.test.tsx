@@ -177,6 +177,145 @@ describe("App against the mock", () => {
     expect(await screen.findByText(/elegido: cand2 \(vos\)/)).toBeTruthy();
   });
 
+  describe("manual chop choice (WP14 finding 2)", () => {
+    const setChoose = (mode: string) => fetch(`${mock.url}/debug/choose?mode=${mode}`, { method: "POST" });
+    async function openChops() {
+      const b = await boot();
+      await b.user.click(screen.getByTestId("tab-chops"));
+      await b.user.click(await screen.findByTestId("cand-cand2"));
+      return b;
+    }
+
+    it("success says what happened, in Spanish, and shows it in Chops and in the feedback list", async () => {
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      const out = await screen.findByTestId("chop-outcome");
+      expect(out.dataset.status).toBe("ok");
+      expect(out.textContent).toContain("Elegiste el candidato 2; el agente lo va a usar en la próxima versión.");
+      expect(await screen.findByText(/elegido: cand2 \(vos\)/)).toBeTruthy();
+      await user.click(screen.getByRole("button", { name: "Todo" }));
+      expect(within(screen.getByTestId("feedback-list")).getAllByText(/cs001\/cand2/).length).toBeGreaterThan(0);
+    });
+
+    it("a chop written under a new id says so; a rescaled clip is explained", async () => {
+      await setChoose("newid");
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      expect((await screen.findByTestId("chop-outcome")).textContent).toMatch(/Quedó guardado como chop «c1_2» \(no pisé «c1»\)/);
+      await setChoose("rescale");
+      await user.click(screen.getByTestId("confirm-chop"));
+      await waitFor(() => expect(screen.getByTestId("chop-outcome").textContent).toContain("Ajusté la repetición del clip (repetición 8 → 5)"));
+    });
+
+    it("an English backend error is never the primary message; the one-click comment keeps the choice", async () => {
+      await setChoose("fail");
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      const out = await screen.findByTestId("chop-outcome");
+      expect(out.dataset.status).toBe("error");
+      const primary = out.querySelector("strong")!.textContent!;
+      expect(primary).toMatch(/Ese corte es más largo/);
+      expect(primary).not.toContain("Clip ends");
+      expect(out.textContent).toContain("Clip ends at beat 128"); // kept as secondary detail
+      // nothing was recorded yet...
+      expect((await mock.received()).some((r) => r.event.type === "chop_choice")).toBe(false);
+      // ...so one click leaves it for the agent as a comment
+      await user.click(screen.getByTestId("chop-as-comment"));
+      await waitFor(async () => {
+        const r = await lastReceived();
+        expect(r.valid).toBe(true);
+        expect(r.event).toMatchObject({ type: "comment" });
+        expect(String(r.event.text)).toContain("cs001/cand2");
+        expect(String(r.event.text)).toContain("«c1»");
+      });
+      expect(screen.getByTestId("chop-outcome").dataset.status).toBe("commented");
+      expect(screen.queryByTestId("chop-as-comment")).toBeNull();
+    });
+
+    it("if the backend recorded the choice despite failing, we say it is not lost", async () => {
+      await setChoose("fail-recorded");
+      const { user } = await openChops();
+      await user.click(screen.getByTestId("confirm-chop"));
+      const out = await screen.findByTestId("chop-outcome");
+      await waitFor(() => expect(out.dataset.status).toBe("recorded"));
+      expect(screen.queryByTestId("chop-as-comment")).toBeNull();
+    });
+  });
+
+  describe("versions without audio (WP14 finding 3)", () => {
+    const del = (vs: string) => fetch(`${mock.url}/debug/delete-renders?versions=${vs}`, { method: "POST" });
+
+    it("lists them greyed out, with summary, feedback and a copyable regeneration request; no play/A-B", async () => {
+      await del("v001,v003");
+      const { store, engine, user } = await boot();
+      expect(store.state.versions.map((v) => v.version)).toEqual(["v002", "v004"]);
+      expect(store.state.noAudio.map((v) => v.version)).toEqual(["v001", "v003"]);
+      const row = screen.getByTestId("version-v003");
+      expect(row.dataset.noaudio).toBe("true");
+      expect(row.className).toContain("ghost");
+      // summary + the human's feedback survive
+      expect(row.textContent).toContain("Abrí el filtro del sample");
+      expect(within(screen.getByTestId("version-v001")).getByText(/me gustó/)).toBeTruthy();
+      // clear message, no play / A-B affordances
+      expect(screen.getByTestId("noaudio-v003").textContent).toContain("Sin audio: pedile al agente que la regenere (render de v003)");
+      expect(within(row).queryByRole("button", { name: /Escuchar v003/ })).toBeNull();
+      expect(within(row).queryByRole("button", { name: /v003 como A/ })).toBeNull();
+      expect(within(row).queryByRole("button", { name: /v003 como B/ })).toBeNull();
+      await user.click(row);
+      expect(engine.calls.some((c) => c[0] === "select" && c[1] === "v003")).toBe(false);
+      // the copy button puts the request on the clipboard
+      const written: string[] = [];
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => void written.push(t) } });
+      await user.click(screen.getByTestId("copy-regen-v003"));
+      expect(written[0]).toContain("render de v003");
+      expect(written[0]).toContain("v003");
+      // number keys still map to versions with audio only
+      expect(store.versionAt(2)).toBe("v004");
+    });
+
+    it("when NO version has audio the app says so instead of 'no versions yet'", async () => {
+      await del("v001,v002,v003,v004");
+      const { store } = await boot().catch(async () => {
+        throw new Error("boot failed");
+      });
+      void store;
+      expect(screen.queryByTestId("empty")).toBeNull();
+      const card = await screen.findByTestId("no-audio");
+      expect(card.textContent).toContain("render de v004");
+      expect(screen.getAllByTestId(/^version-v00[1-4]$/)).toHaveLength(4);
+    });
+  });
+
+  describe("drafts and previews (WP14 finding 4)", () => {
+    it("no drafts exposed → no area (today's server)", async () => {
+      await boot();
+      expect(screen.queryByTestId("drafts")).toBeNull();
+    });
+
+    it("lists a draft from /project, marked as not a version, playable with the same engine", async () => {
+      await fetch(`${mock.url}/debug/draft`, { method: "POST" });
+      const { engine, user } = await boot();
+      const area = await screen.findByTestId("drafts");
+      expect(area.textContent).toContain("Borradores y previews");
+      expect(area.textContent).toContain("no es una versión");
+      expect(area.textContent).toContain("compases 1–2");
+      // it is not in the version list
+      expect(screen.getByTestId("versions").querySelectorAll("[data-testid^='version-']")).toHaveLength(4);
+      await user.click(screen.getByTestId("play-draft-d001"));
+      const call = engine.calls.find((c) => c[0] === "playPreview");
+      expect(call?.[1]).toBe("draft:d001");
+    });
+
+    it("a draft announced live (draft.created) appears without reloading", async () => {
+      const { store } = await boot({ ws: true });
+      await waitFor(() => expect(store.state.ws).toBe("open"), { timeout: 5000 });
+      expect(screen.queryByTestId("drafts")).toBeNull();
+      await fetch(`${mock.url}/debug/draft?label=Probando%20el%20bombo`, { method: "POST" });
+      expect((await screen.findByTestId("drafts", {}, { timeout: 4000 })).textContent).toContain("Probando el bombo");
+      store.destroy();
+    });
+  });
+
   it("oídos: alarms in Spanish, clickable to jump", async () => {
     const { engine, user } = await boot();
     await user.keyboard("2"); // v002 has positioned alarms

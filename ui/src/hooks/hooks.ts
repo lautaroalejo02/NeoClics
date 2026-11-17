@@ -76,3 +76,31 @@ export function isTypingTarget(t: EventTarget | null): boolean {
   }
   return el.isContentEditable;
 }
+
+/** Copy text to the clipboard. navigator.clipboard only exists in secure
+ *  contexts (not on http://192.168.x.y from a phone), so fall back to the
+ *  old textarea + execCommand trick. Resolves whether it worked. */
+export async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fall through */
+  }
+  try {
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.cssText = "position:fixed;top:0;left:0;opacity:0;pointer-events:none";
+    document.body.appendChild(ta);
+    ta.select();
+    ta.setSelectionRange(0, text.length);
+    const ok = document.execCommand("copy");
+    ta.remove();
+    return ok;
+  } catch {
+    return false;
+  }
+}

@@ -176,7 +176,13 @@ export interface VersionInfo {
   created_at?: string | null;
   git_commit?: string | null;
   summary?: string | null;
+  request?: string | null;
   liked?: boolean | null;
+  /** versions.list (WP5): renders/<v>/mix.wav exists. Absent on older servers. */
+  rendered?: boolean;
+  /** no audio on disk but the song is in git: `render` with version=<v> regenerates it */
+  rerenderable?: boolean;
+  has_meta?: boolean;
 }
 
 export interface VersionsListResult {
@@ -255,6 +261,20 @@ export interface ChopsChooseResult {
   set_id: string;
   candidate_id: string;
   chop: Record<string, unknown>;
+  // ---- planned by the WP14 backend change (all optional; the UI tolerates
+  // their absence, see ui/API-NEEDS.md): the human's choice is ALWAYS recorded
+  /** the chop id actually written (differs from the requested one when the
+   *  backend wrote the chop under a new id instead of replacing a clip's) */
+  chop_id?: string;
+  requested_chop_id?: string;
+  /** a clip's `repeat` was rescaled to keep its span */
+  rescaled?: boolean | { clip?: string; repeat_from?: number; repeat_to?: number };
+  /** true once the chop_choice feedback event is on disk */
+  recorded?: boolean;
+  /** backend notes (any language); shown as secondary details */
+  message?: string | null;
+  notes?: string[];
+  warnings?: string[];
 }
 
 // ---------- analysis.json → Analysis ----------
@@ -295,6 +315,23 @@ export interface SongGetResult {
 }
 
 // ---------- muestra-api read endpoints (docs/server.md) ----------
+/** Playable audio that is NOT a version (WP14 finding 4): a draft render
+ *  (partial / experimental, never versioned) or a preview the agent made
+ *  (source grid check, chop candidate). Proposed shape, see ui/API-NEEDS.md. */
+export interface DraftInfo {
+  id: string;
+  /** project-relative, under renders/ or cache/previews/ (served by /files) */
+  path: string;
+  created_at?: string | null;
+  label?: string | null;
+  /** [start, end) 1-indexed bars when it is a partial render */
+  range_bars?: [number, number] | null;
+  duration_s?: number | null;
+  /** draft (default) | grid | chop | preview */
+  kind?: "draft" | "grid" | "chop" | "preview";
+  source_id?: string | null;
+}
+
 /** GET /project, as the server sends it. */
 export interface ProjectView {
   project_path: string;
@@ -305,6 +342,9 @@ export interface ProjectView {
   analyses?: Record<string, Analysis>;
   feedback_cursor?: number;
   issues?: unknown[];
+  /** optional (WP14 backend change): non-versioned draft renders and previews */
+  drafts?: unknown;
+  previews?: unknown;
 }
 
 /** The UI's boot summary, mapped from ProjectView in client.ts. */
@@ -317,6 +357,7 @@ export interface ProjectSummary {
   metas?: Record<VersionId, RenderMeta>;
   metrics?: Record<VersionId, Metrics | null>;
   analyses?: Record<string, Analysis>;
+  drafts?: DraftInfo[];
 }
 
 /** GET /waveform?path=&points=N (server shape). */
@@ -352,7 +393,9 @@ export type WsEventType =
   | "version.created"
   | "candidates.created"
   | "feedback.appended"
-  | "song.changed";
+  | "song.changed"
+  | "draft.created"
+  | "drafts.changed";
 
 export interface WsEvent {
   type: WsEventType;

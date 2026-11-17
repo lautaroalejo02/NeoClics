@@ -64,6 +64,7 @@ export class FakeEngine implements PlaybackEngine {
     active: null,
     partner: null,
     listening: "mix",
+    stemBus: "native",
     stemsLoading: false,
     ready: [],
     loading: [],

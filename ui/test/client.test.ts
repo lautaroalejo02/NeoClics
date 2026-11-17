@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ApiError, MuestraClient, encodePath } from "../src/api/client";
+import { ApiError, MuestraClient, encodePath, normalizeDrafts, summaryFromProjectView } from "../src/api/client";
 
 type Call = { url: string; init?: RequestInit };
 
@@ -147,5 +147,41 @@ describe("MuestraClient", () => {
     expect(MuestraClient.feedbackFromWs(ev)).toEqual(ev);
     expect(MuestraClient.feedbackFromWs({ event: ev })).toEqual(ev);
     expect(MuestraClient.feedbackFromWs({})).toBeNull();
+  });
+});
+
+describe("drafts / previews (WP14 finding 4): tolerated when absent", () => {
+  const meta = { version: "v001", created_at: "2026-01-01T00:00:00Z", agent: "x", diff: [], sample_rate: 48000, bpm: 120, key: "C", length_bars: 4, range_bars: [1, 5], mix: "renders/v001/mix.wav", tracks: [], schema_version: 0 };
+  it("a /project without the fields gives no drafts", () => {
+    const s = summaryFromProjectView({ project_path: "/p", versions: [{ version: "v001", meta: meta as never, metrics: null }] });
+    expect(s.drafts).toEqual([]);
+  });
+  it("reads the proposed shape and keeps only usable entries", () => {
+    const d = normalizeDrafts(
+      [
+        { id: "d001", path: "renders/_drafts/d001.wav", created_at: "2026-11-17T10:00:00Z", label: "bajo", range_bars: [5, 9], duration_s: 7.5 },
+        { path: "cache/previews/src1/grid.wav", kind: "grid", source_id: "src1" },
+        { id: "bad" }, // no path
+        null,
+        "x",
+        { id: "d9", path: "a.wav", range_bars: [1], duration_s: "no" }, // malformed optional fields are dropped, the entry stays
+      ],
+      "draft",
+    );
+    expect(d.map((x) => x.id)).toEqual(["d001", "cache/previews/src1/grid.wav", "d9"]);
+    expect(d[0]).toMatchObject({ label: "bajo", range_bars: [5, 9], duration_s: 7.5, kind: "draft" });
+    expect(d[1]).toMatchObject({ kind: "grid", source_id: "src1" });
+    expect(d[2]).toMatchObject({ range_bars: null, duration_s: null });
+    expect(normalizeDrafts("nope", "draft")).toEqual([]);
+    expect(normalizeDrafts(undefined, "preview")).toEqual([]);
+  });
+  it("previews default to kind preview; drafts to draft", () => {
+    const s = summaryFromProjectView({
+      project_path: "/p",
+      versions: [{ version: "v001", meta: meta as never, metrics: null }],
+      drafts: [{ id: "d1", path: "renders/d1.wav" }],
+      previews: [{ id: "p1", path: "cache/previews/p1.wav" }],
+    });
+    expect(s.drafts!.map((x) => [x.id, x.kind])).toEqual([["d1", "draft"], ["p1", "preview"]]);
   });
 });

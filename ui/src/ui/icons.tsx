@@ -45,3 +45,4 @@ export const Stop = ({ size = 16 }: P) => (
 );
 export const Layers = ({ size = 16 }: P) => svg(size, <><path d="m12 2 10 5-10 5L2 7l10-5Z" /><path d="m2 17 10 5 10-5" /><path d="m2 12 10 5 10-5" /></>);
 export const Retry = ({ size = 16 }: P) => svg(size, <><path d="M21 12a9 9 0 1 1-3-6.7L21 8" /><path d="M21 3v5h-5" /></>);
+export const Copy = ({ size = 16 }: P) => svg(size, <><rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15V5a2 2 0 0 1 2-2h10" /></>);

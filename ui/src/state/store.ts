@@ -4,10 +4,12 @@
 // never depends on React re-renders. The engine and the client are
 // injected (component tests pass a fake engine and a client on the mock).
 
-import { MuestraClient, ApiError } from "../api/client";
+import { MuestraClient, ApiError, isAuthError, normalizeDrafts } from "../api/client";
 import type {
   Analysis,
   ChopAdjust,
+  ChopsChooseResult,
+  DraftInfo,
   ChopCandidateSet,
   FeedbackEvent,
   Job,
@@ -23,6 +25,7 @@ import { computePeaks, peaksFromPayload } from "../audio/signal";
 import * as fb from "../feedback/events";
 import { BEATS_PER_BAR, defaultLoopAt, secondsToBeats, stepSeek, type Timing } from "../music/time";
 import { loudnessOffsets, sortVersions, versionNumber } from "./derive";
+import { friendlyError, signed } from "../text/es";
 
 /** The engine surface the store uses (AudioEngine implements it; tests fake it). */
 export type PlaybackEngine = Pick<
@@ -74,14 +77,35 @@ export interface BlindState {
   picked: "x" | "y" | null;
 }
 
+/** What happened to the last manual chop choice of a set (shown in the Chops tab). */
+export interface ChopOutcome {
+  setId: string;
+  /** global candidate id csNNN/candN */
+  candidateId: string;
+  /** chop id the person asked for */
+  chopId: string;
+  adjust: ChopAdjust | null;
+  status: "ok" | "error" | "recorded" | "commented";
+  /** Spanish, primary */
+  message: string;
+  advice: string | null;
+  /** the backend's raw text, secondary */
+  detail: string | null;
+  notes: string[];
+  /** a one-click "leave it as a comment" is still possible */
+  canComment: boolean;
+}
+
 export type Theme = "dark" | "light";
 export type NewVersionPolicy = "play" | "offer";
 
 export interface AppState {
-  boot: "loading" | "ready" | "empty" | "error";
+  boot: "loading" | "ready" | "empty" | "error" | "unauthorized";
   bootError: string | null;
   title: string | null;
-  versions: VersionInfo[]; // sorted ascending
+  versions: VersionInfo[]; // sorted ascending; only versions with audio
+  /** versions the project knows but whose renders/ is gone (WP14 finding 3), ascending */
+  noAudio: VersionInfo[];
   metas: Record<VersionId, RenderMeta>;
   metrics: Record<VersionId, Metrics | null>;
   peaks: Record<VersionId, Float32Array>;
@@ -90,6 +114,10 @@ export interface AppState {
   chopSets: ChopCandidateSet[];
   /** chops declared in song.yaml (suggests the chop id on a manual choose) */
   songChops: { id: string; source: string }[];
+  /** playable non-version audio (draft renders, previews); empty when the server has none */
+  drafts: DraftInfo[];
+  /** latest manual chop choice per candidate set */
+  chopOutcome: Record<string, ChopOutcome>;
   /** versions.diff(parent, v) musical description, fetched when a row opens. */
   diffs: Record<VersionId, { changes: string[]; metrics: string[] } | "loading" | "error">;
   analyses: Record<string, Analysis>;
@@ -186,6 +214,7 @@ export class Store {
       bootError: null,
       title: null,
       versions: [],
+      noAudio: [],
       metas: {},
       metrics: {},
       peaks: {},
@@ -193,6 +222,8 @@ export class Store {
       sendStatus: {},
       chopSets: [],
       songChops: [],
+      chopOutcome: {},
+      drafts: [],
       diffs: {},
       analyses: {},
       jobs: {},
@@ -260,17 +291,29 @@ export class Store {
     this.set({ boot: "loading", bootError: null });
     try {
       await this.loadAll();
-      this.set({ boot: this.state.versions.length ? "ready" : "empty" });
+      this.set({ boot: this.hasAnyVersion() ? "ready" : "empty" });
     } catch (e) {
-      this.set({ boot: "error", bootError: e instanceof Error ? e.message : String(e) });
+      if (isAuthError(e)) this.set({ boot: "unauthorized", bootError: null });
+      else this.set({ boot: "error", bootError: e instanceof Error ? e.message : String(e) });
     }
     this.connectWs();
+  }
+
+  /** The server refused us (401/403): show the "open the link" screen. */
+  authRefused(): void {
+    if (this.state.boot !== "unauthorized") this.set({ boot: "unauthorized", bootError: null });
   }
 
   /** Full (re)load — also used after a websocket reconnect, where events
    *  may have been missed. */
   async loadAll(): Promise<void> {
-    const summary = await this.client.getSummary();
+    // versions.list knows EVERY version, also those whose renders/ is gone
+    // (the /project summary only lists versions with a meta.json).
+    const [summary, listedRes] = await Promise.all([this.client.getSummary(), this.client.listVersions().catch((e: unknown) => e)]);
+    const listed: VersionInfo[] | null =
+      listedRes && !(listedRes instanceof Error) && Array.isArray((listedRes as { versions?: unknown }).versions)
+        ? (listedRes as { versions: VersionInfo[] }).versions
+        : null;
     let versions: VersionInfo[] = summary?.versions ?? [];
     let title = summary?.title ?? null;
     if (summary?.song) {
@@ -283,27 +326,33 @@ export class Store {
         .catch(() => undefined);
     }
     if (!summary?.versions) {
-      const [list, project, song] = await Promise.all([
-        this.client.listVersions().catch((e: unknown) => e),
-        this.client.openProject().catch(() => null),
-        this.client.getSong().catch(() => null),
-      ]);
+      const [project, song] = await Promise.all([this.client.openProject().catch(() => null), this.client.getSong().catch(() => null)]);
       title = song?.song?.meta?.title ?? project?.project_path?.split(/[\\/]/).filter(Boolean).pop() ?? null;
       this.noteSong(song);
-      if (list instanceof Error || list == null) {
+      if (listed == null) {
         // versions.list unavailable (e.g. still a stub): fall back to the
         // render dirs project.open reports.
-        if (!project) throw list instanceof Error ? list : new Error("Sin respuesta de la API");
+        if (!project) throw listedRes instanceof Error ? listedRes : new Error("Sin respuesta de la API");
         versions = (project.versions ?? []).map((v) => ({ version: v }));
       } else {
-        versions = (list as { versions: VersionInfo[] }).versions;
+        versions = listed;
       }
     }
+    if (summary?.versions && listed) {
+      // union: the summary has the playable ones, the list also the rest
+      const byId = new Map(listed.map((l) => [l.version, l]));
+      versions = versions.map((v) => ({ ...(byId.get(v.version) ?? {}), ...v, rendered: byId.get(v.version)?.rendered, rerenderable: byId.get(v.version)?.rerenderable }));
+      const have = new Set(versions.map((v) => v.version));
+      versions = [...versions, ...listed.filter((l) => !have.has(l.version))];
+    }
+    // Versions the project lists as not rendered have no audio to fetch.
+    const noRender = new Set((listed ?? []).filter((l) => l.rendered === false).map((l) => l.version));
     versions = sortVersions(versions);
     const metas: Record<VersionId, RenderMeta> = { ...(summary?.metas ?? {}) };
     const metrics: Record<VersionId, Metrics | null> = { ...(summary?.metrics ?? {}) };
     await Promise.all(
       versions.map(async (v) => {
+        if (noRender.has(v.version) && !metas[v.version]) return;
         const [m, x] = await Promise.all([
           metas[v.version] ? metas[v.version] : this.client.getMeta(v.version).catch(() => null),
           v.version in metrics ? metrics[v.version] : this.client.getMetrics(v.version).catch(() => null),
@@ -312,17 +361,19 @@ export class Store {
         metrics[v.version] = x ?? null;
       }),
     );
-    // Only versions with a render (meta.json) are playable.
-    versions = versions
-      .filter((v) => metas[v.version])
-      .map((v) => ({
-        ...v,
-        parent: v.parent ?? metas[v.version].parent ?? null,
-        created_at: v.created_at ?? metas[v.version].created_at,
-        summary: v.summary ?? metas[v.version].summary ?? null,
-      }));
+    // Only versions with a render (meta.json + audio) are playable; the rest
+    // are listed greyed out with how to regenerate them.
+    const enrich = (v: VersionInfo): VersionInfo => ({
+      ...v,
+      parent: v.parent ?? metas[v.version]?.parent ?? null,
+      created_at: v.created_at ?? metas[v.version]?.created_at ?? null,
+      summary: v.summary ?? metas[v.version]?.summary ?? null,
+      request: v.request ?? metas[v.version]?.request ?? null,
+    });
+    const noAudio = versions.filter((v) => !metas[v.version] || noRender.has(v.version)).map(enrich);
+    versions = versions.filter((v) => metas[v.version] && !noRender.has(v.version)).map(enrich);
     for (const v of versions) this.engine.register(specOf(metas[v.version]));
-    this.set({ title: title ?? this.state.title, versions, metas, metrics });
+    this.set({ title: title ?? this.state.title, versions, noAudio, metas, metrics, ...(summary?.drafts ? { drafts: summary.drafts } : {}) });
     await Promise.all([this.loadFeedback(), this.loadChops(summary?.analyses)]);
     if (!this.state.active && versions.length) {
       const latest = versions[versions.length - 1].version;
@@ -335,6 +386,10 @@ export class Store {
       void this.engine.prepare(latest, { stems: true }).catch(() => undefined);
     }
     void this.fetchRemotePeaks();
+  }
+
+  private hasAnyVersion(): boolean {
+    return this.state.versions.length > 0 || this.state.noAudio.length > 0;
   }
 
   private noteSong(song: SongGetResult | null): void {
@@ -405,7 +460,7 @@ export class Store {
       this.wsRetry = 0;
       this.set({ ws: "open" });
       // Events may have been missed while disconnected: resync.
-      if (wasRetry) void this.loadAll().then(() => this.set({ boot: this.state.versions.length ? "ready" : "empty" }));
+      if (wasRetry) void this.loadAll().then(() => this.set({ boot: this.hasAnyVersion() ? "ready" : "empty" }));
     };
     ws.onmessage = (ev) => this.onWsMessage(ev.data);
     ws.onerror = () => {
@@ -464,6 +519,18 @@ export class Store {
       case "candidates.created":
         void this.loadChops().then(() => this.toast("El agente propuso candidatos de chop nuevos", "info"));
         break;
+      case "draft.created": {
+        // an upsert keyed by id
+        const [d] = normalizeDrafts([e.data], "draft");
+        if (d) this.set({ drafts: [d, ...this.state.drafts.filter((x) => x.id !== d.id)] });
+        break;
+      }
+      case "drafts.changed":
+        void this.client
+          .getSummary()
+          .then((s) => s && this.set({ drafts: s.drafts ?? [] }))
+          .catch(() => undefined);
+        break;
       case "song.changed":
         void this.client
           .getSong()
@@ -509,7 +576,8 @@ export class Store {
   }
 
   async onNewVersion(version: VersionId, meta: RenderMeta | null, eventMetrics?: Metrics | null): Promise<void> {
-    if (this.state.metas[version]) {
+    const wasGhost = this.state.noAudio.some((g) => g.version === version);
+    if (this.state.metas[version] && !wasGhost) {
       // Known version: metrics.json landed later, or the version was re-rendered.
       const m = meta ?? this.state.metas[version];
       const metrics = eventMetrics !== undefined ? eventMetrics : await this.client.getMetrics(version).catch(() => null);
@@ -527,6 +595,7 @@ export class Store {
     const versions = sortVersions([...this.state.versions.filter((v) => v.version !== version), info]);
     this.set({
       versions,
+      noAudio: this.state.noAudio.filter((g) => g.version !== version),
       metas: { ...this.state.metas, [version]: m },
       metrics: { ...this.state.metrics, [version]: metrics },
       boot: "ready",
@@ -842,15 +911,68 @@ export class Store {
 
   async chooseChop(set: ChopCandidateSet, candId: string, chopId: string, adjust: ChopAdjust | null): Promise<boolean> {
     const gid = fb.globalCandidateId(set.set_id, candId);
+    const startedAt = Date.now();
+    const base = { setId: set.set_id, candidateId: gid, chopId, adjust };
     try {
-      await this.client.chooseChop(gid, chopId, adjust);
-      this.toast(`Listo: ${gid} quedó como chop «${chopId}». El agente lo usa en la próxima versión.`, "ok", undefined, 6000);
+      const res = await this.client.chooseChop(gid, chopId, adjust);
+      const { message, notes } = describeChopResult(res, gid, chopId);
+      this.setOutcome({ ...base, status: "ok", message, advice: null, detail: null, notes, canComment: false });
+      this.toast(message, "ok", undefined, 7000);
       await Promise.all([this.loadChops(), this.loadFeedback()]);
       return true;
     } catch (e) {
-      this.toast(`No se pudo confirmar el chop: ${errMsg(e)}`, "error", undefined, 8000);
+      const fe = friendlyError(e, "No se pudo confirmar el chop");
+      // the backend may still have written the human's choice to feedback.jsonl
+      await this.loadFeedback();
+      const recorded = this.state.feedback.some(
+        (ev) => ev.type === "chop_choice" && ev.candidate_id === gid && Date.parse(ev.ts) >= startedAt - 2000,
+      );
+      if (recorded) {
+        this.setOutcome({
+          ...base,
+          status: "recorded",
+          message: `No pude aplicarlo en la canción, pero tu elección de ${candLabel(gid)} quedó anotada para el agente.`,
+          advice: fe.advice ?? fe.message,
+          detail: fe.detail,
+          notes: [],
+          canComment: false,
+        });
+      } else {
+        this.setOutcome({ ...base, status: "error", message: fe.message, advice: fe.advice, detail: fe.detail, notes: [], canComment: true });
+      }
+      this.toast(`No se pudo confirmar el chop: ${fe.message}`, "error", undefined, 8000);
       return false;
     }
+  }
+
+  private setOutcome(o: ChopOutcome): void {
+    this.set({ chopOutcome: { ...this.state.chopOutcome, [o.setId]: o } });
+  }
+
+  /** The failure fallback: leave the choice as a plain comment for the agent
+   *  so it is never lost. */
+  async chopChoiceAsComment(setId: string): Promise<boolean> {
+    const o = this.state.chopOutcome[setId];
+    if (!o) return false;
+    const adj = o.adjust && (o.adjust.start_beats || o.adjust.length_beats) ? `, con ajuste de inicio ${signed(o.adjust.start_beats)} y de largo ${signed(o.adjust.length_beats)} beats` : "";
+    const text = `Elijo el candidato ${candLabel(o.candidateId)} del set ${setId} (${o.candidateId}) como chop «${o.chopId}»${adj}. No pude aplicarlo desde la app${o.detail ? ` (${o.detail})` : ""}; usalo en la próxima versión.`;
+    const ok = await this.append(fb.comment({ text, version: null }));
+    if (ok) {
+      this.setOutcome({ ...o, status: "commented", message: "Listo: le dejé tu elección al agente como comentario.", advice: null, canComment: false });
+    }
+    return ok;
+  }
+
+  // ------------------------------------------------------------ drafts
+
+  /** Play a draft / preview with the same engine (one-shot, not a version). */
+  async playDraft(d: DraftInfo): Promise<void> {
+    const key = `draft:${d.id}`;
+    if (this.engine.getSnapshot().preview === key) {
+      this.engine.stopPreview();
+      return;
+    }
+    await this.engine.playPreview(key, d.path, null, false);
   }
 
   // ------------------------------------------------------------ prefs
@@ -878,6 +1000,30 @@ export class Store {
     this.ws = null;
     ws?.close();
   }
+}
+
+/** "cs001/cand2" → "candidato 2" */
+export function candLabel(gid: string): string {
+  const m = /cand(\d+)$/.exec(gid);
+  return m ? `candidato ${m[1]}` : gid;
+}
+
+/** Spanish sentence + secondary notes for a successful chops.choose. Tolerates
+ *  both the current result and the WP14 one (see ChopsChooseResult). */
+export function describeChopResult(res: ChopsChooseResult, gid: string, requestedChopId: string): { message: string; notes: string[] } {
+  const wrote = res.chop_id ?? (typeof res.chop?.id === "string" ? res.chop.id : requestedChopId);
+  let message = `Elegiste el ${candLabel(gid)}; el agente lo va a usar en la próxima versión.`;
+  if (wrote && wrote !== requestedChopId) {
+    message += ` Quedó guardado como chop «${wrote}» (no pisé «${requestedChopId}»).`;
+  }
+  const notes: string[] = [];
+  const r = res.rescaled;
+  if (r) {
+    const span = typeof r === "object" && r.repeat_from != null && r.repeat_to != null ? ` (repetición ${r.repeat_from} → ${r.repeat_to})` : "";
+    notes.push(`Ajusté la repetición del clip${span} para que siga ocupando lo mismo en la canción.`);
+  }
+  for (const n of [res.message, ...(res.notes ?? []), ...(res.warnings ?? [])]) if (n && typeof n === "string") notes.push(n);
+  return { message, notes };
 }
 
 export function errMsg(e: unknown): string {

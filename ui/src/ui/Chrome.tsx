@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { Job } from "../api/types";
+import { copyText } from "../hooks/hooks";
+import { regenRequest } from "../text/es";
 import { useApp, useStore } from "../state/react";
 import * as I from "./icons";
 import { SHORTCUTS } from "./keys";
@@ -248,14 +250,47 @@ const SAY = [
   "Más filtrado en la intro, el bajo más gordo y el sample medio tono más arriba",
 ];
 
+/** Versions exist (the project knows them) but none has audio: renders/ is
+ *  derived data and was deleted. Nothing to play, so say how to get it back. */
+export function NoAudioCard() {
+  const store = useStore();
+  const noAudio = useApp((s) => s.noAudio);
+  const newest = noAudio[noAudio.length - 1];
+  if (!newest) return null;
+  const text = regenRequest(newest.version);
+  return (
+    <section className="card empty" data-testid="no-audio">
+      <h2>Las versiones no tienen audio</h2>
+      <p>
+        Conozco {noAudio.length} versi{noAudio.length === 1 ? "ón" : "ones"} de este proyecto, pero no hay audio para escuchar (la carpeta <code>renders/</code> se borró o
+        todavía no se renderizó). Se regenera sin perder nada: la canción está guardada.
+      </p>
+      <p>
+        <strong>Pedile al agente que la regenere</strong> (render de {newest.version}):
+      </p>
+      <div className="say">
+        <button
+          type="button"
+          data-testid="copy-regen-newest"
+          onClick={async () => {
+            const ok = await copyText(text);
+            store.toast(ok ? "Copiado: pegáselo al agente" : "No pude copiar. Decile: " + text, ok ? "ok" : "warn", undefined, ok ? 3000 : 9000);
+          }}
+        >
+          <span style={{ flex: 1 }}>{text}</span>
+          <span className="hint">copiar</span>
+        </button>
+      </div>
+      <p className="hint">Cuando termine de renderizar, la versión aparece sola acá, sin recargar.</p>
+    </section>
+  );
+}
+
 export function EmptyState() {
   const store = useStore();
   const [copied, setCopied] = useState<string | null>(null);
   const copy = (t: string) => {
-    void navigator.clipboard?.writeText(t).then(
-      () => setCopied(t),
-      () => setCopied(null),
-    );
+    void copyText(t).then((ok) => setCopied(ok ? t : null));
   };
   return (
     <section className="card empty" data-testid="empty">
@@ -293,6 +328,22 @@ export function ErrorState({ message }: { message: string | null }) {
       <button type="button" className="btn primary" onClick={() => void store.init()}>
         <I.Retry /> Reintentar
       </button>
+    </section>
+  );
+}
+
+/** 401/403: the server wants an access token (it is not on this computer). */
+export function UnauthorizedState() {
+  return (
+    <section className="card empty" role="alert" data-testid="unauthorized">
+      <h2>Este link no tiene permiso</h2>
+      <p>
+        El servidor de muestra pide un código de acceso cuando lo abrís desde otro dispositivo (por ejemplo el celu en el mismo Wi-Fi), y a este link le falta o está vencido.
+      </p>
+      <p>
+        <strong>Abrí el link que muestra <code>muestra serve</code> en la terminal</strong>: termina en <code>?token=…</code>. Si reiniciaste el servidor, el código cambia: usá el link
+        nuevo.
+      </p>
     </section>
   );
 }

@@ -5,15 +5,26 @@ import "./styles.css";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { MuestraClient, resolveBaseUrl } from "./api/client";
+import { captureToken, forgetToken } from "./api/token";
 import { AudioEngine } from "./audio/engine";
 import { StoreProvider } from "./state/react";
 import { Store } from "./state/store";
 import { App } from "./ui/App";
 
-const client = new MuestraClient({ baseUrl: resolveBaseUrl() });
+// Access token (phone on the same Wi-Fi): taken from ?token= on first load,
+// kept for the session, stripped from the visible URL.
+const token = captureToken();
 // The store is created first so the engine can hand decoded mixes to it
 // (waveform peaks) without React in the loop.
 let store: Store | null = null;
+const client = new MuestraClient({
+  baseUrl: resolveBaseUrl(),
+  token,
+  onAuthError: () => {
+    forgetToken(); // a stale token must not be re-sent forever
+    store?.authRefused();
+  },
+});
 const engine = new AudioEngine({
   fetchFile: (p, signal) => client.fetchFile(p, signal),
   onMixDecoded: (v, ch) => store?.onMixDecoded(v, ch),
@@ -21,14 +32,24 @@ const engine = new AudioEngine({
 store = new Store({ client, engine });
 engine.onEnded = () => undefined;
 
-// Autoplay policy: the first user gesture anywhere unlocks audio.
-const unlock = () => {
-  engine.unlock();
-  window.removeEventListener("pointerdown", unlock, true);
-  window.removeEventListener("keydown", unlock, true);
+// Autoplay policy: a user gesture anywhere unlocks audio. iOS Safari only
+// honours AudioContext.resume() inside touchend/click (not pointerdown), so
+// listen to all of them and keep listening until the context really runs;
+// if it gets interrupted later (phone call, lock screen) arm them again.
+const GESTURES = ["pointerdown", "touchend", "click", "keydown"] as const;
+let armed = false;
+const unlock = () => engine.unlock();
+const arm = (on: boolean) => {
+  if (on === armed) return;
+  armed = on;
+  for (const g of GESTURES) (on ? window.addEventListener : window.removeEventListener).call(window, g, unlock, true);
 };
-window.addEventListener("pointerdown", unlock, true);
-window.addEventListener("keydown", unlock, true);
+engine.subscribe(() => {
+  const a = engine.getSnapshot().audio;
+  if (a === "running") arm(false);
+  else if (a === "suspended") arm(true);
+});
+arm(true);
 
 // Diagnostics hook (used by the e2e test to read scheduling data).
 (window as unknown as { __muestra: unknown }).__muestra = { store, engine, client };

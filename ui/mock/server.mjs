@@ -29,7 +29,7 @@ import { fileURLToPath } from "node:url";
 import { WebSocketServer } from "ws";
 import YAML from "yaml";
 import { seedVersions, renderNext } from "./versions.mjs";
-import { decodeWav } from "./wav.mjs";
+import { decodeWav, encodeWav } from "./wav.mjs";
 import { makeAjv, compile } from "./schema.mjs";
 
 
@@ -211,16 +211,40 @@ function readMetrics(v) {
   }
 }
 
+// non-versioned draft renders (POST /debug/draft): playable audio under
+// cache/previews/drafts/, announced in GET /project and by draft.created.
+const drafts = [];
+
+function makeDraft(label) {
+  const n = drafts.length + 1;
+  const id = `d${String(n).padStart(3, "0")}`;
+  const src = readMeta("v002");
+  const wav = decodeWav(fs.readFileSync(path.join(PROJECT, src.mix)));
+  const bars = 2;
+  const frames = Math.min(wav.frames, Math.round(bars * 4 * (60 / src.bpm) * wav.sampleRate));
+  const out = { ...wav, frames, data: wav.data.map((ch) => ch.slice(0, frames)) };
+  const rel = `cache/previews/drafts/${id}.wav`;
+  fs.mkdirSync(path.join(PROJECT, "cache/previews/drafts"), { recursive: true });
+  fs.writeFileSync(path.join(PROJECT, rel), encodeWav(out, "pcm24"));
+  const d = { id, path: rel, created_at: new Date().toISOString(), label: label ?? "Probando el bajo (compases 1-2)", range_bars: [1, 1 + bars], duration_s: frames / wav.sampleRate, kind: "draft" };
+  drafts.push(d);
+  return d;
+}
+
+// versions whose renders/ folder was deleted (POST /debug/delete-renders): the
+// real versions.list still knows them (git tags), with rendered=false.
+const ghosts = new Map();
+
 function listVersions() {
   const liked = {};
   for (const { e } of readFeedbackFile().events) if (e.type === "rating") liked[e.version] = e.value === "like";
-  return {
-    files: [],
-    versions: versionDirs().map((v) => {
-      const m = readMeta(v) ?? {};
-      return { version: v, parent: m.parent ?? null, created_at: m.created_at ?? null, git_commit: m.git_commit ?? null, summary: m.summary ?? null, liked: liked[v] ?? null };
-    }),
-  };
+  const live = versionDirs().map((v) => {
+    const m = readMeta(v) ?? {};
+    return { version: v, parent: m.parent ?? null, created_at: m.created_at ?? null, git_commit: m.git_commit ?? null, request: m.request ?? null, summary: m.summary ?? null, liked: liked[v] ?? null, rendered: true, rerenderable: false, has_meta: !!readMeta(v) };
+  });
+  const gone = [...ghosts.values()].filter((g) => !live.some((l) => l.version === g.version)).map((g) => ({ ...g, liked: liked[g.version] ?? null }));
+  const all = [...live, ...gone].sort((a, b) => Number(a.version.slice(1)) - Number(b.version.slice(1)));
+  return { files: [], versions: all };
 }
 
 function songTitle() {
@@ -276,6 +300,10 @@ function runTool(name, params) {
     }
     case "chops_choose": {
       if (!validateChoose(params)) throw toolError(ajv.errorsText(validateChoose.errors), "invalid_value", "");
+      if (chooseMode === "fail" || chooseMode === "fail-recorded") {
+        if (chooseMode === "fail-recorded") appendFeedback({ ts: new Date().toISOString(), type: "chop_choice", candidate_id: params.candidate_id });
+        throw toolError("Clip ends at beat 128 but the song ends at beat 64 (bar 32).", "clip_overrun", "tracks[0].clips[0].repeat");
+      }
       const [setId, local] = params.candidate_id.split("/");
       const setPath = chopSetPaths().find((p) => path.basename(p) === `${setId}.json`);
       if (!setPath) throw toolError(`set ${setId} no encontrado`, "ref_not_found", "candidate_id");
@@ -301,7 +329,10 @@ function runTool(name, params) {
         warp: { mode: "resample", pitch_semitones: 0 },
         fade_ms: 5,
       };
-      return { files: [path.relative(PROJECT, setPath).split(path.sep).join("/"), "song.yaml", "feedback.jsonl"], set_id: setId, candidate_id: params.candidate_id, chop };
+      const out = { files: [path.relative(PROJECT, setPath).split(path.sep).join("/"), "song.yaml", "feedback.jsonl"], set_id: setId, candidate_id: params.candidate_id, chop };
+      if (chooseMode === "newid") Object.assign(out, { chop_id: `${params.chop_id}_2`, requested_chop_id: params.chop_id, chop: { ...chop, id: `${params.chop_id}_2` }, recorded: true });
+      if (chooseMode === "rescale") Object.assign(out, { rescaled: { clip: "intro", repeat_from: 8, repeat_to: 5 }, notes: ["Clip 'intro': repeat 8 -> 5 to keep its span."], recorded: true });
+      return out;
     }
     case "render":
       return startRender();
@@ -311,6 +342,8 @@ function runTool(name, params) {
       throw toolError(`herramienta desconocida: ${name}`, "unknown_tool", "");
   }
 }
+
+let chooseMode = "ok";
 
 function toolError(message, code, p) {
   const err = new Error(message);
@@ -339,7 +372,7 @@ function projectView() {
   } catch {
     /* no song */
   }
-  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [] };
+  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [], ...(drafts.length ? { drafts } : {}) };
 }
 
 const peaksCache = new Map();
@@ -430,8 +463,22 @@ function readBody(req) {
   });
 }
 
+// MOCK_TOKEN=abc → like `muestra serve --host 0.0.0.0`: API routes and the
+// websocket need the token (Authorization: Bearer / X-Muestra-Token header,
+// or ?token= for the websocket); the static UI is served freely.
+const TOKEN = process.env.MOCK_TOKEN ?? "";
+function authorized(req, url) {
+  if (!TOKEN) return true;
+  const h = String(req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
+  return h === TOKEN || req.headers["x-muestra-token"] === TOKEN || url.searchParams.get("token") === TOKEN;
+}
+const API_PREFIXES = ["/tools/", "/files/", "/jobs/", "/project", "/waveform"];
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
+  if (TOKEN && API_PREFIXES.some((p) => url.pathname.startsWith(p)) && !authorized(req, url)) {
+    return send(res, 401, { detail: "token requerido" });
+  }
   let pathname;
   try {
     pathname = decodeURIComponent(url.pathname);
@@ -445,7 +492,30 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/debug/received") return send(res, 200, received);
   if (pathname === "/debug/render" && req.method === "POST") return send(res, 200, startRender(Number(url.searchParams.get("ms") ?? RENDER_MS)));
   if (pathname === "/debug/separate" && req.method === "POST") return send(res, 200, startSeparate("src1", Number(url.searchParams.get("ms") ?? 45_000)));
+  if (pathname === "/debug/draft" && req.method === "POST") {
+    const d = makeDraft(url.searchParams.get("label") ?? undefined);
+    broadcast("draft.created", d);
+    return send(res, 200, d);
+  }
+  if (pathname === "/debug/delete-renders" && req.method === "POST") {
+    for (const v of (url.searchParams.get("versions") ?? "").split(",").filter(Boolean)) {
+      const rec = listVersions().versions.find((x) => x.version === v);
+      if (!rec) continue;
+      ghosts.set(v, { ...rec, rendered: false, rerenderable: true, has_meta: false });
+      fs.rmSync(path.join(PROJECT, "renders", v), { recursive: true, force: true });
+    }
+    peaksCache.clear();
+    return send(res, 200, { ok: true });
+  }
+  if (pathname === "/debug/choose" && req.method === "POST") {
+    // what the next chops.choose does: ok | fail (the real English clip_overrun) | newid | rescale | fail-recorded
+    chooseMode = url.searchParams.get("mode") ?? "ok";
+    return send(res, 200, { ok: true, mode: chooseMode });
+  }
   if (pathname === "/debug/reset" && req.method === "POST") {
+    chooseMode = "ok";
+    ghosts.clear();
+    drafts.length = 0;
     freshProject();
     peaksCache.clear();
     return send(res, 200, { ok: true });
@@ -523,7 +593,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ---------------------------------------------------------------- ws
-const wss = new WebSocketServer({ server, path: "/events" });
+const wss = new WebSocketServer({
+  server,
+  path: "/events",
+  verifyClient: (info, cb) => (authorized(info.req, new URL(info.req.url ?? "/", "http://x")) ? cb(true) : cb(false, 401, "token requerido")),
+});
 wss.on("connection", (ws) => {
   clients.add(ws);
   ws.on("close", () => clients.delete(ws));

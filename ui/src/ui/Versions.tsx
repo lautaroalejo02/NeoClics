@@ -1,13 +1,17 @@
 import { useMemo, useState } from "react";
+import { copyText } from "../hooks/hooks";
+import { regenRequest } from "../text/es";
 import type { VersionId } from "../api/types";
 import { useTick } from "../hooks/hooks";
 import { useApp, useEngine, useStore } from "../state/react";
 import { alarmCounts, clockTime, commentCounts, latestRatings, readableDiff, timeAgo, versionTree } from "../state/derive";
 import * as I from "./icons";
+import { DraftsArea } from "./Drafts";
 
 export function VersionsPanel() {
   const store = useStore();
   const versions = useApp((s) => s.versions);
+  const noAudio = useApp((s) => s.noAudio);
   const metas = useApp((s) => s.metas);
   const metrics = useApp((s) => s.metrics);
   const feedback = useApp((s) => s.feedback);
@@ -18,7 +22,11 @@ export function VersionsPanel() {
   const diffs = useApp((s) => s.diffs);
   const eng = useEngine();
   useTick(30_000);
-  const rows = useMemo(() => versionTree(versions, metas), [versions, metas]);
+  const all = useMemo(() => [...versions, ...noAudio], [versions, noAudio]);
+  const ghostSet = useMemo(() => new Set(noAudio.map((v) => v.version)), [noAudio]);
+  const info = useMemo(() => new Map(all.map((v) => [v.version, v])), [all]);
+  const rows = useMemo(() => versionTree(all, metas), [all, metas]);
+  const [copied, setCopied] = useState<string | null>(null);
   const ratings = useMemo(() => latestRatings(feedback), [feedback]);
   const counts = useMemo(() => commentCounts(feedback), [feedback]);
   const [open, setOpen] = useState<Record<VersionId, boolean>>({});
@@ -31,7 +39,10 @@ export function VersionsPanel() {
         <h2 className="card-title" id="versions-title">
           Versiones
         </h2>
-        <span className="card-sub">{versions.length}</span>
+        <span className="card-sub">
+          {all.length}
+          {noAudio.length > 0 ? ` · ${noAudio.length} sin audio` : ""}
+        </span>
         <span className="header-spacer" />
         <span className="hint hide-narrow">
           <kbd>1</kbd>…<kbd>9</kbd> para saltar
@@ -48,16 +59,20 @@ export function VersionsPanel() {
             const al = alarmCounts(metrics[r.version]);
             const rating = ratings[r.version] ?? null;
             const isActive = r.version === active;
+            const ghost = ghostSet.has(r.version);
             const n = versions.findIndex((v) => v.version === r.version) + 1;
+            const request = meta?.request ?? info.get(r.version)?.request ?? null;
+            const rerenderable = info.get(r.version)?.rerenderable;
             const diff = meta?.diff ?? [];
             const expanded = !!open[r.version];
             return (
               <li
                 key={r.version}
-                className={`vrow${isActive ? " active" : ""}${r.depth > 0 ? " branch" : ""}`}
+                className={`vrow${isActive ? " active" : ""}${r.depth > 0 ? " branch" : ""}${ghost ? " ghost" : ""}`}
                 style={{ ["--depth" as string]: r.depth }}
-                onClick={() => void store.listen(r.version)}
+                onClick={ghost ? undefined : () => void store.listen(r.version)}
                 data-testid={`version-${r.version}`}
+                data-noaudio={ghost ? "true" : undefined}
                 aria-current={isActive ? "true" : undefined}
               >
                 <div className="vmain">
@@ -70,6 +85,11 @@ export function VersionsPanel() {
                       <i />
                     </span>
                   )}
+                  {ghost ? (
+                    <span className="mono" style={{ fontSize: 14, fontWeight: 600 }}>
+                      {r.version}
+                    </span>
+                  ) : (
                   <button
                     type="button"
                     className="linkish mono"
@@ -82,11 +102,17 @@ export function VersionsPanel() {
                   >
                     {r.version}
                   </button>
+                  )}
                   </span>
                     <span className="vtime" title={meta?.created_at ?? ""}>
                       {timeAgo(r.createdAt)} · {clockTime(r.createdAt)}
                     </span>
                     {r.branched && r.parent && <span className="tag">de {r.parent}</span>}
+                    {ghost && (
+                      <span className="tag" data-testid={`noaudio-tag-${r.version}`}>
+                        sin audio
+                      </span>
+                    )}
                     {al.error > 0 && (
                       <span className="tag err" title="Alarmas graves">
                         <I.Alert size={11} /> {al.error}
@@ -103,7 +129,7 @@ export function VersionsPanel() {
                       </span>
                     )}
                   </div>
-                  {meta?.request && <p className="vreq">{meta.request}</p>}
+                  {request && <p className="vreq">{request}</p>}
                   {r.summary && <p className="vsum">{r.summary}</p>}
                   {expanded && r.parent && (() => {
                     const md = diffs[r.version];
@@ -152,7 +178,28 @@ export function VersionsPanel() {
                       })}
                     </ul>
                   )}
+                  {ghost && (
+                    <div className="noaudio" onClick={(e) => e.stopPropagation()} data-testid={`noaudio-${r.version}`}>
+                      <p>
+                        <strong>Sin audio:</strong> {rerenderable === false ? "no hay forma de regenerarla sola; pedile al agente que la reconstruya" : "pedile al agente que la regenere"} (render de {r.version}).
+                      </p>
+                      <button
+                        type="button"
+                        className="btn small"
+                        data-testid={`copy-regen-${r.version}`}
+                        onClick={async () => {
+                          const ok = await copyText(regenRequest(r.version));
+                          setCopied(ok ? r.version : null);
+                          if (ok) store.toast("Copiado: pegáselo al agente", "ok", undefined, 3000);
+                          else store.toast("No pude copiar. Decile: " + regenRequest(r.version), "warn", undefined, 9000);
+                        }}
+                      >
+                        <I.Copy size={13} /> {copied === r.version ? "Copiado" : "Copiar el pedido"}
+                      </button>
+                    </div>
+                  )}
                   <div className="vfoot" onClick={(e) => e.stopPropagation()}>
+                    {!ghost && (
                     <span className="ab-pick" role="group" aria-label={`Usar ${r.version} en A/B`}>
                       <button type="button" className="a" aria-pressed={a === r.version} onClick={() => store.setA(r.version)} aria-label={`${r.version} como A`}>
                         A
@@ -161,6 +208,14 @@ export function VersionsPanel() {
                         B
                       </button>
                     </span>
+                    )}
+                    {ghost ? (
+                      rating && (
+                        <span className="tag" title="Tu valoración de esa versión">
+                          {rating === "like" ? <I.ThumbUp size={11} /> : <I.ThumbDown size={11} />} {rating === "like" ? "me gustó" : "no me gustó"}
+                        </span>
+                      )
+                    ) : (
                     <span className="rate">
                       <button
                         type="button"
@@ -176,6 +231,7 @@ export function VersionsPanel() {
                         <I.ThumbDown size={15} />
                       </button>
                     </span>
+                    )}
                     {(counts[r.version] ?? 0) > 0 && (
                       <span className="tag" title="Comentarios">
                         <I.Comment size={11} /> {counts[r.version]}
@@ -203,6 +259,7 @@ export function VersionsPanel() {
           })}
         </ol>
       )}
+      <DraftsArea />
     </section>
   );
 }

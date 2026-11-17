@@ -25,6 +25,8 @@ test("listen, A/B, mute a track and leave a comment the agent can read", async (
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
+  // Playwright's WebKit for Windows has no Web Audio at all: nothing to play there
+  test.skip(!(await page.evaluate(() => typeof AudioContext !== "undefined" || "webkitAudioContext" in window)), "this engine has no Web Audio");
   await expect(page.getByTestId("now-version")).toHaveText("v004");
   await expect.poll(async () => (await snap(page)).ready, { timeout: 15_000 }).toEqual(expect.arrayContaining(["v002", "v004"]));
 

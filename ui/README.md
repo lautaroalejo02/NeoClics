@@ -39,9 +39,12 @@ MUESTRA_API=http://localhost:8765 npm run dev
 | `npm run lint` | ESLint (typescript-eslint, react-hooks) |
 | `npm test` | unit + engine + component tests (Vitest, jsdom). Component tests spawn the mock server on a free port. |
 | `npm run build` | typecheck + production build to `ui/dist` |
-| `npm run test:e2e` | build, then Playwright (headless Chromium, desktop + phone) against the mock serving `ui/dist` |
+| `npm run test:e2e` | build, then Playwright on Chromium (desktop + phone), Firefox and WebKit against the mock serving `ui/dist`. Playwright's WebKit for Windows has **no Web Audio**: audio tests skip there (the app is checked to degrade gracefully) |
 | `npm run test:e2e:real` | build, then Playwright against the REAL muestra-api serving `ui/dist` for a real project built by `tests/integration/e2e_server.py` (needs `uv` on PATH or `MUESTRA_UV`): play, A/B, mute, a comment reaching `feedback.jsonl`, a CLI render showing up live |
-| `npm run e2e:install` | download Playwright's Chromium once (`npx playwright install chromium`) |
+| `npm run e2e:install` | download Playwright's Chromium, Firefox and WebKit once |
+| `node scripts/stem-bench.mjs <project>...` | offline bench of stem-bus candidates (compressor vs worklet limiter) on real renders |
+| `node scripts/stem-real-bench.mjs <url>` | stem-mode peak/level of every version of a project served by `muestra serve`, through the app's own engine |
+| `node scripts/shots.mjs <url> <dir>` | screenshots at 1440 / 390 / landscape, dark and light |
 
 ## How it is served in production
 
@@ -138,11 +141,28 @@ time readout are painted from `requestAnimationFrame` straight to the DOM.
   `start(when, offset)`, so they are sample-synchronous for the whole run.
 - **Mix vs stems.** Per contract the stems are pre-master and the mix is
   post-master. With the mixer untouched you hear `mix.wav`. Mute, solo, a
-  fader move or a lane control crossfades (15 ms) to the summed stems, level
-  matched to the mix (RMS ratio, clamped ±18 dB), and the player shows
-  "escuchando stems sin master". Nothing is restarted or re-rendered: it is a
+  fader move or a lane control crossfades (15 ms) to the summed stems and the
+  player shows "escuchando stems sin master". The stem sum has far more crest
+  than the mastered mix, so it goes through a **stem bus** (below) and is
+  level-matched to the mix *after* limiting (RMS, clamped ±18 dB). Nothing is restarted or re-rendered: it is a
   gain change on the running graph. Lane mute/solo swaps that track's stem
   for its level-matched lane stems.
+- **Stem bus (WP14).** Level-matched stems peaked at +2 to +5 dBFS on the
+  real renders (13 of 17 clipped at the speaker with the default 0.85
+  volume): the browser hard-clipped kicks as soon as you touched mute/solo.
+  Now stems pass a look-ahead brickwall limiter (`audio/limiter.ts`, 5 ms
+  look-ahead, 60 ms release, ceiling −1 dBFS like the masters, stereo-linked;
+  the ceiling is provable: `test/limiter.test.ts`) running as an
+  AudioWorklet. The mix path is delayed by the same 5 ms so the mix ⇄ stems
+  crossfade stays aligned. Chosen by measurement (`scripts/stem-bench.mjs`,
+  20 real renders, OfflineAudioContext): the limiter held exactly −1.0 dBFS
+  and was the closest to the mastered mix on average; DynamicsCompressor
+  variants overshot or changed the level by 1 to 2 dB. Where AudioWorklet
+  does not exist (it needs a **secure context**: a phone on plain
+  `http://192.168…` has none) the bus is DynamicsCompressor + a WaveShaper
+  that hard-bounds at 0.99, level-matched by an offline render of that exact
+  chain. `engine.renderOffline()` renders the real graph offline for tests
+  (`e2e/stems.spec.ts`).
 - **A/B.** The incoming version is started at context time `T = now + 12 ms`
   at the position the outgoing version will have at `T`, mapped by bar/beat
   (identity for equal timing; tempo or range differences map musically), and

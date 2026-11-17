@@ -43,6 +43,8 @@ test("real API: load, play, A/B, mute, comment reaches feedback.jsonl", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   const project = await projectPath(request);
   await page.goto("/");
+  // Playwright's WebKit for Windows has no Web Audio at all: nothing to play there
+  test.skip(!(await page.evaluate(() => typeof AudioContext !== "undefined" || "webkitAudioContext" in window)), "this engine has no Web Audio");
   const latest = (await (await request.get("/project")).json()).versions[0].version as string;
   await expect(page.getByTestId("now-version")).toHaveText(latest);
   // the latest version and its A/B partner are decoded and ready
@@ -107,7 +109,7 @@ test("real API: load, play, A/B, mute, comment reaches feedback.jsonl", async ({
 });
 
 test("real API: a render from the CLI in another process shows up live", async ({ page, request }, info) => {
-  test.skip(info.project.name.startsWith("phone"), "one CLI render is enough");
+  test.skip(info.project.name !== "desktop-chromium" && info.project.name !== "desktop-firefox", "one CLI render per engine family is enough");
   const project = await projectPath(request);
   await page.goto("/");
   const before = ((await (await request.get("/project")).json()).versions as { version: string }[]).map((v) => v.version);
@@ -118,4 +120,29 @@ test("real API: a render from the CLI in another process shows up live", async (
   // the watcher sees renders/<next>/meta.json and the page updates without reload
   await expect(page.getByTestId(`version-${next}`)).toBeVisible({ timeout: 30_000 });
   await page.screenshot({ path: info.outputPath("live.png"), fullPage: true });
+});
+
+test("real API: with renders/ gone every version is still listed, greyed out, with how to regenerate it", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "desktop-chromium" && info.project.name !== "phone-chromium", "one engine family is enough");
+  const project = await projectPath(request);
+  const renders = path.join(project, "renders");
+  const hidden = path.join(project, "renders.hidden");
+  const before = ((await (await request.get("/project")).json()).versions as { version: string }[]).map((v) => v.version);
+  expect(before.length).toBeGreaterThan(0);
+  fs.renameSync(renders, hidden);
+  try {
+    await page.goto("/");
+    // the old behaviour here was "Todavía no hay ninguna versión"
+    await expect(page.getByTestId("empty")).toHaveCount(0);
+    await expect(page.getByTestId("no-audio")).toBeVisible({ timeout: 20_000 });
+    // (no tabs in this view: the version list sits right under the card)
+    for (const v of before) {
+      const row = page.getByTestId(`version-${v}`);
+      await expect(row).toHaveAttribute("data-noaudio", "true");
+      await expect(page.getByTestId(`noaudio-${v}`)).toContainText(`render de ${v}`);
+    }
+    await page.screenshot({ path: info.outputPath("noaudio.png"), fullPage: true });
+  } finally {
+    fs.renameSync(hidden, renders);
+  }
 });
