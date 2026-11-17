@@ -121,6 +121,11 @@ In-process seams (`muestra.versions.core`, `muestra.ears.core`,
 `build_plugin_fx`, `resolve_plugin`, `lookup`, `resolve` — typed stubs
 with fixed signatures; WP owners implement them.
 
+WP3 tempo ruling (2026-11-17):
+`render_instrument(project, instrument, notes, sample_rate, n_frames, *, bpm: float)`
+returns float32 `(n_frames, 2)`. Notes remain in project beats (beat 1 is
+song start); the renderer passes the song's `meta.bpm` explicitly.
+
 **Render orchestration** (the `render` tool, WP2): validate → allocate
 version id → `record_version` (WP5) → render audio → write `meta.json`
 → `ears.analyze` (WP6) → write `metrics.json`.

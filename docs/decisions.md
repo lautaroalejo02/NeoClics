@@ -1,5 +1,13 @@
 # Decisions
 
+## 2026-11-17 — WP3: explicit instrument tempo (orchestrator ruling)
+
+`plugins.core.render_instrument` gains required keyword-only `bpm: float`:
+`render_instrument(project, instrument, notes, sample_rate, n_frames, *, bpm)`.
+The renderer passes `meta.bpm`; beat 1 maps to frame zero. This removes
+the stub's ambiguity about who converts beats to frames while preserving
+the float32 `(n_frames, 2)` output and project-beat MIDI rule.
+
 Dated log of decisions made where `docs/spec.md` was silent or ambiguous,
 and of deviations from it. Each entry says what was decided and why.
 (Newest last; WPs append their own entries.)
