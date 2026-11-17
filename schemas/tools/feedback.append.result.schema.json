@@ -1,0 +1,25 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "appended": {
+      "default": 1,
+      "minimum": 0,
+      "title": "Appended",
+      "type": "integer"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "path": {
+      "default": "feedback.jsonl",
+      "title": "Path",
+      "type": "string"
+    }
+  },
+  "title": "FeedbackAppendResult",
+  "type": "object"
+}

@@ -1,0 +1,23 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "event": {
+      "additionalProperties": true,
+      "description": "The event to append (a feedback union object); 'ts' is filled with aware UTC now when omitted.",
+      "title": "Event",
+      "type": "object"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "event"
+  ],
+  "title": "FeedbackAppendParams",
+  "type": "object"
+}

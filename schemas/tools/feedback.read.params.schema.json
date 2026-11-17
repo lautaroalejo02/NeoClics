@@ -1,6 +1,20 @@
 {
   "additionalProperties": false,
   "properties": {
+    "cursor": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Line-based cursor: skip this many lines before reading. Feed back the previous result's 'next_cursor' for exact paging.",
+      "title": "Cursor"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,
@@ -10,6 +24,7 @@
     "since": {
       "anyOf": [
         {
+          "format": "date-time",
           "type": "string"
         },
         {
@@ -17,7 +32,7 @@
         }
       ],
       "default": null,
-      "description": "ISO-8601 timestamp; only events with ts > since are returned. Omit to read everything.",
+      "description": "Aware ISO-8601 timestamp; only events with ts >= since are returned. Omit (and use 'cursor') to page everything.",
       "title": "Since"
     }
   },

@@ -16,7 +16,7 @@
           "type": "string"
         },
         "ts": {
-          "description": "ISO-8601 timestamp of the event.",
+          "description": "ISO-8601 timestamp of the event (timezone-aware, UTC).",
           "format": "date-time",
           "title": "Ts",
           "type": "string"
@@ -77,17 +77,13 @@
           "default": null
         },
         "candidate_id": {
-          "description": "Local candidate id inside the set, e.g. 'cand2'.",
+          "description": "Global candidate id 'csNNN/candN', e.g. 'cs001/cand2'.",
+          "pattern": "^cs\\d{3,}/cand\\d+$",
           "title": "Candidate Id",
           "type": "string"
         },
-        "set_id": {
-          "description": "Chop candidate set id, e.g. 'cs001'.",
-          "title": "Set Id",
-          "type": "string"
-        },
         "ts": {
-          "description": "ISO-8601 timestamp of the event.",
+          "description": "ISO-8601 timestamp of the event (timezone-aware, UTC).",
           "format": "date-time",
           "title": "Ts",
           "type": "string"
@@ -115,7 +111,6 @@
       },
       "required": [
         "ts",
-        "set_id",
         "candidate_id"
       ],
       "title": "ChopChoiceEvent",
@@ -157,7 +152,7 @@
           "title": "Track"
         },
         "ts": {
-          "description": "ISO-8601 timestamp of the event.",
+          "description": "ISO-8601 timestamp of the event (timezone-aware, UTC).",
           "format": "date-time",
           "title": "Ts",
           "type": "string"
@@ -194,7 +189,7 @@
       "additionalProperties": false,
       "properties": {
         "ts": {
-          "description": "ISO-8601 timestamp of the event.",
+          "description": "ISO-8601 timestamp of the event (timezone-aware, UTC).",
           "format": "date-time",
           "title": "Ts",
           "type": "string"
@@ -226,6 +221,36 @@
         "value"
       ],
       "title": "RatingEvent",
+      "type": "object"
+    },
+    "SkippedFeedbackLine": {
+      "additionalProperties": false,
+      "description": "Report of a feedback.jsonl line that could not be parsed.",
+      "properties": {
+        "hint": {
+          "title": "Hint",
+          "type": "string"
+        },
+        "line": {
+          "title": "Line",
+          "type": "integer"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "line",
+        "message",
+        "hint"
+      ],
+      "title": "SkippedFeedbackLine",
       "type": "object"
     }
   },
@@ -283,10 +308,27 @@
         }
       ],
       "default": null,
-      "description": "ts of the newest returned event (feed it back as 'since').",
+      "description": "ts of the newest returned event.",
       "title": "Latest Ts"
+    },
+    "next_cursor": {
+      "description": "Line count read so far; feed back as 'cursor' to get exactly the events appended later (>=-safe, no timestamp ties).",
+      "minimum": 0,
+      "title": "Next Cursor",
+      "type": "integer"
+    },
+    "skipped": {
+      "description": "feedback.jsonl lines that were skipped (path + line + hint).",
+      "items": {
+        "$ref": "#/$defs/SkippedFeedbackLine"
+      },
+      "title": "Skipped",
+      "type": "array"
     }
   },
+  "required": [
+    "next_cursor"
+  ],
   "title": "FeedbackReadResult",
   "type": "object"
 }

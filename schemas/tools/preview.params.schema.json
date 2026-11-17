@@ -22,7 +22,7 @@
       "type": "string"
     },
     "target": {
-      "description": "What to preview: 'mix', 'chop:<id>', 'track:<id>', or 'clip:<track_id>:<index>'.",
+      "description": "What to preview: 'mix', 'chop:<id>', 'track:<id>', or 'clip:<track_id>:<index>' (0-based clip index).",
       "title": "Target",
       "type": "string"
     }

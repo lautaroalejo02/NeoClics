@@ -1,5 +1,89 @@
 {
   "$defs": {
+    "LibraryConfig": {
+      "additionalProperties": false,
+      "description": "``[library]`` section: the sample-library roots.",
+      "properties": {
+        "roots": {
+          "description": "Library roots searched by 'library://' URIs, in order. Relative paths resolve against the project dir ('..' allowed); absolute paths are allowed. Each root's index lives inside the root as '.muestra-index.json'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Roots",
+          "type": "array"
+        }
+      },
+      "title": "LibraryConfig",
+      "type": "object"
+    },
+    "PluginPaths": {
+      "additionalProperties": false,
+      "description": "OS-specific install paths for one plugin alias.",
+      "properties": {
+        "linux": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Linux"
+        },
+        "macos": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Macos"
+        },
+        "windows": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Windows"
+        }
+      },
+      "title": "PluginPaths",
+      "type": "object"
+    },
+    "PluginsConfig": {
+      "additionalProperties": false,
+      "description": "``[plugins]`` section: plugin aliases and extra search dirs.\n\nIn muestra.toml the aliases sit directly inside ``[plugins]``::\n\n    [plugins]\n    search_dirs = [\"C:/VST3\"]\n    surge-xt = {windows = \"C:/VST3/Surge XT.vst3\", macos = \"/Library/...vst3\"}",
+      "properties": {
+        "aliases": {
+          "additionalProperties": {
+            "$ref": "#/$defs/PluginPaths"
+          },
+          "description": "alias -> per-OS path table (populated from the extra keys of [plugins]).",
+          "title": "Aliases",
+          "type": "object"
+        },
+        "search_dirs": {
+          "description": "Extra directories scanned for VST3/AU plugins.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Search Dirs",
+          "type": "array"
+        }
+      },
+      "title": "PluginsConfig",
+      "type": "object"
+    },
     "SeparationConfig": {
       "additionalProperties": false,
       "properties": {
@@ -41,12 +125,10 @@
       "type": "integer"
     },
     "library": {
-      "description": "Library directories searched by 'library://' URIs, in order. Relative paths resolve against the project dir ('..' allowed); absolute paths are allowed.",
-      "items": {
-        "type": "string"
-      },
-      "title": "Library",
-      "type": "array"
+      "$ref": "#/$defs/LibraryConfig"
+    },
+    "plugins": {
+      "$ref": "#/$defs/PluginsConfig"
     },
     "sample_rate": {
       "default": 48000,

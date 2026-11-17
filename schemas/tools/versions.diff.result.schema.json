@@ -2,7 +2,7 @@
   "$defs": {
     "DiffEntry": {
       "additionalProperties": false,
-      "description": "One changed value in the musical diff between versions.\n\n``path`` uses dotted/bracketed song.yaml addressing, e.g.\n``chops[0].warp.pitch_semitones`` or ``tracks[1].fx[2].cutoff_hz``.\n``from_`` serializes as ``from``.",
+      "description": "One changed value in the musical diff between versions.\n\n``path`` uses ID-based song.yaml addressing, matching the automation\ngrammar: ``chops.c1.warp.pitch_semitones``,\n``tracks.sample.fx.lp.cutoff_hz``,\n``tracks.drums.pattern.lanes.kick.steps``, ``meta.bpm``. Elements\nwithout ids use indices: ``tracks.<id>.clips[<i>]``, and an fx\nwithout an ``id`` is addressed as ``fx[<i>]``.\n``from_`` serializes as ``from``.",
       "properties": {
         "from": {
           "default": null,
@@ -39,7 +39,7 @@
       "type": "string"
     },
     "diff": {
-      "description": "Changed fields, song.yaml addressing.",
+      "description": "Changed fields; ID-based song.yaml paths (chops.c1.warp.pitch_semitones, tracks.drums.pattern.lanes.kick.steps, tracks.<id>.clips[<i>], fx[<i>] for id-less fx).",
       "items": {
         "$ref": "#/$defs/DiffEntry"
       },

@@ -33,7 +33,7 @@
     },
     "stems": {
       "additionalProperties": {
-        "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+        "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
         "type": "string"
       },
       "description": "stem name -> project-relative wav path.",

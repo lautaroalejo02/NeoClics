@@ -35,6 +35,14 @@
           "title": "Start Downbeat",
           "type": "integer"
         },
+        "start_offset_beats": {
+          "default": 0.0,
+          "description": "Beats to shift the start along beats_s from the downbeat's matching beat; may be negative, fractional interpolates. Enables off-downbeat starts and stutters.",
+          "maximum": 4096.0,
+          "minimum": -4096.0,
+          "title": "Start Offset Beats",
+          "type": "number"
+        },
         "stem": {
           "default": "other",
           "enum": [
@@ -62,7 +70,7 @@
     },
     "Warp": {
       "additionalProperties": false,
-      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: vinyl-style playback-rate change; pitch rises with\n  tempo. ``pitch_semitones`` multiplies into the rate, so it also\n  changes the sounding duration (audio is truncated or padded to the\n  clip's grid span).\n* ``stretch``: high-quality time-stretch preserving pitch\n  (Rubber Band), then a separate pitch shift of ``pitch_semitones``.",
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
       "properties": {
         "mode": {
           "default": "resample",
@@ -88,12 +96,14 @@
   "additionalProperties": false,
   "properties": {
     "candidate_id": {
+      "description": "Global chop candidate id '<csNNN>/<candN>', e.g. 'cs001/cand2'.",
+      "pattern": "^cs\\d{3,}/cand\\d+$",
       "title": "Candidate Id",
       "type": "string"
     },
     "chop": {
       "$ref": "#/$defs/Chop",
-      "description": "The resulting chop to write into song.yaml."
+      "description": "The chop written into song.yaml."
     },
     "files": {
       "items": {

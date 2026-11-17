@@ -16,6 +16,18 @@
           "default": null,
           "title": "Created At"
         },
+        "git_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Git Commit"
+        },
         "liked": {
           "anyOf": [
             {

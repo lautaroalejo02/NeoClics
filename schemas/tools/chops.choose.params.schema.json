@@ -34,8 +34,15 @@
       "description": "Beat deltas to start/length (mode manual)."
     },
     "candidate_id": {
-      "description": "Global candidate id '<set_id>/<local_id>', e.g. 'cs001/cand2'.",
+      "description": "Global candidate id 'csNNN/candN', e.g. 'cs001/cand2'.",
+      "pattern": "^cs\\d{3,}/cand\\d+$",
       "title": "Candidate Id",
+      "type": "string"
+    },
+    "chop_id": {
+      "description": "Id of the chop to create or replace in song.yaml.",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Chop Id",
       "type": "string"
     },
     "mode": {
@@ -57,7 +64,8 @@
   },
   "required": [
     "project",
-    "candidate_id"
+    "candidate_id",
+    "chop_id"
   ],
   "title": "ChopsChooseParams",
   "type": "object"

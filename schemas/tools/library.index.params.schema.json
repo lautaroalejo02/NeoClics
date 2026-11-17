@@ -2,7 +2,7 @@
   "additionalProperties": false,
   "properties": {
     "path": {
-      "description": "Directory to index (added to muestra.toml library).",
+      "description": "Library root to index (added to muestra.toml [library] roots).",
       "title": "Path",
       "type": "string"
     },

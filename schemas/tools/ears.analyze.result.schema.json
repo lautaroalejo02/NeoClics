@@ -496,7 +496,7 @@
         "target_key": {
           "anyOf": [
             {
-              "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+              "description": "Musical key, canonical form 'F#m' (minor) or 'F#' (major). Accepted: 'F#m', 'F#min', 'F# minor', 'F#', 'F#M', 'F#maj', bare lowercase 'a' = A minor.",
               "type": "string"
             },
             {
@@ -564,7 +564,7 @@
       "$ref": "#/$defs/Metrics"
     },
     "metrics_path": {
-      "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+      "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
       "title": "Metrics Path",
       "type": "string"
     },

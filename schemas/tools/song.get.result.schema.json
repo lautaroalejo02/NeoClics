@@ -2,7 +2,7 @@
   "$defs": {
     "Automation": {
       "additionalProperties": false,
-      "description": "Parameter automation over time.\n\n``points`` are ``[bar, value]`` pairs; bars are 1-indexed, fractional\nallowed, in [1, length_bars + 1] (length_bars + 1 = end of song).\nValue units are the target parameter's own units. ``curve``: ``lin``\nlinear, ``exp`` exponential (values must be non-zero and same-sign),\n``step`` holds the previous value.",
+      "description": "Parameter automation over time.\n\n``points`` are ``[bar, value]`` pairs; bars are 1-indexed, fractional\nallowed, in [1, length_bars + 1] (length_bars + 1 = end of song).\nValue units are the target parameter's own units and must stay inside\nthe parameter's declared bounds. ``curve``: ``lin`` linear, ``exp``\nexponential (values must be non-zero and same-sign), ``step`` holds\nthe previous value.\n\nSemantics: automation REPLACES the target's static value entirely;\nbefore the first point it holds the first value, after the last\npoint it holds the last value. Two automations may not share a\ntarget. NaN/inf values are rejected everywhere.",
       "properties": {
         "curve": {
           "default": "lin",
@@ -33,7 +33,7 @@
           "type": "array"
         },
         "target": {
-          "description": "tracks.<track_id>.gain_db | tracks.<track_id>.pan | tracks.<track_id>.fx.<fx_id>.<param> | master.gain_db | master.fx.<fx_id>.<param>",
+          "description": "tracks.<track_id>.gain_db | tracks.<track_id>.pan | tracks.<track_id>.fx.<fx_id>.<param> | tracks.<track_id>.fx.<fx_id>.params.<name> | master.gain_db | master.fx.<fx_id>.<param> | master.fx.<fx_id>.params.<name>",
           "title": "Target",
           "type": "string"
         }
@@ -79,6 +79,14 @@
           "minimum": 1,
           "title": "Start Downbeat",
           "type": "integer"
+        },
+        "start_offset_beats": {
+          "default": 0.0,
+          "description": "Beats to shift the start along beats_s from the downbeat's matching beat; may be negative, fractional interpolates. Enables off-downbeat starts and stutters.",
+          "maximum": 4096.0,
+          "minimum": -4096.0,
+          "title": "Start Offset Beats",
+          "type": "number"
         },
         "stem": {
           "default": "other",
@@ -152,8 +160,8 @@
         },
         "rate_hz": {
           "default": 1.0,
-          "exclusiveMinimum": 0.0,
           "maximum": 20.0,
+          "minimum": 0.01,
           "title": "Rate Hz",
           "type": "number"
         },
@@ -411,8 +419,8 @@
       "additionalProperties": false,
       "properties": {
         "cutoff_hz": {
-          "exclusiveMinimum": 0.0,
           "maximum": 22000.0,
+          "minimum": 10.0,
           "title": "Cutoff Hz",
           "type": "number"
         },
@@ -456,7 +464,7 @@
     },
     "Instrument": {
       "additionalProperties": false,
-      "description": "A plugin instrument (VST3/AU or built-in) fed by a MIDI file.",
+      "description": "A plugin instrument (VST3/AU or built-in) fed by MIDI notes.",
       "properties": {
         "params": {
           "additionalProperties": {
@@ -536,8 +544,8 @@
       "additionalProperties": false,
       "properties": {
         "cutoff_hz": {
-          "exclusiveMinimum": 0.0,
           "maximum": 22000.0,
+          "minimum": 10.0,
           "title": "Cutoff Hz",
           "type": "number"
         },
@@ -668,9 +676,47 @@
       "title": "Master",
       "type": "object"
     },
+    "MidiNote": {
+      "additionalProperties": false,
+      "description": "One note of an instrument track's inline melody.",
+      "properties": {
+        "beat": {
+          "description": "1-indexed beat position from the start of the song.",
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 4096.0,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "pitch": {
+          "ge": 0,
+          "le": 127,
+          "title": "Pitch",
+          "type": "integer"
+        },
+        "velocity": {
+          "default": 100,
+          "maximum": 127,
+          "minimum": 1,
+          "title": "Velocity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "beat",
+        "pitch",
+        "length_beats"
+      ],
+      "title": "MidiNote",
+      "type": "object"
+    },
     "Pattern": {
       "additionalProperties": false,
-      "description": "Step-sequenced drum pattern, tiled across the song.\n\nEach lane's ``steps`` string must be exactly\n``steps_per_bar * bars`` characters (ignoring spaces).",
+      "description": "Step-sequenced drum pattern, tiled across the track's window.\n\nEach lane's ``steps`` string must be exactly\n``steps_per_bar * bars`` characters (ignoring spaces).\n\n``swing`` in [0, 1] delays every odd-indexed (off) step by\n``swing * step / 3``: 0 is straight, 1 is full triplet swing.",
       "properties": {
         "bars": {
           "default": 1,
@@ -753,8 +799,8 @@
       "properties": {
         "centre_frequency_hz": {
           "default": 1300.0,
-          "exclusiveMinimum": 0.0,
           "maximum": 20000.0,
+          "minimum": 10.0,
           "title": "Centre Frequency Hz",
           "type": "number"
         },
@@ -795,8 +841,8 @@
         },
         "rate_hz": {
           "default": 1.0,
-          "exclusiveMinimum": 0.0,
           "maximum": 20.0,
+          "minimum": 0.01,
           "title": "Rate Hz",
           "type": "number"
         },
@@ -964,10 +1010,10 @@
     },
     "SidechainFx": {
       "additionalProperties": false,
-      "description": "Ducks this track when ``key_track`` is playing.\n\n``depth`` is the fraction of gain removed: the key envelope scales the\ntrack by ``1 - depth`` (0 = off, 1 = full duck to silence).",
+      "description": "Ducks this track whenever the ``key_track`` produces an event.\n\nThe key signal is EVENT-triggered: when the key track has events\n(pattern steps or notes), the envelope ``env`` jumps to 1 at each\ntrigger and decays with ``release_ms``; ``attack_ms`` ramps the jump.\nThe track's gain is scaled by ``1 - depth * env`` (0 = off, 1 = full\nduck to silence).\n\n``key_lane`` (optional) restricts triggers to one drum lane of a\npattern track (e.g. ``kick``); it must name an existing lane. If the\nkey track is a clips track (no events), the renderer falls back to an\naudio envelope follower on that track's stem.\n\nSidechain chains that form a cycle (A keys on B, B keys on A) are a\nvalidation error.",
       "properties": {
         "attack_ms": {
-          "default": 5.0,
+          "default": 1.0,
           "maximum": 500.0,
           "minimum": 0.0,
           "title": "Attack Ms",
@@ -992,6 +1038,21 @@
           ],
           "default": null,
           "title": "Id"
+        },
+        "key_lane": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Restrict triggers to this lane of a pattern key track (e.g. 'kick'). Must exist.",
+          "title": "Key Lane"
         },
         "key_track": {
           "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
@@ -1082,7 +1143,7 @@
           "type": "number"
         },
         "key": {
-          "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+          "description": "Musical key, canonical form 'F#m' (minor) or 'F#' (major). Accepted: 'F#m', 'F#min', 'F# minor', 'F#', 'F#M', 'F#maj', bare lowercase 'a' = A minor.",
           "title": "Key",
           "type": "string"
         },
@@ -1143,8 +1204,15 @@
     },
     "Track": {
       "additionalProperties": false,
-      "description": "One mixer track. Exactly one kind of content:\n\n* ``clips`` \u2014 placed chops / library samples, or\n* ``pattern`` \u2014 a step-sequenced drum pattern, or\n* ``instrument`` + ``midi`` \u2014 a plugin instrument playing a .mid file.",
+      "description": "One mixer track. Exactly one kind of content:\n\n* ``clips`` \u2014 placed chops / library samples, or\n* ``pattern`` \u2014 a step-sequenced drum pattern, or\n* ``instrument`` + (``midi`` XOR ``notes``) \u2014 a plugin instrument\n  playing a .mid file or an inline note list.\n\nPattern and instrument tracks may restrict their window with\n``at_bar`` (1-indexed, default 1) and ``until_bar`` (exclusive,\ndefault = ``meta.length_bars + 1``, i.e. end of song).",
       "properties": {
+        "at_bar": {
+          "default": 1,
+          "description": "First bar this track plays (pattern/instrument tracks only).",
+          "minimum": 1,
+          "title": "At Bar",
+          "type": "integer"
+        },
         "clips": {
           "anyOf": [
             {
@@ -1263,6 +1331,22 @@
           "title": "Mute",
           "type": "boolean"
         },
+        "notes": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/MidiNote"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Inline MIDI notes for an instrument track (alternative to 'midi').",
+          "title": "Notes"
+        },
         "pan": {
           "default": 0.0,
           "maximum": 1.0,
@@ -1280,6 +1364,20 @@
             }
           ],
           "default": null
+        },
+        "until_bar": {
+          "anyOf": [
+            {
+              "minimum": 2,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bar the track stops at (exclusive; default = end of song). Pattern/instrument tracks only.",
+          "title": "Until Bar"
         }
       },
       "required": [
@@ -1290,7 +1388,7 @@
     },
     "Warp": {
       "additionalProperties": false,
-      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: vinyl-style playback-rate change; pitch rises with\n  tempo. ``pitch_semitones`` multiplies into the rate, so it also\n  changes the sounding duration (audio is truncated or padded to the\n  clip's grid span).\n* ``stretch``: high-quality time-stretch preserving pitch\n  (Rubber Band), then a separate pitch shift of ``pitch_semitones``.",
+      "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
       "properties": {
         "mode": {
           "default": "resample",

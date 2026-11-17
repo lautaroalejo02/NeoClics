@@ -1,0 +1,86 @@
+{
+  "$defs": {
+    "LibraryIndexEntry": {
+      "additionalProperties": false,
+      "description": "One indexed file inside a library root.",
+      "properties": {
+        "bpm": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detected/tagged source BPM; null = no warp possible.",
+          "title": "Bpm"
+        },
+        "key": {
+          "anyOf": [
+            {
+              "description": "Musical key, canonical form 'F#m' (minor) or 'F#' (major). Accepted: 'F#m', 'F#min', 'F# minor', 'F#', 'F#M', 'F#maj', bare lowercase 'a' = A minor.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Key"
+        },
+        "path": {
+          "description": "Path relative to the library root.",
+          "title": "Path",
+          "type": "string"
+        },
+        "tags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Tags",
+          "type": "array"
+        },
+        "type": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "e.g. kick/snare/clap/hat/loop/oneshot.",
+          "title": "Type"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "LibraryIndexEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``.muestra-index.json`` inside a library root.",
+  "properties": {
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/LibraryIndexEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "schema_version": {
+      "const": 0,
+      "default": 0,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "title": "LibraryIndex",
+  "type": "object"
+}

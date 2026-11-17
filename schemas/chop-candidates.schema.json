@@ -5,7 +5,8 @@
       "description": "The candidate the agent chose in mode 'auto', with its reason.",
       "properties": {
         "candidate_id": {
-          "description": "Local candidate id, e.g. 'cand2'.",
+          "description": "Global candidate id 'csNNN/candN'.",
+          "pattern": "^cs\\d{3,}/cand\\d+$",
           "title": "Candidate Id",
           "type": "string"
         },
@@ -101,7 +102,7 @@
         "preview": {
           "anyOf": [
             {
-              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
               "type": "string"
             },
             {
@@ -236,6 +237,8 @@
           "type": "string"
         },
         "candidate_id": {
+          "description": "Global chop candidate id '<csNNN>/<candN>', e.g. 'cs001/cand2'.",
+          "pattern": "^cs\\d{3,}/cand\\d+$",
           "title": "Candidate Id",
           "type": "string"
         },

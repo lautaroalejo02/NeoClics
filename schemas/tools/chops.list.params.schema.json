@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "source_id": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Filter candidate sets by source; omit for all.",
+      "title": "Source Id"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "ChopsListParams",
+  "type": "object"
+}

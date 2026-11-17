@@ -1,6 +1,19 @@
 {
   "additionalProperties": false,
   "properties": {
+    "agent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Agent/tool identity (commit trailer Muestra-Agent).",
+      "title": "Agent"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,
@@ -14,10 +27,10 @@
           "minItems": 2,
           "prefixItems": [
             {
-              "type": "number"
+              "type": "integer"
             },
             {
-              "type": "number"
+              "type": "integer"
             }
           ],
           "type": "array"
@@ -27,14 +40,55 @@
         }
       ],
       "default": null,
-      "description": "[start_bar, end_bar] to render (1-indexed); default: whole song.",
+      "description": "[start_bar, end_bar) to render, 1-indexed, end EXCLUSIVE; must satisfy start < end <= length_bars + 1. Default: the whole song.",
       "title": "Range Bars"
+    },
+    "request": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The natural-language request that produced this version (commit trailer Muestra-Request).",
+      "title": "Request"
     },
     "stems": {
       "default": true,
       "description": "Also render per-track stems.",
       "title": "Stems",
       "type": "boolean"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Musical description of what changed (commit subject 'vNNN: <summary>').",
+      "title": "Summary"
+    },
+    "version": {
+      "anyOf": [
+        {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Re-render an existing version from its tagged song.yaml into renders/<version>/ \u2014 no new commit.",
+      "title": "Version"
     }
   },
   "required": [

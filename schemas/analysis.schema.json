@@ -66,7 +66,7 @@
         "bass": {
           "anyOf": [
             {
-              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
               "type": "string"
             },
             {
@@ -79,7 +79,7 @@
         "drums": {
           "anyOf": [
             {
-              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
               "type": "string"
             },
             {
@@ -92,7 +92,7 @@
         "other": {
           "anyOf": [
             {
-              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
               "type": "string"
             },
             {
@@ -105,7 +105,7 @@
         "vocals": {
           "anyOf": [
             {
-              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths).",
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
               "type": "string"
             },
             {

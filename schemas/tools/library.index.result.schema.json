@@ -9,7 +9,7 @@
       "type": "array"
     },
     "index_path": {
-      "description": "Project-relative path of the index file.",
+      "description": "Path of the index file ('.muestra-index.json' inside the root).",
       "title": "Index Path",
       "type": "string"
     },

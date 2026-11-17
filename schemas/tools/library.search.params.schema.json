@@ -17,7 +17,6 @@
     "key": {
       "anyOf": [
         {
-          "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
           "type": "string"
         },
         {
@@ -25,6 +24,7 @@
         }
       ],
       "default": null,
+      "description": "Key filter, e.g. 'F#m'.",
       "title": "Key"
     },
     "limit": {

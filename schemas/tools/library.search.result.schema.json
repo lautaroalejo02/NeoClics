@@ -2,6 +2,7 @@
   "$defs": {
     "LibraryHit": {
       "additionalProperties": false,
+      "description": "A search/lookup result, usable directly in song.yaml.",
       "properties": {
         "bpm": {
           "anyOf": [
@@ -18,7 +19,7 @@
         "key": {
           "anyOf": [
             {
-              "description": "Musical key, e.g. 'F#m', 'A', 'Bbmaj', 'C#minor'.",
+              "description": "Musical key, canonical form 'F#m' (minor) or 'F#' (major). Accepted: 'F#m', 'F#min', 'F# minor', 'F#', 'F#M', 'F#maj', bare lowercase 'a' = A minor.",
               "type": "string"
             },
             {
@@ -29,8 +30,13 @@
           "title": "Key"
         },
         "path": {
-          "description": "Path relative to its library dir.",
+          "description": "Path relative to its library root.",
           "title": "Path",
+          "type": "string"
+        },
+        "root": {
+          "description": "The library root this hit lives in, as configured (may be absolute).",
+          "title": "Root",
           "type": "string"
         },
         "tags": {
@@ -61,6 +67,7 @@
       },
       "required": [
         "uri",
+        "root",
         "path"
       ],
       "title": "LibraryHit",

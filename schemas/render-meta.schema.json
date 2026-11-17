@@ -2,7 +2,7 @@
   "$defs": {
     "DiffEntry": {
       "additionalProperties": false,
-      "description": "One changed value in the musical diff between versions.\n\n``path`` uses dotted/bracketed song.yaml addressing, e.g.\n``chops[0].warp.pitch_semitones`` or ``tracks[1].fx[2].cutoff_hz``.\n``from_`` serializes as ``from``.",
+      "description": "One changed value in the musical diff between versions.\n\n``path`` uses ID-based song.yaml addressing, matching the automation\ngrammar: ``chops.c1.warp.pitch_semitones``,\n``tracks.sample.fx.lp.cutoff_hz``,\n``tracks.drums.pattern.lanes.kick.steps``, ``meta.bpm``. Elements\nwithout ids use indices: ``tracks.<id>.clips[<i>]``, and an fx\nwithout an ``id`` is addressed as ``fx[<i>]``.\n``from_`` serializes as ``from``.",
       "properties": {
         "from": {
           "default": null,
@@ -22,6 +22,70 @@
       ],
       "title": "DiffEntry",
       "type": "object"
+    },
+    "RenderTrackMeta": {
+      "additionalProperties": false,
+      "description": "A track's entry in meta.json: id, kind and its stem path(s).",
+      "properties": {
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "enum": [
+            "clips",
+            "pattern",
+            "instrument"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "lanes": {
+          "description": "Per-lane stems (pattern tracks only), pre track fx.",
+          "items": {
+            "$ref": "#/$defs/StemLaneRef"
+          },
+          "title": "Lanes",
+          "type": "array"
+        },
+        "stem": {
+          "description": "Project-relative path of the track stem, e.g. 'renders/v001/stems/drums.wav'.",
+          "title": "Stem",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "stem"
+      ],
+      "title": "RenderTrackMeta",
+      "type": "object"
+    },
+    "StemLaneRef": {
+      "additionalProperties": false,
+      "description": "One pattern lane's stem file.",
+      "properties": {
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "stem": {
+          "description": "Project-relative path, e.g. 'renders/v001/stems/drums.kick.wav'.",
+          "title": "Stem",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "stem"
+      ],
+      "title": "StemLaneRef",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -31,6 +95,12 @@
       "minLength": 1,
       "title": "Agent",
       "type": "string"
+    },
+    "bpm": {
+      "exclusiveMaximum": 400,
+      "exclusiveMinimum": 0,
+      "title": "Bpm",
+      "type": "number"
     },
     "created_at": {
       "format": "date-time",
@@ -67,7 +137,24 @@
         }
       ],
       "default": null,
+      "description": "The version commit in the project's git repo (it contains this version's song.yaml). meta.json/metrics.json are written AFTER the commit and can always be regenerated.",
       "title": "Git Commit"
+    },
+    "key": {
+      "description": "Musical key, canonical form 'F#m' (minor) or 'F#' (major). Accepted: 'F#m', 'F#min', 'F# minor', 'F#', 'F#M', 'F#maj', bare lowercase 'a' = A minor.",
+      "title": "Key",
+      "type": "string"
+    },
+    "length_bars": {
+      "description": "meta.length_bars of the song at this version.",
+      "minimum": 1,
+      "title": "Length Bars",
+      "type": "integer"
+    },
+    "mix": {
+      "description": "Project-relative path of mix.wav.",
+      "title": "Mix",
+      "type": "string"
     },
     "parent": {
       "anyOf": [
@@ -82,6 +169,21 @@
       ],
       "default": null,
       "title": "Parent"
+    },
+    "range_bars": {
+      "description": "[start, end) 1-indexed bar range that was rendered; end is EXCLUSIVE (default render: [1, length_bars + 1]).",
+      "maxItems": 2,
+      "minItems": 2,
+      "prefixItems": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "integer"
+        }
+      ],
+      "title": "Range Bars",
+      "type": "array"
     },
     "render_time_s": {
       "anyOf": [
@@ -109,6 +211,12 @@
       "description": "The natural-language request that produced this version.",
       "title": "Request"
     },
+    "sample_rate": {
+      "description": "Project sample rate of every wav in renders/vNNN.",
+      "exclusiveMinimum": 0,
+      "title": "Sample Rate",
+      "type": "integer"
+    },
     "schema_version": {
       "const": 0,
       "default": 0,
@@ -128,6 +236,14 @@
       "description": "Musical (not technical) description of what changed.",
       "title": "Summary"
     },
+    "tracks": {
+      "description": "Ordered track list with stems, mirroring song.yaml.",
+      "items": {
+        "$ref": "#/$defs/RenderTrackMeta"
+      },
+      "title": "Tracks",
+      "type": "array"
+    },
     "version": {
       "description": "Render version id like 'v001'.",
       "pattern": "^v\\d{3,}$",
@@ -138,7 +254,13 @@
   "required": [
     "version",
     "created_at",
-    "agent"
+    "agent",
+    "sample_rate",
+    "bpm",
+    "key",
+    "length_bars",
+    "range_bars",
+    "mix"
   ],
   "title": "RenderMeta",
   "type": "object"
