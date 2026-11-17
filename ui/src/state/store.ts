@@ -4,7 +4,7 @@
 // never depends on React re-renders. The engine and the client are
 // injected (component tests pass a fake engine and a client on the mock).
 
-import { MuestraClient, ApiError, normalizeDrafts } from "../api/client";
+import { MuestraClient, ApiError, isAuthError, normalizeDrafts } from "../api/client";
 import type {
   Analysis,
   ChopAdjust,
@@ -100,7 +100,7 @@ export type Theme = "dark" | "light";
 export type NewVersionPolicy = "play" | "offer";
 
 export interface AppState {
-  boot: "loading" | "ready" | "empty" | "error";
+  boot: "loading" | "ready" | "empty" | "error" | "unauthorized";
   bootError: string | null;
   title: string | null;
   versions: VersionInfo[]; // sorted ascending; only versions with audio
@@ -293,9 +293,15 @@ export class Store {
       await this.loadAll();
       this.set({ boot: this.hasAnyVersion() ? "ready" : "empty" });
     } catch (e) {
-      this.set({ boot: "error", bootError: e instanceof Error ? e.message : String(e) });
+      if (isAuthError(e)) this.set({ boot: "unauthorized", bootError: null });
+      else this.set({ boot: "error", bootError: e instanceof Error ? e.message : String(e) });
     }
     this.connectWs();
+  }
+
+  /** The server refused us (401/403): show the "open the link" screen. */
+  authRefused(_status: number): void {
+    if (this.state.boot !== "unauthorized") this.set({ boot: "unauthorized", bootError: null });
   }
 
   /** Full (re)load — also used after a websocket reconnect, where events

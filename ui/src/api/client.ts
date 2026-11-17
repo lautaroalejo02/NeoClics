@@ -40,7 +40,20 @@ export class ApiError extends Error {
   }
 }
 
+/** The server says no: missing / wrong access token (non-loopback use). */
+export function isAuthError(e: unknown): boolean {
+  return e instanceof ApiError && (e.status === 401 || e.status === 403);
+}
+
+/** Header names the access token travels in. One place, so the integrator can
+ *  reconcile with the backend (docs/server.md will say which it accepts). */
+export const TOKEN_HEADERS = ["authorization", "x-muestra-token"] as const;
+
 export interface ClientOptions {
+  /** Access token (see api/token.ts); omitted → no auth headers at all. */
+  token?: string | null;
+  /** Called when any request is refused with 401/403. */
+  onAuthError?: (status: number) => void;
   /** API base URL. "" = same origin (production: the API serves ui/dist). */
   baseUrl?: string;
   /** Project path for project-scoped tool params. The HTTP API is bound to
@@ -81,6 +94,8 @@ export class MuestraClient {
   readonly baseUrl: string;
   readonly project: string | null;
   private readonly fetchImpl: typeof fetch;
+  private readonly token: string | null;
+  private readonly onAuthError: ((status: number) => void) | null;
   /** Optional endpoints we already know are missing (404) — don't retry. */
   private missing = new Set<string>();
   private versionRequests = new Map<VersionId, Promise<VersionsGetResult | null>>();
@@ -89,6 +104,19 @@ export class MuestraClient {
     this.baseUrl = (opts.baseUrl ?? "").replace(/\/$/, "");
     this.project = opts.project ?? null;
     this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
+    this.token = opts.token ?? null;
+    this.onAuthError = opts.onAuthError ?? null;
+  }
+
+  /** Headers for every HTTP request: the access token, when there is one. */
+  private headers(extra: Record<string, string> = {}): Record<string, string> {
+    if (!this.token) return extra;
+    return { ...extra, authorization: `Bearer ${this.token}`, "x-muestra-token": this.token };
+  }
+
+  /** 401/403 → tell the app (it shows the "open the link" screen). */
+  private checkAuth(res: Response): void {
+    if (res.status === 401 || res.status === 403) this.onAuthError?.(res.status);
   }
 
   // ---------------------------------------------------------------- low level
@@ -106,12 +134,13 @@ export class MuestraClient {
     try {
       res = await this.fetchImpl(this.url(`/tools/${mcpName}`), {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: this.headers({ "content-type": "application/json" }),
         body: JSON.stringify(body),
       });
     } catch (e) {
       throw new ApiError(`${mcpName}: sin conexión con la API (${String(e)})`, null);
     }
+    this.checkAuth(res);
     let tr: ToolResult<T> | null = null;
     try {
       tr = (await res.json()) as ToolResult<T>;
@@ -131,7 +160,8 @@ export class MuestraClient {
 
   /** GET JSON; null on 404 (optional files/endpoints). */
   private async getJson<T>(path: string): Promise<T | null> {
-    const res = await this.fetchImpl(this.url(path));
+    const res = await this.fetchImpl(this.url(path), { headers: this.headers() });
+    this.checkAuth(res);
     if (res.status === 404) return null;
     if (!res.ok) throw new ApiError(`${path}: HTTP ${res.status}`, res.status);
     return (await res.json()) as T;
@@ -155,7 +185,8 @@ export class MuestraClient {
   }
 
   async fetchFile(projectPath: string, signal?: AbortSignal): Promise<ArrayBuffer> {
-    const res = await this.fetchImpl(this.fileUrl(projectPath), { signal });
+    const res = await this.fetchImpl(this.fileUrl(projectPath), { signal, headers: this.headers() });
+    this.checkAuth(res);
     if (!res.ok) throw new ApiError(`${projectPath}: HTTP ${res.status}`, res.status);
     return res.arrayBuffer();
   }
@@ -174,7 +205,8 @@ export class MuestraClient {
   private async projectView(): Promise<ProjectView | null> {
     if (this.missing.has("summary")) return null;
     try {
-      const res = await this.fetchImpl(this.url("/project"));
+      const res = await this.fetchImpl(this.url("/project"), { headers: this.headers() });
+      this.checkAuth(res);
       if (res.status === 404) {
         this.missing.add("summary");
         return null;
@@ -285,7 +317,8 @@ export class MuestraClient {
 
   eventsUrl(): string {
     const base = this.baseUrl || globalThis.location?.origin || "http://localhost";
-    return base.replace(/^http/, "ws") + "/events";
+    // browsers cannot set headers on a WebSocket: the token goes in the query
+    return base.replace(/^http/, "ws") + "/events" + (this.token ? `?token=${encodeURIComponent(this.token)}` : "");
   }
 
   static parseWsEvent(raw: unknown): WsEvent | null {

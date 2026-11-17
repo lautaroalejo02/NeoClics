@@ -463,8 +463,22 @@ function readBody(req) {
   });
 }
 
+// MOCK_TOKEN=abc → like `muestra serve --host 0.0.0.0`: API routes and the
+// websocket need the token (Authorization: Bearer / X-Muestra-Token header,
+// or ?token= for the websocket); the static UI is served freely.
+const TOKEN = process.env.MOCK_TOKEN ?? "";
+function authorized(req, url) {
+  if (!TOKEN) return true;
+  const h = String(req.headers.authorization ?? "").replace(/^Bearer\s+/i, "");
+  return h === TOKEN || req.headers["x-muestra-token"] === TOKEN || url.searchParams.get("token") === TOKEN;
+}
+const API_PREFIXES = ["/tools/", "/files/", "/jobs/", "/project", "/waveform"];
+
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url ?? "/", "http://x");
+  if (TOKEN && API_PREFIXES.some((p) => url.pathname.startsWith(p)) && !authorized(req, url)) {
+    return send(res, 401, { detail: "token requerido" });
+  }
   let pathname;
   try {
     pathname = decodeURIComponent(url.pathname);
@@ -579,7 +593,11 @@ const server = http.createServer(async (req, res) => {
 });
 
 // ---------------------------------------------------------------- ws
-const wss = new WebSocketServer({ server, path: "/events" });
+const wss = new WebSocketServer({
+  server,
+  path: "/events",
+  verifyClient: (info, cb) => (authorized(info.req, new URL(info.req.url ?? "/", "http://x")) ? cb(true) : cb(false, 401, "token requerido")),
+});
 wss.on("connection", (ws) => {
   clients.add(ws);
   ws.on("close", () => clients.delete(ws));

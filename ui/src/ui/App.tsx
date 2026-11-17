@@ -3,7 +3,7 @@ import { useLayout } from "../hooks/hooks";
 import { handleKey } from "./keys";
 import { useApp, useStore } from "../state/react";
 import { ChopsPanel } from "./Chops";
-import { BootSkeleton, EmptyState, ErrorState, NoAudioCard, Header, HelpDialog, Jobs, OfferBanner, SettingsDialog, Toasts } from "./Chrome";
+import { BootSkeleton, EmptyState, ErrorState, NoAudioCard, UnauthorizedState, Header, HelpDialog, Jobs, OfferBanner, SettingsDialog, Toasts } from "./Chrome";
 import { EarsPanel } from "./Ears";
 import { FeedbackPanel } from "./Feedback";
 import { MixerPanel } from "./Mixer";
@@ -52,6 +52,7 @@ export function App() {
   let main: ReactNode;
   if (boot === "loading") main = <BootSkeleton />;
   else if (boot === "error") main = <ErrorState message={bootError} />;
+  else if (boot === "unauthorized") main = <UnauthorizedState />;
   else if (boot === "empty")
     main = (
       <>

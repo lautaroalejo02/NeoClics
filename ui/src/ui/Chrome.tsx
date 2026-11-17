@@ -332,6 +332,22 @@ export function ErrorState({ message }: { message: string | null }) {
   );
 }
 
+/** 401/403: the server wants an access token (it is not on this computer). */
+export function UnauthorizedState() {
+  return (
+    <section className="card empty" role="alert" data-testid="unauthorized">
+      <h2>Este link no tiene permiso</h2>
+      <p>
+        El servidor de muestra pide un código de acceso cuando lo abrís desde otro dispositivo (por ejemplo el celu en el mismo Wi-Fi), y a este link le falta o está vencido.
+      </p>
+      <p>
+        <strong>Abrí el link que muestra <code>muestra serve</code> en la terminal</strong>: termina en <code>?token=…</code>. Si reiniciaste el servidor, el código cambia: usá el link
+        nuevo.
+      </p>
+    </section>
+  );
+}
+
 export function BootSkeleton() {
   return (
     <div aria-busy="true" aria-label="Cargando" style={{ display: "grid", gap: 16 }}>
