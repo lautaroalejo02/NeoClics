@@ -357,3 +357,12 @@ export function friendlyError(
 export function regenRequest(version: string): string {
   return `La versión ${version} no tiene audio (se borró renders/). Regenerala con render de ${version}, sin cambiar la canción.`;
 }
+
+/** The agent's pick justification embeds the raw score sentences ("Pulso
+ *  estable: 0.730; irregularidad residual 3.14%…"). Keep the human sentences,
+ *  drop the ones the facets already say in musician words. */
+export function humanizeJustification(text: string): string {
+  const sentences = text.split(/(?<=[.!?])\s+(?=[A-ZÁÉÍÓÚÑ¿¡])/);
+  const kept = sentences.filter((s) => !/^(Continuidad del loop|Pulso estable|Energ[ií]a relativa|Contenido tonal)\s*:/i.test(s.trim()));
+  return (kept.length ? kept : sentences).join(" ").trim();
+}

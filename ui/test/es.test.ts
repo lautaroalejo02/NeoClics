@@ -8,6 +8,7 @@ import {
   fmtMs,
   fmtNum,
   fmtPct,
+  humanizeJustification,
   friendlyError,
   keyLabel,
   parseKey,
@@ -146,5 +147,15 @@ describe("friendlyError", () => {
   it("a Spanish backend message is shown as is", () => {
     const f = friendlyError(Object.assign(new Error("x"), { status: 422, issues: [{ code: "otro", message: "El candidato ya está en uso" }] }));
     expect(f.message).toBe("El candidato ya está en uso");
+  });
+});
+
+describe("humanizeJustification", () => {
+  it("drops the raw score sentences, keeps the agent's words", () => {
+    const raw = "Elijo este loop de 4 compases porque cierra bien. Empieza a 15.28 s; tempo local 246.2 BPM. Continuidad del loop: 0.718 (espectro y nivel en el punto de vuelta). Pulso estable: 0.730; irregularidad residual 3.14% descontando la deriva. Energía relativa: 0.925; ataques por segundo: 8.21. Contenido tonal: 0.421; coincidencia con voz (posible filtración): 0.007.";
+    const h = humanizeJustification(raw);
+    expect(h).toContain("Elijo este loop de 4 compases porque cierra bien.");
+    expect(h).toContain("246.2 BPM");
+    expect(h).not.toMatch(/irregularidad|Continuidad|Pulso estable|Contenido tonal/);
   });
 });

@@ -48,10 +48,27 @@ export function Player() {
   const layout = useLayout();
   const sectionRef = useRef<HTMLElement>(null);
   const [offscreen, setOffscreen] = useState(false);
+  // While typing (on-screen keyboard open) the pinned bar would eat a fifth of
+  // the visible height: hide it until the field loses focus.
+  const [typing, setTyping] = useState(false);
   useEffect(() => {
-    const el = sectionRef.current;
+    const isField = (t: EventTarget | null) => t instanceof HTMLElement && (t.tagName === "TEXTAREA" || (t.tagName === "INPUT" && !["range", "checkbox", "radio", "button"].includes((t as HTMLInputElement).type)));
+    const on = (e: FocusEvent) => setTyping(isField(e.target));
+    const off = () => setTyping(false);
+    document.addEventListener("focusin", on);
+    document.addEventListener("focusout", off);
+    return () => {
+      document.removeEventListener("focusin", on);
+      document.removeEventListener("focusout", off);
+    };
+  }, []);
+  useEffect(() => {
+    // Watch the TRANSPORT row (play button), not the whole card: on a phone the
+    // card's A/B bar can still be on screen after the play button scrolled
+    // away behind the sticky header, and then there was no way to play.
+    const el = sectionRef.current?.querySelector(".transport");
     if (!el || typeof IntersectionObserver === "undefined") return;
-    const io = new IntersectionObserver(([e]) => setOffscreen(!e.isIntersecting), { threshold: 0, rootMargin: "-120px 0px 0px 0px" });
+    const io = new IntersectionObserver(([e]) => setOffscreen(e.intersectionRatio < 0.9), { threshold: [0, 0.9, 1], rootMargin: "-56px 0px 0px 0px" });
     io.observe(el);
     return () => io.disconnect();
   }, []);
@@ -62,7 +79,7 @@ export function Player() {
 
   return (
     <section className="card player" aria-label="Reproductor" ref={sectionRef}>
-      {layout === "narrow" && offscreen && <MiniBar />}
+      {layout === "narrow" && offscreen && !typing && <MiniBar />}
       <div className="player-top">
         <div className="now-version mono" data-testid="now-version">
           {label(active)}

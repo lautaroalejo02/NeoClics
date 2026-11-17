@@ -7,7 +7,7 @@ import { useRaf } from "../hooks/hooks";
 import { formatClock } from "../music/time";
 import { useApp, useEngine, useStore } from "../state/react";
 import { timeAgo } from "../state/derive";
-import { describeChopScore, fmtBpm, fmtNum, fmtPct, scoreVerdict, signed } from "../text/es";
+import { describeChopScore, fmtBpm, humanizeJustification, fmtNum, fmtPct, scoreVerdict, signed } from "../text/es";
 import type { ChopOutcome } from "../state/store";
 import type { MuestraClient } from "../api/client";
 import * as I from "./icons";
@@ -111,7 +111,7 @@ function CandidateSet({ set }: { set: ChopCandidateSet }) {
             <I.Info />
           </span>
           <span>
-            <strong>El agente eligió {localId(set, set.pick.candidate_id)}</strong>: {set.pick.justification}
+            <strong>El agente eligió {localId(set, set.pick.candidate_id)}</strong>: {humanizeJustification(set.pick.justification)}
           </span>
         </div>
       )}

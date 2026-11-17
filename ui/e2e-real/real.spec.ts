@@ -121,3 +121,28 @@ test("real API: a render from the CLI in another process shows up live", async (
   await expect(page.getByTestId(`version-${next}`)).toBeVisible({ timeout: 30_000 });
   await page.screenshot({ path: info.outputPath("live.png"), fullPage: true });
 });
+
+test("real API: with renders/ gone every version is still listed, greyed out, with how to regenerate it", async ({ page, request }, info) => {
+  test.skip(info.project.name !== "desktop-chromium" && info.project.name !== "phone-chromium", "one engine family is enough");
+  const project = await projectPath(request);
+  const renders = path.join(project, "renders");
+  const hidden = path.join(project, "renders.hidden");
+  const before = ((await (await request.get("/project")).json()).versions as { version: string }[]).map((v) => v.version);
+  expect(before.length).toBeGreaterThan(0);
+  fs.renameSync(renders, hidden);
+  try {
+    await page.goto("/");
+    // the old behaviour here was "Todavía no hay ninguna versión"
+    await expect(page.getByTestId("empty")).toHaveCount(0);
+    await expect(page.getByTestId("no-audio")).toBeVisible({ timeout: 20_000 });
+    if (info.project.name.startsWith("phone")) await page.getByTestId("tab-versions").tap().catch(() => undefined);
+    for (const v of before) {
+      const row = page.getByTestId(`version-${v}`);
+      await expect(row).toHaveAttribute("data-noaudio", "true");
+      await expect(page.getByTestId(`noaudio-${v}`)).toContainText(`render de ${v}`);
+    }
+    await page.screenshot({ path: info.outputPath("noaudio.png"), fullPage: true });
+  } finally {
+    fs.renameSync(hidden, renders);
+  }
+});
