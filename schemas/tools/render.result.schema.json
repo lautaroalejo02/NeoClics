@@ -121,6 +121,19 @@
           "title": "Range Bars",
           "type": "array"
         },
+        "render_signature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Renderer ABI, song, grids and input-content provenance for safe pruning.",
+          "title": "Render Signature"
+        },
         "render_time_s": {
           "anyOf": [
             {

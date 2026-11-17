@@ -184,9 +184,23 @@ def audit(root):
                 np.count_nonzero(np.all(x[slot - 24 : slot + 24] == 0, axis=1))
             ),
         }
+        from muestra.render.core import render_audio
+        from muestra.schemas.song import Clip
+
+        isolated = song.model_copy(deep=True)
+        track = isolated.tracks[0]
+        track.clips = [
+            Clip(chop=c.id, at_bar=1, repeat=int(isolated.meta.length_bars * 4 / c.length_beats))
+        ]
+        track.fx = []
+        isolated.tracks, isolated.chops, isolated.automation = [track], [c], []
+        isolated.master.fx, isolated.master.target_lufs = [], None
+        full = render_audio(codex, isolated, (1, isolated.meta.length_bars + 1))[0]
+        full_wrap = np.concatenate([full[-sr // 10 :], full[: sr // 10]])
+        seams[mode]["full_render_wrap_min_1ms_db"] = float(_dip_db(full_wrap, sr // 10, sr))
     result["real_record_seams"] = seams
 
-    rendered, elapsed = call(codex, "render", draft=True, range_bars=[1, 5], analyze=True)
+    rendered, elapsed = call(codex, "render", draft=True, analyze=True)
     metrics = json.loads(codex.path(rendered["metrics_path"]).read_text("utf-8"))
     result["master"] = {
         "wall_s": elapsed,
@@ -198,6 +212,47 @@ def audit(root):
     # separately by the codec regression suite.
     audio, rate = sf.read(codex.resolve(analysis.file), always_2d=True)
     result["source_decode"] = {"frames": len(audio), "sr": rate}
+    from muestra.errors import MuestraError
+    from muestra.ingest.audio import decode as ingest_decode
+    from muestra.media import require_ffmpeg
+    from muestra.render.audio import decode as render_decode
+
+    ffmpeg = require_ffmpeg()
+    codec = codex.path("cache/wp15-codec.m4a")
+    subprocess.run(
+        [
+            ffmpeg,
+            "-v",
+            "error",
+            "-y",
+            "-i",
+            str(codex.resolve(analysis.file)),
+            "-t",
+            "1",
+            "-c:a",
+            "aac",
+            str(codec),
+        ],
+        check=True,
+    )
+    with patch.dict(os.environ, {"MUESTRA_FFMPEG": ffmpeg}):
+        imported, import_sr = ingest_decode(codec)
+        decoded, _ = render_decode(codex, codec, import_sr)
+        bad = codex.path("cache/wp15-corrupt.wav")
+        bad.write_bytes(b"this is not a WAV")
+        failures = []
+        for decoder in (lambda: ingest_decode(bad), lambda: render_decode(codex, bad, 48000)):
+            try:
+                decoder()
+            except MuestraError as exc:
+                failures.append(exc.issues[0].code)
+        assert failures == ["decode_error", "decode_error"]
+    result["ffmpeg"] = {
+        "m4a_ingest_frames": len(imported),
+        "m4a_render_frames": len(decoded),
+        "sr": import_sr,
+        "corrupt_codes": failures,
+    }
 
     from tests.feedback.test_concurrency import WRITER
 
@@ -222,7 +277,24 @@ def audit(root):
     result["feedback"] = {"writers": 3, "expected": 1200, "appended": count}
 
     demo = open_project(root / "demo-e2e")
+    # Two real renders provide an old, unliked, reproducible version that is
+    # not the base, even when the owner's existing versions are all protected.
+    call(demo, "render", range_bars=[1, 3], analyze=False, summary="WP15 prune probe A")
+    call(demo, "render", range_bars=[1, 3], analyze=False, summary="WP15 prune probe B")
     dry, _ = call(demo, "versions.prune", keep_latest=0, cache=False)
+    assert dry["remove"], "The prune test must exercise a real deletion"
+    import hashlib
+
+    fingerprints = {
+        item["version"]: hashlib.sha256(
+            demo.path(f"renders/{item['version']}/mix.wav").read_bytes()
+        ).hexdigest()
+        for item in dry["remove"]
+    }
+    ranges = {
+        v: json.loads(demo.path(f"renders/{v}/meta.json").read_text("utf-8"))["range_bars"]
+        for v in fingerprints
+    }
     tags_before = git(demo.root, "tag")
     real, _ = call(demo, "versions.prune", keep_latest=0, cache=False, dry_run=False)
     assert git(demo.root, "tag") == tags_before
@@ -232,6 +304,13 @@ def audit(root):
         "freed_bytes": real["freed_bytes"],
         "history_preserved": True,
     }
+    restored = next(iter(fingerprints))
+    call(demo, "render", version=restored, range_bars=ranges[restored], analyze=False)
+    assert (
+        hashlib.sha256(demo.path(f"renders/{restored}/mix.wav").read_bytes()).hexdigest()
+        == fingerprints[restored]
+    )
+    result["prune_restore"] = {"version": restored, "bit_exact": True}
 
     from muestra.ears.dsp import integrated_loudness
     from muestra.plugins.core import render_instrument
@@ -265,6 +344,14 @@ def audit(root):
     result["formants"] = {
         "other_default_equals_off": bool(np.array_equal(default, off)),
         "on_off_rms_difference": float(np.sqrt(np.mean((on - off) ** 2))),
+    }
+    c.stem, c.warp.formants = "vocals", None
+    vocal_default = render_chop(codex, c, sr, song.meta.bpm)
+    c.warp.formants = True
+    result["vocal_formants"] = {
+        "default_equals_on": bool(
+            np.array_equal(vocal_default, render_chop(codex, c, sr, song.meta.bpm))
+        )
     }
 
     # Full Livery source in the Devin copy; no new separation is needed.

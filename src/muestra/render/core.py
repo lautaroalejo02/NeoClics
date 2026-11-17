@@ -468,7 +468,13 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
                     if track.mute
                     else np.asarray(
                         plugins.render_instrument(
-                            project, track.instrument, notes, sr, n_frames, bpm=bpm
+                            project,
+                            track.instrument,
+                            notes,
+                            sr,
+                            n_frames,
+                            bpm=bpm,
+                            seed=song.meta.seed,
                         )
                     )
                 )

@@ -312,16 +312,18 @@ def test_midi_ignores_tempo_and_uses_ppq(project, monkeypatch):
         }
     )
     notes = read_notes(project, song.tracks[0])
+    song.meta.seed = 73  # snapshot differs from the project's live song
     assert notes[0].beat == 1.5 and notes[0].length_beats == 1
     seen = []
 
-    def host(project, instrument, notes, sample_rate, n_frames, *, bpm):
-        seen.append((notes, bpm))
+    def host(project, instrument, notes, sample_rate, n_frames, *, bpm, seed=None):
+        seen.append((notes, bpm, seed))
         return np.zeros((n_frames, 2), np.float32)
 
     monkeypatch.setattr(plugins, "render_instrument", host)
     arrange(project, song, 22050, 10000)
     assert seen[0][1] == 133
+    assert seen[0][2] == 73
     assert seen[0][0][0].beat == 1.5
 
 

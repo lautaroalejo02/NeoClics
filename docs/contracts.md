@@ -14,6 +14,13 @@ output too. New events: `draft.created` (one entry, upsert), `drafts.changed`
 LAN accepts Bearer, X-Muestra-Token, query and cookie tokens; `/` and
 `/assets/*` are public so the UI can read the link and render its auth screen.
 
+WP15 safe pruning: `RenderMeta.render_signature?` fingerprints the renderer
+ABI/dependency versions, normalized song, effective source grids and referenced
+audio/MIDI/explicit preset file contents. `versions.prune` keeps missing/mismatched
+signatures, in addition to WP13 protections. Legacy audio is never silently
+claimed bit-exact after engine/grid changes. Instrument hosting accepts optional
+`seed`; renderer passes the snapshot's seed, including on re-render.
+
 WP15 additions: `Analysis.reliability` contains
 `confidence` (fraction of complete bars with consistent meter, not a probability),
 `bars[{start_downbeat,start_s,end_s,beat_count,reliable,reason}]`, contiguous

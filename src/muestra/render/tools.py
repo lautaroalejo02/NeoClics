@@ -295,6 +295,9 @@ def _render(project, p: RenderParams) -> RenderResult:
     with staging.stage(project) as stage:
         # Audio first: nothing is versioned until it exists (WP13 finding 1).
         loudness: dict = {}
+        from .reproducibility import render_signature
+
+        signature = render_signature(project, song)
         render_song(
             project,
             song,
@@ -365,6 +368,7 @@ def _render(project, p: RenderParams) -> RenderResult:
                     )
             meta = RenderMeta(
                 version=version,
+                render_signature=signature,
                 parent=parent,
                 git_commit=commit,
                 created_at=_created_at(prior, info if p.version else None),

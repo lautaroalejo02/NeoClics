@@ -85,6 +85,10 @@ class RenderTrackMeta(ContractModel):
 class RenderMeta(ContractModel):
     schema_version: Literal[0] = 0
     version: RenderIdStr
+    render_signature: str | None = Field(
+        default=None,
+        description="Renderer ABI, song, grids and input-content provenance for safe pruning.",
+    )
     parent: VersionStr | None = None
     git_commit: str | None = Field(
         default=None,

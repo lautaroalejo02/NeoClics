@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-import numpy as np
-
 from ..errors import MuestraError
 from .discovery import resolve_plugin
-from .host import PluginHost
 from .presets import CURATED, CURATED_PARAMS, CURATED_TRIM_DB, instrument_root, resolve_preset
-from .sfz import render_sfz
 
 if TYPE_CHECKING:
+    import numpy as np
+
     from ..project.core import Project
     from ..schemas.song import Instrument, MidiNote, PluginFx
 
@@ -71,12 +69,18 @@ def render_instrument(
     n_frames: int,
     *,
     bpm: float,
+    seed: int | None = None,
 ) -> np.ndarray:
     """Render project-beat notes, release tails included, to exactly (n_frames, 2).
 
     Pedalboard compensates reported plugin latency internally. Do not trim it twice.
     The renderer owns track windows, final truncation fades and MIDI-file decoding.
     """
+    import numpy as np
+
+    from .host import PluginHost
+    from .sfz import render_sfz
+
     if not np.isfinite(bpm) or bpm <= 0 or sample_rate <= 0 or n_frames < 0:
         raise MuestraError.one(
             "invalid_value",
@@ -89,7 +93,7 @@ def render_instrument(
     if path == "sfz":
         from ..project.validate import load_song
 
-        seed = load_song(project).meta.seed
+        seed = load_song(project).meta.seed if seed is None else seed
         audio = render_sfz(
             preset, notes, sample_rate, n_frames, bpm=bpm, seed=seed, params=instrument.params
         )
@@ -135,6 +139,8 @@ class PluginEffect:
         return self._host.info["latency_samples"]
 
     def set_parameters(self, params):
+        import numpy as np
+
         for name, value in params.items():
             if name not in self.parameters or not np.isfinite(value):
                 raise MuestraError.one(
@@ -175,6 +181,8 @@ class PluginEffect:
 
 def build_plugin_fx(project: Project, fx: PluginFx) -> object:
     """Build an isolated effect with process(audio, sample_rate, reset=False)."""
+    from .host import PluginHost
+
     path = resolve_plugin(project, fx.plugin)
     preset = resolve_preset(project, fx.preset) if fx.preset else None
     host = PluginHost(path, preset, fx.params)

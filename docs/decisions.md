@@ -866,3 +866,16 @@ after normalization. UTF-8 input errors include the byte offset. CLI doctor
 retains its documented `{ok,checks}` diagnostic exception. Generated help escapes
 percent signs. Drum sample swaps precede configured-gain notes, which explicitly
 do not claim an isolated audible level change.
+
+### WP15 — inherited prune reproduction gap found on real demo
+
+An old demo render (v003, created before subsequent engine/grid changes) was
+prunable under WP13's curated-alias test but regenerated with different PCM.
+`RenderMeta.render_signature` now fingerprints renderer ABI/dependency versions,
+song, effective source grids and referenced audio/MIDI/explicit preset content.
+Pruning keeps absent/mismatched provenance as well as existing protections;
+older versions are protected conservatively. A current render can be pruned and
+regenerated with matching PCM. The renderer also passes the version snapshot's
+seed to SFZ hosting (optional Python keyword), rather than reading the live
+song's seed during re-render. Candidate fingerprints ignore reporting/history
+changes, so no-op regrids leave retained candidates choosable.

@@ -23,6 +23,7 @@ newest ``PREVIEWS_KEPT`` loose previews (``cache/previews/render-*.wav``,
 from __future__ import annotations
 
 import contextlib
+import json
 import os
 import shutil
 import time
@@ -126,7 +127,18 @@ def plan(project: Project, keep_latest: int = 5) -> tuple[dict[str, list[str]], 
             keep(version, "not in git (cannot be re-rendered)")
             continue
         try:
-            unverified = unverified_reproducibility(song_at(project, version))
+            from ..render.reproducibility import render_signature
+
+            song = song_at(project, version)
+            meta = json.loads(project.path(f"renders/{version}/meta.json").read_text("utf-8"))
+            signature = meta.get("render_signature")
+            if not signature:
+                keep(version, "render provenance unavailable (older renderer)")
+                continue
+            if signature != render_signature(project, song):
+                keep(version, "renderer, grid or input content changed")
+                continue
+            unverified = unverified_reproducibility(song)
         except Exception:  # noqa: BLE001 - unreadable song: never delete its audio
             unverified = ["?"]
         if unverified:

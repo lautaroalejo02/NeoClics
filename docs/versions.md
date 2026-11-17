@@ -1,6 +1,14 @@
 # Versions (WP5)
 
-Every render is a **version**: cheap to create, compare, discard and restore.
+Every saved render is a **version**: cheap to create, compare, discard and restore.
+WP15: `render(draft=true, range_bars?, analyze?)` instead writes a disposable
+`renders/d-<12 hex>/` snapshot, audio and metadata without allocating a version,
+commit or tag. It appears under drafts in `/project` and in the listening UI.
+Ears is opt-in (`analyze=true`, or later `ears.analyze(version=<draft_id>)`).
+Drafts never enter version history, parentage or A/B; save an actual version
+with a normal `render` when ready. Ordinary `preview` output is also listed
+for listening. `versions.prune` only prunes `vNNN` history audio and its
+documented caches; it does not delete drafts automatically.
 This is how it works and what the four tools (`versions.list`, `versions.get`,
 `versions.diff`, `versions.restore`) promise. Binding contract text lives in
 [`contracts.md`](contracts.md) ("Project = its own git repo"); decisions in
@@ -298,8 +306,10 @@ the version (rating, comment, chop choice, either side of an A/B) with a
 timestamp after the newest version's creation (the agent hasn't answered it
 with a new version yet; Muestra can't know which `feedback.read` was the
 agent's); both sides of the last 10 A/B choices; the base (parent of the
-next render); versions that can't be re-rendered bit-exactly (no tag, or
-plugin presets outside the curated aliases/SFZ). Cache GC: `cache/render`
+next render); versions that can't be re-rendered bit-exactly (no tag,
+missing/changed `render_signature`, or plugin presets outside the curated
+aliases/SFZ). WP15 signatures protect legacy audio when renderer dependencies,
+effective grid or referenced file contents changed. Cache GC: `cache/render`
 entries not used by the newest render (cache hits now touch their file),
 interrupted `*.tmp`, and all but the newest 5 loose previews / draft
 renders. Never touched: `sources/`, `cache/stems/`, `cache/analysis/`,
