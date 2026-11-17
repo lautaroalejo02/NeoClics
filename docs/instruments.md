@@ -196,8 +196,8 @@ avoid octave-naming conventions in older sample packs. Sustain is a percentage.
 Loop end and sample end are inclusive. Modes: no_loop, one_shot (ignores note
 off), loop_continuous, loop_sustain. Loops must have explicit points; the setup
 script extracts the Rhodes' original embedded points. Pitch conversion uses
-polyphase sinc resampling with a Kaiser-12 window and rational rates bounded
-to denominator 4096. Tests check alias rejection, zones, envelopes, loops,
+polyphase sinc resampling with a 64-taps-per-rate Kaiser-12 FIR and rational
+rates bounded to denominator 4096. Tests check alias rejection, zones, envelopes, loops,
 seeded round robin, stereo, tuning and release. A 1 ms attack is the default
 when unspecified to suppress onset clicks; an explicit zero attack is honored.
 
@@ -279,12 +279,21 @@ Python API, only in the child process; tests cover it against **0.9.26**.
 
 16 bars, 120 BPM, 48 kHz, 64 bass notes, 1,536,000 stereo frames:
 
-- Surge synth-bass: **4.33 s end to end**, including fresh process/plugin startup.
-- Recorded finger-bass: **0.52 s end to end**, including map/sample reads.
+- Surge synth-bass: **4.09 s end to end**, including fresh process/plugin startup.
+- Recorded finger-bass: **0.61 s end to end**, including map/sample reads.
 - A warm native instance took about **0.50 s** for DSP and transfer alone.
 
 These are wall times on the busy Windows laptop, not a hard performance limit.
 Separate measurement runs varied with other agents' CPU activity.
+
+Final verification on this Windows worktree: `uv run pytest` **133 passed**
+(63.07 s), including 11 native-plugin tests and two installed-sample tests.
+`uv run pytest -m "not real_plugin"`: **122 passed, 11 deselected** (46.11 s).
+Ruff lint passes; `uv run ruff format --check` reports **81 files already
+formatted**. The external-data-independent subset excludes both real_plugin
+and real_samples: **120 passed, 13 deselected** (37.83 s). Missing installations
+also skip those optional tests with
+explicit setup instructions during an ordinary default test run.
 
 ## macOS and integration notes
 

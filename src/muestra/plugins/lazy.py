@@ -1,4 +1,4 @@
-"""Avoid Pedalboard eagerly measuring ranges for every one of Surge's 1200 params.
+"""Avoid Pedalboard eagerly measuring ranges for every one of Surge's 2,855 params.
 
 The native DSP host is unchanged. Only requested parameters get Pedalboard's
 native-unit conversion wrapper. Keep this adapter covered when upgrading
