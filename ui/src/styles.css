@@ -724,6 +724,14 @@ button.pill:hover {
   top: auto;
   bottom: 0;
   color: var(--warn);
+  /* the Ears panel's .alarm card rule also matches this marker: undo it,
+     or the marker becomes a full-width bar that overflows the page */
+  width: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  grid-template-columns: none;
 }
 
 .marker.alarm.error {
