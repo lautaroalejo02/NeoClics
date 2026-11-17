@@ -71,9 +71,12 @@ def test_cli_project_workflow_flags_stdin_and_errors(tmp_path):
     assert nearest.returncode == 0
     from_env = cli("song", "get", env={"MUESTRA_PROJECT": str(root)}, cwd=tmp_path)
     assert from_env.returncode == 0
-    stub = cli("render", "--project", root, "--range-bars", "[1,3]", "--no-stems")
-    assert stub.returncode != 0
-    assert json.loads(stub.stdout)["errors"][0]["code"] == "not_implemented"
+    # The renderer is integrated now: a real render through the CLI succeeds.
+    rendered = cli("render", "--project", root, "--range-bars", "[1,3]", "--no-stems")
+    assert rendered.returncode == 0, rendered.stdout
+    assert json.loads(rendered.stdout)["ok"]
+    missing = cli("versions", "get", "--project", root, "--version", "v999")
+    assert missing.returncode != 0 and not json.loads(missing.stdout)["ok"]
     bad = cli("feedback", "append", "--project", root, "--params-json", "[]")
     assert bad.returncode != 0 and not json.loads(bad.stdout)["ok"]
     with (root / "song.yaml").open("a", encoding="utf-8") as file:
