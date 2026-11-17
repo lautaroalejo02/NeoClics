@@ -249,7 +249,7 @@ def test_an_empty_first_root_does_not_hide_the_real_library_kits(tmp_path):
 @pytest.mark.parametrize("name", KIT_NAMES)
 def test_closed_and_open_hats_never_hit_the_same_step(name):
     for pname, spec in bundled().kits[name].patterns.items():
-        ch, oh = spec.steps.get("chat"), spec.steps.get("ohat")
+        ch, oh = (spec.steps.get(k, "").replace(" ", "") for k in ("chat", "ohat"))
         if not ch or not oh:
             continue
         both = [i for i, (a, b) in enumerate(zip(ch, oh, strict=True)) if a != "." and b != "."]
