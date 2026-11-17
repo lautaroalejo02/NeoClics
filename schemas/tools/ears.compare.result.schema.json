@@ -1,0 +1,245 @@
+{
+  "$defs": {
+    "AlarmRef": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warn",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "AlarmRef",
+      "type": "object"
+    },
+    "MetricsDelta": {
+      "additionalProperties": false,
+      "description": "Difference between two versions' metrics (b relative to a).",
+      "properties": {
+        "alarms_fixed": {
+          "items": {
+            "$ref": "#/$defs/AlarmRef"
+          },
+          "title": "Alarms Fixed",
+          "type": "array"
+        },
+        "alarms_introduced": {
+          "items": {
+            "$ref": "#/$defs/AlarmRef"
+          },
+          "title": "Alarms Introduced",
+          "type": "array"
+        },
+        "alarms_kept": {
+          "items": {
+            "$ref": "#/$defs/AlarmRef"
+          },
+          "title": "Alarms Kept",
+          "type": "array"
+        },
+        "brightness": {
+          "anyOf": [
+            {
+              "enum": [
+                "brighter",
+                "darker",
+                "same"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Brightness"
+        },
+        "high_delta_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Change of the 4-20 kHz share of the mix, dB.",
+          "title": "High Delta Db"
+        },
+        "loudness": {
+          "anyOf": [
+            {
+              "enum": [
+                "louder",
+                "quieter",
+                "same"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loudness"
+        },
+        "low_delta_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Change of the 20-250 Hz share of the mix, dB.",
+          "title": "Low Delta Db"
+        },
+        "low_end": {
+          "anyOf": [
+            {
+              "enum": [
+                "heavier",
+                "lighter",
+                "same"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Low End"
+        },
+        "lufs_delta": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "b - a, integrated LUFS.",
+          "title": "Lufs Delta"
+        },
+        "notes": {
+          "description": "Short Spanish notes.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Notes",
+          "type": "array"
+        },
+        "plr_delta_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Plr Delta Db"
+        },
+        "track_level_delta_db": {
+          "description": "Per track stem RMS change, dB.",
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "type": "number"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Track Level Delta Db",
+          "type": "object"
+        },
+        "true_peak_delta_db": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "True Peak Delta Db"
+        },
+        "version_a": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version A",
+          "type": "string"
+        },
+        "version_b": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version B",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version_a",
+        "version_b"
+      ],
+      "title": "MetricsDelta",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "delta": {
+      "$ref": "#/$defs/MetricsDelta"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    }
+  },
+  "required": [
+    "delta"
+  ],
+  "title": "EarsCompareResult",
+  "type": "object"
+}

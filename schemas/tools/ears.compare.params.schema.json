@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "reanalyze": {
+      "default": false,
+      "description": "Recompute both metrics.json instead of reusing them.",
+      "title": "Reanalyze",
+      "type": "boolean"
+    },
+    "version_a": {
+      "description": "Base version, e.g. 'v001'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Version A",
+      "type": "string"
+    },
+    "version_b": {
+      "description": "Version compared against the base, e.g. 'v002'.",
+      "pattern": "^v\\d{3,}$",
+      "title": "Version B",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project",
+    "version_a",
+    "version_b"
+  ],
+  "title": "EarsCompareParams",
+  "type": "object"
+}

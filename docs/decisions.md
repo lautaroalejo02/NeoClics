@@ -538,3 +538,75 @@ index is unchanged):
   manifest, in `library.kits` output and in `docs/library.md`).
 - `library.search` treats `bpm`/`key` as hard filters, so they only match
   loops/phrases; the result hint says so when a filtered search is empty.
+
+## 2026-11-17 — WP6: ears (objective audio metrics)
+
+Contract changes are **additive only**: every pre-existing field of
+`metrics.json` keeps its name, type and meaning, and every new field has
+a default, so older files still validate. Methods, thresholds and
+detection limits are in `docs/ears.md`.
+
+1. **metrics.json extended** (`src/muestra/schemas/metrics.py`):
+   - `Loudness` + `sample_peak_dbfs`, `short_term_max_lufs`, `lra_lu`,
+     `target_lufs`, `target_delta_lu`, `plr_db`, `crest_factor_db`.
+     `clipping` now means "flat-topped full-scale runs", not "any sample
+     at full scale"; `clipped_samples` still counts samples >= 0.9999.
+   - `SpectralReport` + seven nested detail bands (`DETAIL_BAND_EDGES_HZ`:
+     sub/bass/low_mid/mid/high_mid/presence/air, nesting exactly inside
+     the three fixed bands), `mix_detail_db` (share of total power),
+     `tracks_detail_db`, the `reference` used and `deviation_db`.
+     The fixed three bands are unchanged.
+   - `LowEndMasking` + `kick`, per-track `pairs`, per-hit `collisions`
+     (bar/beat) and `sidechain` (measured dip depth + recovery per
+     sidechain fx).
+   - `TrackAlignment` + `basis`, `median_offset_ms`, `mad_ms`,
+     `p90_abs_offset_ms`, `drift_ms`, `pulse_share`,
+     `offbeat_offset_ms`, `histogram_ms`, `flagged`, per-instance
+     `clips`; `AlignmentReport` + `lanes` (keyed `<track>.<lane>`).
+   - `TonalReport` + `compatible`, `source`, per-track `tracks`,
+     `detune` (expected shift from snapshot + analysis vs measured
+     tuning), `bass_vs_sample`.
+   - `ClickEvent` + `bar`, `beat`, `edge`, `clip`, `chop`, `ratio`,
+     `level_db`.
+   - New `technical` (DC, stereo/low-band correlation, mono loss,
+     per-track levels, silent/inaudible tracks), `summary` (compact
+     Spanish text for inline use), `skipped`, `analysis_time_s`,
+     `ears_version`.
+   - `Alarm` + `bar`, `beat`, `lane`, `clip`, `chop`, `value`,
+     `threshold`, `unit`, `count`, `where[]`, `fix`. `message` is a
+     one-line Spanish explanation; `fix` a concrete song.yaml change
+     using the automation-target path grammar.
+   - New `MetricsDelta` / `AlarmRef` for `ears.compare`.
+2. **Severity vocabulary kept** as `info | warn | error` (no rename);
+   `error` is the "problem" level of the WP6 brief.
+3. **New optional project file `ears.toml`** (project root,
+   git-versioned): `[spectral]` picks or defines the reference tilt,
+   `[thresholds]` overrides any `muestra.ears.config.Thresholds` field.
+   Unknown keys are errors. `muestra.toml` was not touched (its model
+   forbids unknown tables).
+4. **Tools:** `ears.analyze` result gains `summary`; new readonly-ish
+   `ears.compare(version_a, version_b, reanalyze=False)` returning a
+   `MetricsDelta` (it writes a missing `metrics.json`, which is derived
+   data). Seam for WP5/UI: `muestra.ears.core.compare(project, a, b)`.
+   **Suggestion for WP2:** the `render` tool should return
+   `metrics.summary` inline (a handful of lines) rather than the full
+   `Metrics` model, which is large.
+5. **No new dependency.** BS.1770-4/EBU 3342 loudness is implemented
+   in `muestra.ears.dsp` and verified against the EBU Tech 3341/3342
+   reference signals; the `ears` dependency group stays empty (the
+   earlier partial work had added pyloudnorm; removed).
+6. **Sidechain verification needs the chop's source stem** in
+   `cache/stems/` (+ `analysis.json`): the stem is compared with the
+   un-processed chop mapped through its warp. Without it the check is
+   skipped and reported in `metrics.skipped` (no guess, no alarm).
+7. **Timeline assumptions** where the contract is silent (to confirm
+   with WP2): a pattern's `bars`-long tiles are anchored at the track's
+   `at_bar`; clip instances outside the track's `at_bar`/`until_bar`
+   window are silent; a render always starts on a bar line
+   (`range_bars` are whole bars).
+8. **Shared test touched:** `tests/test_registry.py::test_run_tool_not_implemented`
+   used `ears.analyze` as its example stub; it now swaps a stub into the
+   registry with `monkeypatch`, so it no longer depends on which WP has
+   shipped.
+9. **Style similarity** (CLAP/MERT) is a documented hook only
+   (`muestra.ears.style.register`); `style_similarity` stays `null`.
