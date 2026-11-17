@@ -134,7 +134,15 @@ class Sound:
 
 
 def song_text(
-    bpm: float, key: str, chop: dict, sound: Sound, *, bass: str, pitch=0, depth=0.5
+    bpm: float,
+    key: str,
+    chop: dict,
+    sound: Sound,
+    *,
+    bass: str,
+    pitch=0,
+    depth=0.5,
+    title: str = "integration",
 ) -> str:
     lanes = {"kick": "x...x...x...x...", "clap": "....x.......x...", "ohat": "..x...x...x...x."}
     lane_lines = "\n".join(
@@ -167,7 +175,7 @@ def song_text(
     return f"""schema_version: 0
 # written by the agent (integration test)
 meta:
-  title: integration
+  title: {title}
   bpm: {bpm:g}
   key: {key}
   length_bars: 16
@@ -304,7 +312,10 @@ class Scenario:
             "start_downbeat": chosen["start_downbeat"],
             "length_beats": chosen["length_beats"],
         }
-        self.edit("write song.yaml", song_text(bpm, key, chop, self.sound, bass=self.sound.bass))
+        self.edit(
+            "write song.yaml",
+            song_text(bpm, key, chop, self.sound, bass=self.sound.bass, title=self.name),
+        )
         valid = self.run("song.validate", "song.validate", {})
         assert valid["valid"], valid["issues"]
         v1 = self.run(
@@ -316,7 +327,9 @@ class Scenario:
                 "agent": "integration-test",
             },
         )
-        edited = song_text(bpm, key, chop, self.sound, bass=self.sound.bass_v2, pitch=1, depth=0.8)
+        edited = song_text(
+            bpm, key, chop, self.sound, bass=self.sound.bass_v2, pitch=1, depth=0.8, title=self.name
+        )
         self.edit("edit (pitch+1, sidechain, bass)", edited)
         v2 = self.run(
             "render v002",
