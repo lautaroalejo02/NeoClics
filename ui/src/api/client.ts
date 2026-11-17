@@ -159,6 +159,28 @@ export class MuestraClient {
     return tr.data as T;
   }
 
+  /** Start a long_running tool (render): POST answers 202 {job_id}; progress
+   *  arrives as job.updated events. Returns the job id. */
+  async startJob(mcpName: string, params: Record<string, unknown> = {}): Promise<string> {
+    const body: Record<string, unknown> = { ...params };
+    if (this.project && !("project" in body)) body.project = this.project;
+    let res: Response;
+    try {
+      res = await this.fetchImpl(this.url(`/tools/${mcpName}`), {
+        method: "POST",
+        headers: this.headers({ "content-type": "application/json" }),
+        body: JSON.stringify(body),
+      });
+    } catch (e) {
+      throw new ApiError(`${mcpName}: sin conexión con la API (${String(e)})`, null);
+    }
+    this.checkAuth(res);
+    const data = (await res.json().catch(() => null)) as { job_id?: string; ok?: boolean; errors?: ToolResult["errors"]; hint?: string } | null;
+    if (res.status === 202 && data?.job_id) return data.job_id;
+    if (data && data.ok === false) throw new ApiError(data.errors?.map((e) => e.message).join("; ") || data.hint || `${mcpName} falló`, res.status, data.errors ?? []);
+    throw new ApiError(`${mcpName}: HTTP ${res.status}`, res.status);
+  }
+
   /** GET JSON; null on 404 (optional files/endpoints). */
   private async getJson<T>(path: string): Promise<T | null> {
     const res = await this.fetchImpl(this.url(path), { headers: this.headers() });

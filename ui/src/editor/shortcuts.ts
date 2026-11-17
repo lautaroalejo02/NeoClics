@@ -1,0 +1,25 @@
+// Keyboard help of the arrangement editor (Spanish).
+
+export const EDITOR_SHORTCUTS: [string[], string][] = [
+  [["Espacio"], "Play / pausa (suena el arreglo, no hace falta renderizar)"],
+  [["Clic"], "En un casillero vacío: agregar golpe · en un golpe: sacarlo"],
+  [["⇧ Clic", "arrastrar"], "Seleccionar (golpes, clips, notas); en el celular: mantener apretado"],
+  [["Arrastrar"], "Mover; bordes del clip: recortar (o estirar con E); golpe hacia arriba/abajo: fuerza"],
+  [["Alt"], "Sin imán a la grilla mientras arrastrás o agregás (golpe suelto)"],
+  [["Doble clic"], "Piano roll: nota nueva · automatización: punto nuevo · clip: todo el clip"],
+  [["S"], "Cortar el clip en el cursor de reproducción"],
+  [["Ctrl D"], "Duplicar"],
+  [["Supr", "⌫"], "Borrar (en un clip repetido: silencia esa repetición)"],
+  [["0"], "Silenciar / volver a hacer sonar"],
+  [["←", "→"], "Correr la selección un paso de grilla (⇧ = un compás)"],
+  [["↑", "↓"], "Notas: subir/bajar un semitono (⇧ = octava) · golpes: fuerza"],
+  [["Ctrl C", "Ctrl V"], "Copiar / pegar en el cursor"],
+  [["Ctrl Z", "Ctrl Y"], "Deshacer / rehacer"],
+  [["E"], "Modo estirar (el borde derecho cambia el largo sin cortar)"],
+  [["F"], "Escuchar el render final del estado actual (borrador) ⇄ vista previa"],
+  [["P"], "Pedile al agente algo sobre lo seleccionado"],
+  [["L"], "Loop on/off (arrastrá sobre la regla para elegir compases)"],
+  [["+", "−"], "Zoom (Ctrl + rueda también)"],
+  [["Esc"], "Deseleccionar"],
+  [["?"], "Esta ayuda"],
+];

@@ -70,6 +70,7 @@ _TOOL_PACKAGES = (
     "versions",
     "feedback",
     "ears",
+    "editor",
 )
 
 

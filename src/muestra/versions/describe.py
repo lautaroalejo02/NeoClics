@@ -939,6 +939,10 @@ class _Describer:
 
     # -- clips ---------------------------------------------------------------------------
 
+    def _chop_len(self, c: dict) -> float | None:
+        chop = next((x for x in self.db.get("chops", []) if x.get("id") == c.get("chop")), None)
+        return chop.get("length_beats") if chop else None
+
     @staticmethod
     def _clip_what(c: dict) -> str:
         return f"el chop {c['chop']}" if c.get("chop") else f"el sample {_base(c.get('sample'))}"
@@ -991,8 +995,12 @@ class _Describer:
                     f"El clip {_del(what)} {_del(np)} ahora se repite {_n(vb)} {_plural(_f(vb), 'vez', 'veces')} (antes {_n(va)})"
                 )
             elif k == "length_beats":
-                word = "Alargué" if _f(vb) > _f(va) else "Acorté"
-                out.append(f"{word} el clip {_del(what)} {_del(np)} de {_n(va)} a {_n(vb)} beats")
+                full = self._chop_len(y)
+                va_, vb_ = (full if va is None else va), (full if vb is None else vb)
+                word = "Alargué" if _f(vb_) > _f(va_) else "Acorté"
+                out.append(f"{word} el clip {_del(what)} {_del(np)} de {_n(va_)} a {_n(vb_)} beats")
+            elif k in _CLIP_WP16:
+                out += _clip_wp16(k, va, vb, what, np)
             elif k in ("chop", "sample"):
                 out.append(
                     f"El clip del compás {y['at_bar']} {_del(np)} ahora usa {self._clip_what(y)} "
@@ -1046,6 +1054,8 @@ class _Describer:
                 out.append(f"Saqué {_lane_in(lane, np)}")
             elif not same(x, y):
                 out += self._lane_change(tid, np, at_bar, lane, x, y, spp_a, spp_b)
+                out += _override_change(lane, np, at_bar, a, b, x, y)
+        out += _free_hits_change(np, a.get("hits") or [], b.get("hits") or [])
         return out
 
     def _lane_change(
@@ -1073,7 +1083,7 @@ class _Describer:
                 out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_in(lane, np)} {_n(abs(d))} dB")
         if not same(x.get("pan"), y.get("pan")):
             out.append(f"Paneé {_lane_in(lane, np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})")
-        for k in sorted((set(x) | set(y)) - {"steps", "sample", "gain_db", "pan"}):
+        for k in sorted((set(x) | set(y)) - {"steps", "sample", "gain_db", "pan", "overrides"}):
             if not same(x.get(k), y.get(k)):
                 out.append(f"Cambié {k} de {_lane_in(lane, np)} de {_n(x.get(k))} a {_n(y.get(k))}")
         return out
@@ -1394,3 +1404,191 @@ def musical_summary(sentences: list[str], extra: list[str] | None = None) -> str
     if not parts:
         return "Sin cambios musicales."
     return ". ".join(parts) + "."
+
+
+# ---------------------------------------------------------------------------
+# WP16: per-bar lane overrides, free hits, clip pass overrides
+# ---------------------------------------------------------------------------
+
+_ORDINAL_BEAT = {1: "primer", 2: "segundo", 3: "tercer", 4: "cuarto"}
+
+
+def _beat_pos(pos: float) -> str:
+    """'el tercer tiempo', "el 'y' del 2" (pos = 0-based beat inside the bar)."""
+    beat = int(pos + _EPS) + 1
+    frac = round(pos - int(pos + _EPS), 6)
+    if abs(frac) < _EPS:
+        return f"el {_ORDINAL_BEAT[beat]} tiempo" if beat in _ORDINAL_BEAT else f"el tiempo {beat}"
+    return _step_pos(pos)
+
+
+def _positions_text(positions: list[float]) -> str:
+    whole = [p for p in positions if abs(p - round(p)) < _EPS]
+    if len(positions) > 1 and len(whole) == len(positions):
+        beats = sorted(int(round(p)) + 1 for p in positions)
+        return "los tiempos " + _join([str(b) for b in beats])
+    return _join([_beat_pos(p) for p in positions])
+
+
+def _bar_velocities(pattern: dict, lane: dict, bar: int, at_bar: int) -> list:
+    over = (lane.get("overrides") or {}).get(bar, (lane.get("overrides") or {}).get(str(bar)))
+    spp = pattern.get("steps_per_bar", 16)
+    if over is not None:
+        return parse_steps(over)
+    vel = parse_steps(lane.get("steps") or "") or [None] * (spp * pattern.get("bars", 1))
+    tile = (bar - at_bar) % max(1, pattern.get("bars", 1))
+    return vel[tile * spp : (tile + 1) * spp]
+
+
+def _override_change(
+    lane: str, np: str, at_bar: int, pa: dict, pb: dict, x: dict, y: dict
+) -> list[str]:
+    """Sentences for single-bar exceptions: 'Saqué el bombo del tercer tiempo del compás 7'."""
+    oa = {int(k): v for k, v in (x.get("overrides") or {}).items()}
+    ob = {int(k): v for k, v in (y.get("overrides") or {}).items()}
+    bars = sorted(b for b in set(oa) | set(ob) if oa.get(b) != ob.get(b))
+    if not bars or pa.get("steps_per_bar", 16) != pb.get("steps_per_bar", 16):
+        return []
+    spp = pb.get("steps_per_bar", 16)
+    lane_np = _lane_in(lane, np)
+    groups: dict[tuple, list[int]] = {}
+    for bar in bars:
+        va = _bar_velocities(pa, x, bar, at_bar)
+        vb = _bar_velocities(pb, y, bar, at_bar)
+        rem = tuple(
+            i * BEATS_PER_BAR / spp
+            for i, (u, v) in enumerate(zip(va, vb, strict=False))
+            if u is not None and v is None
+        )
+        add = tuple(
+            i * BEATS_PER_BAR / spp
+            for i, (u, v) in enumerate(zip(va, vb, strict=False))
+            if u is None and v is not None
+        )
+        loud = tuple(
+            i * BEATS_PER_BAR / spp
+            for i, (u, v) in enumerate(zip(va, vb, strict=False))
+            if u is not None and v is not None and v > u + _EPS
+        )
+        soft = tuple(
+            i * BEATS_PER_BAR / spp
+            for i, (u, v) in enumerate(zip(va, vb, strict=False))
+            if u is not None and v is not None and v < u - _EPS
+        )
+        if rem or add or loud or soft:
+            groups.setdefault((rem, add, loud, soft), []).append(bar)
+    if len(groups) > 4:
+        return [f"Edité a mano {lane_np} en {_bar_list(bars)}"]
+    out: list[str] = []
+    for (rem, add, loud, soft), where_bars in groups.items():
+        where = _bar_list(where_bars)
+        acts: list[str] = []
+        if rem:
+            n = len(rem)
+            golpe = "el golpe" if n == 1 else "los golpes"
+            acts.append(f"saqué {golpe} {_del(_positions_text(list(rem)))}")
+        if add:
+            n = len(add)
+            acts.append(
+                ("agregué un golpe en " if n == 1 else "agregué golpes en ")
+                + _positions_text(list(add))
+            )
+        if loud:
+            acts.append("golpes más fuertes en " + _positions_text(list(loud)))
+        if soft:
+            acts.append("golpes más suaves en " + _positions_text(list(soft)))
+        if rem and not (add or loud or soft):
+            out.append(f"Saqué {lane_np} {_del(_positions_text(list(rem)))} {_del(where)}")
+        else:
+            out.append(f"En {where}, {lane_np}: {'; '.join(acts)}")
+    return out
+
+
+def _hit_key(h: dict) -> tuple:
+    return (h.get("lane"), round(_f(h.get("beat")), 6))
+
+
+def _free_hits_change(np: str, a: list[dict], b: list[dict]) -> list[str]:
+    """Free-timed hits (pattern.hits): grouped by lane, with their bars."""
+    from .diff import HITS
+
+    al = align_items(a, b, HITS)
+    out: list[str] = []
+    by: dict[tuple[str, str], list[int]] = {}
+    for i in al.added:
+        by.setdefault(("add", b[i]["lane"]), []).append(_bar_of(_f(b[i]["beat"])))
+    for i in al.removed:
+        by.setdefault(("rem", a[i]["lane"]), []).append(_bar_of(_f(a[i]["beat"])))
+    for ia, ib in al.modified(a, b):
+        x, y = a[ia], b[ib]
+        kind = "moved" if not same(x.get("beat"), y.get("beat")) else "edit"
+        by.setdefault((kind, y["lane"]), []).append(_bar_of(_f(y["beat"])))
+    for (kind, lane), bars in by.items():
+        n = len(bars)
+        golpes = f"{n} {_plural(n, 'golpe suelto', 'golpes sueltos')}"
+        where = _bars_text(min(bars), max(bars))
+        lane_np = _lane_in(lane, np)
+        if kind == "add":
+            out.append(f"Agregué {golpes} {_del(lane_np)} en {where}")
+        elif kind == "rem":
+            out.append(f"Saqué {golpes} {_del(lane_np)} {_del(where)}")
+        elif kind == "moved":
+            out.append(f"Moví {golpes} {_del(lane_np)} en {where}")
+        else:
+            out.append(f"Cambié la dinámica de {golpes} {_del(lane_np)} en {where}")
+    return out
+
+
+_CLIP_WP16 = {
+    "instances",
+    "trim_start_beats",
+    "stretch",
+    "gain_db",
+    "reverse",
+    "fade_in_ms",
+    "fade_out_ms",
+}
+
+
+def _clip_wp16(k: str, va: Any, vb: Any, what: str, np: str) -> list[str]:
+    clip = f"el clip {_del(what)} {_del(np)}"
+    if k == "gain_db":
+        d = _f(vb) - _f(va)
+        return [f"{'Subí' if d > 0 else 'Bajé'} {clip} {_n(abs(d))} dB"]
+    if k == "reverse":
+        return [
+            f"Di vuelta {clip} (ahora suena al revés)"
+            if vb
+            else f"{_cap(clip)} vuelve a sonar al derecho"
+        ]
+    if k == "stretch":
+        return [
+            f"Estiré {clip} ×{_n(vb)} sin cambiar su altura (antes ×{_n(va if va is not None else 1)})"
+        ]
+    if k == "trim_start_beats":
+        d = _f(vb) - _f(va)
+        word = "más adentro" if d > 0 else "antes"
+        return [f"Recorté el inicio {_del(clip)}: arranca {_beats(abs(d))} {word} en el material"]
+    if k in ("fade_in_ms", "fade_out_ms"):
+        kind = "fade-in" if k == "fade_in_ms" else "fade-out"
+        if vb is None:
+            return [f"Saqué el {kind} {_del(clip)}"]
+        return [f"Le puse un {kind} de {_n(vb)} ms {_al(clip)}"]
+    # instances: per pass
+    ia = {int(x): v for x, v in (va or {}).items()}
+    ib = {int(x): v for x, v in (vb or {}).items()}
+    out: list[str] = []
+    for n in sorted(set(ia) | set(ib)):
+        x, y = ia.get(n) or {}, ib.get(n) or {}
+        rep = f"la repetición {n} {_del(clip)}"
+        if bool(x.get("mute")) != bool(y.get("mute")):
+            out.append(f"{'Muteé' if y.get('mute') else 'Desmuteé'} {rep}")
+        if not same(_f(x.get("gain_db")), _f(y.get("gain_db"))):
+            d = _f(y.get("gain_db")) - _f(x.get("gain_db"))
+            out.append(f"{'Subí' if d > 0 else 'Bajé'} {rep} {_n(abs(d))} dB")
+        if not same(_f(x.get("pitch_semitones")), _f(y.get("pitch_semitones"))):
+            d = _f(y.get("pitch_semitones")) - _f(x.get("pitch_semitones"))
+            out.append(f"{'Subí' if d > 0 else 'Bajé'} {rep} {_semitones(d)}")
+        if bool(x.get("reverse")) != bool(y.get("reverse")):
+            out.append(f"Di vuelta {rep}" if y.get("reverse") else f"{_cap(rep)} vuelve al derecho")
+    return out

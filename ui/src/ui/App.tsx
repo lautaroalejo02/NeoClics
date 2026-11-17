@@ -9,6 +9,8 @@ import { FeedbackPanel } from "./Feedback";
 import { MixerPanel } from "./Mixer";
 import { Player } from "./Player";
 import { VersionsPanel } from "./Versions";
+import { EditorView } from "./editor/EditorView";
+import { useEditor, useEditorMaybe } from "../editor/react";
 
 type TabId = "mixer" | "ears" | "chops" | "feedback" | "versions";
 
@@ -23,6 +25,33 @@ export function App() {
   const [help, setHelp] = useState(false);
   const [settings, setSettings] = useState(false);
   const [tab, setTab] = useState<TabId>("mixer");
+  const editor = useEditorMaybe();
+  const edStatus = useEditor((s) => s.status);
+  // The arrangement editor is the main view when the backend has it (WP16).
+  const [view, setView] = useState<"arreglo" | "escuchar">(() => {
+    try {
+      return (globalThis.localStorage?.getItem("muestra.view") as "arreglo" | "escuchar" | null) ?? "arreglo";
+    } catch {
+      return "arreglo";
+    }
+  });
+  useEffect(() => {
+    if (editor && (boot === "ready" || boot === "empty")) void editor.init();
+  }, [boot, editor]);
+  const editorOn = view === "arreglo" && edStatus !== "unsupported" && edStatus !== "off" && (boot === "ready" || boot === "empty");
+  const go = (v: "arreglo" | "escuchar") => {
+    setView(v);
+    try {
+      globalThis.localStorage?.setItem("muestra.view", v);
+    } catch {
+      /* private mode */
+    }
+    // the transport follows the view: the editor plays the working song
+    editor?.engine.setSource(v === "arreglo" && editor.state.listen === "editor" ? "editor" : "decks");
+  };
+  useEffect(() => {
+    editor?.engine.setSource(editorOn && editor.state.listen === "editor" ? "editor" : "decks");
+  }, [editorOn, editor]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -32,13 +61,14 @@ export function App() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (help || settings) return;
+      if (editorOn) return; // the editor has its own keyboard
       // Space on a focused button would click it AND toggle play: let the
       // transport win, consistently.
       if (handleKey(store, e, () => setHelp(true))) e.preventDefault();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [store, help, settings]);
+  }, [store, help, settings, editorOn]);
 
   const tabs: { id: TabId; label: string; count?: number }[] = [
     { id: "mixer", label: "Mezcla" },
@@ -50,7 +80,8 @@ export function App() {
   const current = tabs.some((t) => t.id === tab) ? tab : "mixer";
 
   let main: ReactNode;
-  if (boot === "loading") main = <BootSkeleton />;
+  if (editorOn) main = <EditorView onListen={() => go("escuchar")} />;
+  else if (boot === "loading") main = <BootSkeleton />;
   else if (boot === "error") main = <ErrorState message={bootError} />;
   else if (boot === "unauthorized") main = <UnauthorizedState />;
   else if (boot === "empty")
@@ -102,6 +133,23 @@ export function App() {
         Saltar al reproductor
       </a>
       <Header onHelp={() => setHelp(true)} onSettings={() => setSettings(true)} />
+      {edStatus !== "unsupported" && (boot === "ready" || boot === "empty") && (
+        <nav className="viewbar" aria-label="Vista">
+          <div className="seg" role="tablist">
+            <button type="button" role="tab" aria-selected={view === "arreglo"} className={`seg-btn ${view === "arreglo" ? "on" : ""}`} onClick={() => go("arreglo")} data-testid="view-arreglo">
+              Arreglo
+            </button>
+            <button type="button" role="tab" aria-selected={view !== "arreglo"} className={`seg-btn ${view !== "arreglo" ? "on" : ""}`} onClick={() => go("escuchar")} data-testid="view-escuchar">
+              Escuchar versiones
+            </button>
+          </div>
+        </nav>
+      )}
+      {editorOn ? (
+        <main className="editor-page" id="main">
+          {main}
+        </main>
+      ) : (
       <div className={`layout ${layout}`}>
         {ready && layout !== "narrow" && (
           <aside className="col side" aria-label="Historial">
@@ -117,6 +165,7 @@ export function App() {
           </aside>
         )}
       </div>
+      )}
       <Toasts />
       {help && <HelpDialog onClose={() => setHelp(false)} />}
       {settings && <SettingsDialog onClose={() => setSettings(false)} />}

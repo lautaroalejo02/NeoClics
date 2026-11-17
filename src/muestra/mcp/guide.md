@@ -15,7 +15,10 @@ traducción de comentarios) está en `skills/muestra/SKILL.md` del repo de Muest
 
 1. **Arranque, siempre:** `project_open` (ruta absoluta) → `feedback_read(cursor=<último
    next_cursor>)` → `versions_list` → `versions_get(<última>)` y leé `metrics_summary` →
-   `song_get`. Recién ahí cambiás algo. La UI: `muestra serve --project <p> --open`.
+   `song_state` (canción + "cambios sin guardar" que hizo el humano en el editor del
+   browser: son suyos, no los pises). Recién ahí cambiás algo. La UI: `muestra serve
+   --project <p> --open`. Para cambios puntuales podés usar `song_edit` (ops por ruta:
+   `{op: hit, track, lane, bar, step, velocity: null}`, `{op: set, path, value}`, ...).
 2. **Fuente:** `source_import(path)` → primero `source_analyze` sobre el mix (~20–30 s,
    sin separar): bpm, key y `reliability.regions` fiables/dudosas; no falla por compás
    irregular. Sin pulso, BPM y grid son null y los beats quedan vacíos.
@@ -53,7 +56,9 @@ traducción de comentarios) está en `skills/muestra/SKILL.md` del repo de Muest
    bien.
 8. **Presentar:** qué cambiaste, qué mediste, qué tiene que escuchar y en qué segundo.
    Nunca digas que suena bien.
-9. **Iterar:** `feedback_read`, 1-3 cambios del mismo tema por versión, `ears_compare` y
+9. **Iterar:** `feedback_read` (su `digest`: los pedidos sobre una selección del editor
+   dicen exactamente qué señaló y la op de `song_edit` que lo toca), 1-3 cambios del mismo
+   tema por versión, `ears_compare` y
    `versions_diff` para explicar; `versions_restore` si prefiere una anterior.
    `versions_prune` propone limpieza (dry-run); `dry_run=false` la ejecuta sin perder historia.
    Celular: `muestra serve --host 0.0.0.0 --project <p>` y el link completo con `?token=...`.

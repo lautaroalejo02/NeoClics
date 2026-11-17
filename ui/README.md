@@ -185,3 +185,47 @@ time readout are painted from `requestAnimationFrame` straight to the DOM.
   until then the transport says "Tocá play para activar el audio".
 
 See `API-NEEDS.md` for exactly what the UI expects from the API.
+
+## Arreglo: the arrangement editor (WP16)
+
+The default view when the server has `song.edit` (older servers and the mock
+fall back to the listening room, "Escuchar versiones"). It shows and plays the
+WORKING song (`song.yaml`), not a render:
+
+- **Timeline** (`src/ui/editor/Timeline.tsx`, drawn on one canvas by
+  `src/editor/draw.ts`; only the visible part is drawn): ruler with loop (drag
+  on it), clip passes with their waveform and repeat seams, drum step grids
+  (pattern hits pink, single-bar exceptions amber, free hits as blue
+  diamonds; height = velocity), piano roll strips (expand ▸; scale of
+  `meta.key` shaded, tonic highlighted), automation lanes ("auto"). Track
+  headers: mute (saved), solo (listening only), status dot (green = exact with
+  fx, blue = preview, amber = preparing).
+- **Editing** (`src/editor/actions.ts` → `ops.ts`): every gesture becomes
+  `song.edit` ops, applied locally at once (1-3 ms measured), then persisted
+  (bursts are batched into one call). Undo/redo replay the inverse ops; the
+  backend journal makes them byte-identical in `song.yaml`. If the agent
+  changed the same element meanwhile the edit is refused, the editor reloads
+  and says so; edits to other elements are re-applied on top.
+- **Inspector** (`Inspector.tsx`): the real parameters of the selection, with
+  units, the track's fx chain, the lane's sound with a library browser
+  (`library.search` + audition), and "Pedile al agente" (a `comment` event with
+  a structured `selection`).
+- **Source view** (`SourceView.tsx`): the source with its analysed grid,
+  reliable regions and chops; drag a region → "Crear chop" (also placed on a
+  clip track), drag a chop's edges to change it, click to audition.
+- **Audio** (`src/audio/arrangement.ts`, owned by the same `AudioEngine`, which
+  now has a second transport source `"editor"`): a look-ahead scheduler (25 ms
+  tick, 200 ms horizon) on the Web Audio clock plays the pieces from
+  `song.pieces`. An edit swaps the event list without restarting: removed
+  events already scheduled fade out in 4 ms, new ones inside the window are
+  scheduled at once, long clip passes start mid-way. Each track plays its WET
+  stem (rendered with its fx/automation, equal to the version's stem to -145 dB)
+  when it matches the song, else its dry events with filters, gain fx and an
+  approximate sidechain. Not reproduced: the master chain (compressor,
+  limiter, `target_lufs`); the mix goes through the stem-bus limiter and is
+  level-matched to the last render. `F` renders a draft of the current state
+  and plays it at the same position ("render final").
+- **One-shot path** for instant audition and the WP17 pads:
+  `engine.playOneShot(buffer, {when?, gain?, pan?, offset?, duration?})`.
+- **Measure** (`scripts/editor-measure.mjs <url> perf|fidelity|latency`) and
+  look (`scripts/editor-shots.mjs <url> <dir>`) on a real server.

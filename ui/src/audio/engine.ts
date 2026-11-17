@@ -30,6 +30,7 @@ import {
   trackUsesLanes,
 } from "./mixer";
 import { BEATS_PER_BAR, mapPositionAB, playheadAt, type Timing } from "../music/time";
+import { ArrangementPlayer, type Arrangement } from "./arrangement";
 
 export interface DeckSpec {
   version: VersionId;
@@ -50,6 +51,8 @@ export interface AbsLoop {
 
 export interface EngineSnapshot {
   audio: "idle" | "suspended" | "running" | "unsupported";
+  /** what the transport plays: rendered versions, or the editor's live arrangement */
+  source: "decks" | "editor";
   playing: boolean;
   active: VersionId | null;
   partner: VersionId | null;
@@ -280,6 +283,14 @@ export class AudioEngine {
   private volume = 0.85;
   private error: string | null = null;
 
+  // editor (WP16): the working song played from its pieces
+  private source: "decks" | "editor" = "decks";
+  private editor: ArrangementPlayer | null = null;
+  private editorOut: GainNode | null = null;
+  private editorLevel: GainNode | null = null;
+  private editorArr: Arrangement | null = null;
+  private editorLevelDb = 0;
+
   private previewSrc: AudioBufferSourceNode | null = null;
   private previewGain: GainNode | null = null;
   private previewKey: string | null = null;
@@ -317,6 +328,7 @@ export class AudioEngine {
     const prev = this.snap;
     const same =
       prev.audio === next.audio &&
+      prev.source === next.source &&
       prev.playing === next.playing &&
       prev.active === next.active &&
       prev.partner === next.partner &&
@@ -343,6 +355,7 @@ export class AudioEngine {
     else if (this.ctx) audio = this.ctx.state === "running" ? "running" : "suspended";
     return {
       audio,
+      source: this.source,
       playing: this.playing,
       active: this.active,
       partner: this.partner,
@@ -703,6 +716,7 @@ export class AudioEngine {
 
   /** Audible position (seconds into the ACTIVE version). */
   getPosition(): number {
+    if (this.source === "editor") return this.editorPosition();
     const d = this.active ? this.decks.get(this.active) : undefined;
     if (!this.playing || !d?.run || !this.ctx) return this.pausedPos;
     let t = this.ctx.currentTime;
@@ -714,6 +728,7 @@ export class AudioEngine {
   }
 
   getDuration(): number {
+    if (this.source === "editor") return this.editorArr?.duration ?? 0;
     return this.active ? this.specs.get(this.active)?.durationS ?? 0 : 0;
   }
 
@@ -729,6 +744,10 @@ export class AudioEngine {
       void this.busPromise.then(() => {
         if (!this.playing) this.play();
       });
+      return;
+    }
+    if (this.source === "editor") {
+      this.playEditor();
       return;
     }
     const d = this.active ? this.deckFor(this.active) : null;
@@ -761,6 +780,10 @@ export class AudioEngine {
   }
 
   pause(): void {
+    if (this.source === "editor") {
+      this.pauseEditor();
+      return;
+    }
     const ctx = this.ctx;
     const d = this.active ? this.decks.get(this.active) : undefined;
     if (!ctx || !this.playing) return;
@@ -784,6 +807,13 @@ export class AudioEngine {
   seek(seconds: number): void {
     const dur = this.getDuration();
     const s = Math.min(Math.max(0, seconds), dur || Number.POSITIVE_INFINITY);
+    if (this.source === "editor") {
+      this.pausedPos = s;
+      if (this.playing && this.ctx && this.editor) {
+        this.editor.start(this.ctx.currentTime + 0.006, s, this.editorLoop());
+      }
+      return;
+    }
     if (!this.playing) {
       this.pausedPos = s;
       return;
@@ -808,6 +838,13 @@ export class AudioEngine {
     const prev = this.loop;
     this.loop = loop;
     if (prev?.startBeat === loop?.startBeat && prev?.endBeat === loop?.endBeat) return;
+    if (this.source === "editor") {
+      if (this.playing && this.ctx && this.editor) {
+        const t = this.ctx.currentTime + 0.006;
+        this.editor.start(t, this.editor.position(t), this.editorLoop());
+      }
+      return;
+    }
     if (this.playing && this.ctx) {
       const d = this.active ? this.decks.get(this.active) : undefined;
       if (d?.run) this.restart(d.position(this.ctx.currentTime + SEEK_FADE_S));
@@ -1106,6 +1143,201 @@ export class AudioEngine {
       this.previewKey = null;
       this.emit();
     }
+  }
+
+  // ------------------------------------------------------------ editor (WP16)
+
+  private ensureEditor(): ArrangementPlayer | null {
+    if (this.editor) return this.editor;
+    const ctx = this.ensureCtx(48000);
+    if (!ctx || !this.master || this.busKind === null || this.busKind === "pending") return null;
+    // Same stem bus as stem mode: a look-ahead limiter at -1 dBFS so a
+    // pre-master sum never clips at the speaker; then the level match.
+    const bus = createStemBus(ctx, this.busKind);
+    this.editorOut = ctx.createGain();
+    this.editorOut.gain.value = 0;
+    this.editorLevel = ctx.createGain();
+    this.editorLevel.gain.value = 10 ** (this.editorLevelDb / 20);
+    bus.output.connect(this.editorLevel);
+    this.editorLevel.connect(this.editorOut);
+    this.editorOut.connect(this.master);
+    this.editor = new ArrangementPlayer(ctx, bus.input);
+    if (this.editorArr) this.editor.setArrangement(this.editorArr);
+    return this.editor;
+  }
+
+  /** Wait for the context + limiter bus, then build the editor player. */
+  async editorReady(sampleRate = 48000): Promise<boolean> {
+    this.ensureCtx(sampleRate);
+    await this.busPromise;
+    return !!this.ensureEditor();
+  }
+
+  /** New arrangement after any edit: takes effect without restarting playback. */
+  setArrangement(arr: Arrangement): void {
+    this.editorArr = arr;
+    this.ensureEditor()?.setArrangement(arr);
+  }
+
+  /** Editor level (dB) so the pre-master editor mix sits near the mastered render. */
+  setEditorLevel(db: number): void {
+    this.editorLevelDb = db;
+    if (this.editorLevel && this.ctx) smoothTo(this.editorLevel.gain, 10 ** (db / 20), this.ctx.currentTime);
+  }
+
+  getSource(): "decks" | "editor" {
+    return this.source;
+  }
+
+  /** Switch what the transport plays, keeping the musical position (song
+   *  seconds: decks are full renders from bar 1). */
+  setSource(src: "decks" | "editor", position?: number): void {
+    if (src === this.source) return;
+    const wasPlaying = this.playing;
+    const pos = position ?? this.getPosition();
+    if (wasPlaying) this.pause();
+    this.source = src;
+    this.pausedPos = pos;
+    if (wasPlaying) this.play();
+    this.emit();
+  }
+
+  /** bpm of the editor's song (loops are kept in absolute beats). */
+  editorBpm = 120;
+
+  private editorLoop(): { start: number; end: number } | null {
+    if (!this.loop || !this.editorArr) return null;
+    const start = Math.max(0, (this.loop.startBeat * 60) / this.editorBpm);
+    const end = Math.min(this.editorArr.duration, (this.loop.endBeat * 60) / this.editorBpm);
+    return end - start > 0.01 ? { start, end } : null;
+  }
+
+  private editorPosition(): number {
+    const ed = this.editor;
+    if (!this.playing || !ed?.playing || !this.ctx) return this.pausedPos;
+    let t = this.ctx.currentTime;
+    const ts = this.ctx.getOutputTimestamp?.();
+    if (ts?.contextTime && ts.contextTime > 0) t = ts.contextTime;
+    else t -= this.ctx.outputLatency || 0;
+    return ed.position(t);
+  }
+
+  private playEditor(): void {
+    const ctx = this.ctx;
+    if (!ctx || this.playing) return;
+    const ed = this.ensureEditor();
+    if (!ed || !this.editorArr) {
+      void this.editorReady().then((ok) => {
+        if (ok && this.source === "editor" && !this.playing && this.editorArr) this.play();
+      });
+      return;
+    }
+    this.stopPreview();
+    const now = ctx.currentTime;
+    this.decks.forEach((d) => {
+      if (d.run) {
+        this.stopRun(d, now + SEEK_FADE_S);
+        smoothTo(d.out.gain, 0, now);
+      }
+    });
+    const T = now + LOOKAHEAD_S;
+    ed.start(T, this.pausedPos, this.editorLoop());
+    holdAt(this.editorOut!.gain, now);
+    this.editorOut!.gain.setValueAtTime(0, T);
+    this.editorOut!.gain.linearRampToValueAtTime(1, T + SEEK_FADE_S);
+    this.playing = true;
+    this.emit();
+  }
+
+  private pauseEditor(): void {
+    const ctx = this.ctx;
+    const ed = this.editor;
+    if (!ctx || !this.playing || !ed) return;
+    const now = ctx.currentTime;
+    this.pausedPos = ed.position(now);
+    linearTo(this.editorOut!.gain, 0, now, SEEK_FADE_S);
+    ed.stop(now + SEEK_FADE_S + 0.002);
+    this.playing = false;
+    this.emit();
+  }
+
+  /**
+   * Low-latency one-shot: play a decoded buffer NOW (or at ctx time `when`)
+   * over whatever is playing, through the editor output. The editor's instant
+   * audition and the performance pads (WP17) use this path.
+   */
+  playOneShot(buffer: AudioBuffer, opts: { when?: number; gain?: number; pan?: number; offset?: number; duration?: number } = {}): () => void {
+    this.unlock();
+    const ed = this.ensureEditor();
+    if (!ed || !this.editorOut || !this.ctx) return () => undefined;
+    if (!this.playing || this.source !== "editor") {
+      holdAt(this.editorOut.gain, this.ctx.currentTime);
+      this.editorOut.gain.setValueAtTime(1, this.ctx.currentTime);
+    }
+    return ed.oneShot(buffer, opts);
+  }
+
+  /** Output + base latency in seconds (WP17 pads align recordings with this). */
+  outputLatency(): number {
+    return (this.ctx?.outputLatency || 0) + (this.ctx?.baseLatency || 0);
+  }
+
+  /** Decode a project audio file (editor pieces) at this context's rate. */
+  async loadBuffer(path: string, signal: AbortSignal = new AbortController().signal): Promise<AudioBuffer> {
+    return this.decode(path, signal);
+  }
+
+  /**
+   * Render the editor's arrangement OFFLINE through the same player, bus and
+   * level (tests prove an edit is audible/absent in the browser mix).
+   */
+  async renderEditorOffline(opts: { seconds?: number; from?: number; bypassBus?: boolean } = {}): Promise<{ channels: Float32Array[]; sampleRate: number }> {
+    const arr = this.editorArr;
+    if (!arr) throw new Error("No hay arreglo cargado");
+    const Off = (globalThis as { OfflineAudioContext?: typeof OfflineAudioContext }).OfflineAudioContext;
+    if (!Off) throw new Error("Este navegador no tiene OfflineAudioContext");
+    await this.editorReady();
+    const sr = this.ctx?.sampleRate ?? 48000;
+    const from = opts.from ?? 0;
+    const seconds = Math.min(opts.seconds ?? arr.duration - from, arr.duration - from);
+    const off = new Off(2, Math.max(1, Math.round(seconds * sr)), sr);
+    const level = off.createGain();
+    level.gain.value = 10 ** (this.editorLevelDb / 20);
+    level.connect(off.destination);
+    let input: AudioNode = level;
+    if (!opts.bypassBus) {
+      if (this.busKind === "worklet") await loadLimiterModule(off);
+      const bus = createStemBus(off, this.busKind === "worklet" ? "worklet" : "native");
+      bus.output.connect(level);
+      input = bus.input;
+    }
+    const player = new ArrangementPlayer(off, input);
+    player.setArrangement(arr);
+    player.start(0, from, null);
+    player.scheduleUntil(seconds + 0.01);
+    const out = await off.startRendering();
+    return { channels: [out.getChannelData(0).slice(), out.getChannelData(1).slice()], sampleRate: sr };
+  }
+
+  /** dB that level-matches a version's pre-master stem sum to its mastered mix
+   *  (the editor plays a pre-master sum too). Loads the version's stems. */
+  async stemMatchDb(version: VersionId): Promise<number | null> {
+    if (!this.specs.has(version)) return null;
+    await this.prepare(version, { stems: true });
+    const d = this.decks.get(version);
+    if (!d) return null;
+    await this.loadStems(d);
+    return d.stemMatch ? 20 * Math.log10(d.stemMatch) : null;
+  }
+
+  /** The arrangement the editor is playing (diagnostics/tests). */
+  get editorArrangement(): Arrangement | null {
+    return this.editorArr;
+  }
+
+  /** The live player (diagnostics/tests). */
+  get editorPlayer(): ArrangementPlayer | null {
+    return this.editor;
   }
 
   // ------------------------------------------------------------ misc

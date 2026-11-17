@@ -49,6 +49,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "CLIPS",
+    "HITS",
     "FX",
     "NOTES",
     "PLACEMENTS",
@@ -254,6 +255,19 @@ NOTES = Matcher(
 FX = Matcher(_fx_score, lambda f: [("type", f.get("type"))])
 
 
+def _hit_score(x: dict, y: dict) -> int | None:
+    """Free hits pair up on the same lane when they start together (velocity or
+    sample edit) or within a beat of each other (moved)."""
+    if x.get("lane") != y.get("lane"):
+        return None
+    if abs(float(x.get("beat", 0)) - float(y.get("beat", 0))) > 1 + _EPS:
+        return None
+    return _equal_fields(x, y)
+
+
+HITS = Matcher(_hit_score, lambda h: [("lane", h.get("lane"))])
+
+
 def _placement_score(x: dict, y: dict) -> int | None:
     """Phrase placements pair up when they place the same phrase or start together."""
     if x.get("phrase") != y.get("phrase") and x.get("at_bar") != y.get("at_bar"):
@@ -380,8 +394,9 @@ def _diff_aligned_list(
 
 
 def _diff_pattern(path: str, a: dict, b: dict, out: list[DiffEntry]) -> None:
-    for k in sorted((set(a) | set(b)) - {"lanes"}):
+    for k in sorted((set(a) | set(b)) - {"lanes", "hits"}):
         _walk(f"{path}.{k}", a.get(k), b.get(k), out)
+    _diff_aligned_list(f"{path}.hits", a.get("hits") or [], b.get("hits") or [], HITS, out)
     a_lanes, b_lanes = a.get("lanes") or {}, b.get("lanes") or {}
     for lane in [*b_lanes, *(k for k in a_lanes if k not in b_lanes)]:
         la, lb = a_lanes.get(lane), b_lanes.get(lane)

@@ -1,0 +1,100 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dry": {
+      "default": true,
+      "description": "Materials, one-shots and instrument dry stems.",
+      "title": "Dry",
+      "type": "boolean"
+    },
+    "instruments": {
+      "default": true,
+      "description": "With dry: also render instrument dry stems (plugin renders, slower).",
+      "title": "Instruments",
+      "type": "boolean"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "revision": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Expected song.state revision; a different current file is 'stale_revision'.",
+      "title": "Revision"
+    },
+    "samples": {
+      "description": "Extra one-shots to prepare (library:// or project paths), e.g. to audition a sound before using it.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Samples",
+      "type": "array"
+    },
+    "source": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Also export this source (its `stem`) as a playable piece for the editor's source view (16-bit, project rate).",
+      "title": "Source"
+    },
+    "stem": {
+      "default": "mix",
+      "enum": [
+        "drums",
+        "bass",
+        "vocals",
+        "other",
+        "mix"
+      ],
+      "title": "Stem",
+      "type": "string"
+    },
+    "tracks": {
+      "anyOf": [
+        {
+          "items": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+            "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only these tracks (default: all).",
+      "title": "Tracks"
+    },
+    "wet": {
+      "default": false,
+      "description": "Per-track renders with fx (seconds).",
+      "title": "Wet",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "SongPiecesParams",
+  "type": "object"
+}

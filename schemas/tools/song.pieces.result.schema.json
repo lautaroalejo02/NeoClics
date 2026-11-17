@@ -1,0 +1,290 @@
+{
+  "$defs": {
+    "Material": {
+      "additionalProperties": false,
+      "description": "Audio for clip passes: material beats [start, start + length/stretch) of the\nchop (or sample) rendered over ``length`` grid beats + ``tail_frames``.",
+      "properties": {
+        "base": {
+          "default": false,
+          "description": "The chop's own slot: any window inside serves.",
+          "title": "Base",
+          "type": "boolean"
+        },
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "clip_warp": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Clip Warp"
+        },
+        "length": {
+          "title": "Length",
+          "type": "number"
+        },
+        "piece": {
+          "title": "Piece",
+          "type": "string"
+        },
+        "pitch": {
+          "default": 0.0,
+          "title": "Pitch",
+          "type": "number"
+        },
+        "sample": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sample"
+        },
+        "start": {
+          "title": "Start",
+          "type": "number"
+        },
+        "stretch": {
+          "default": 1.0,
+          "title": "Stretch",
+          "type": "number"
+        },
+        "tail_frames": {
+          "title": "Tail Frames",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "start",
+        "length",
+        "tail_frames",
+        "piece"
+      ],
+      "title": "Material",
+      "type": "object"
+    },
+    "Piece": {
+      "additionalProperties": false,
+      "properties": {
+        "duration_s": {
+          "title": "Duration S",
+          "type": "number"
+        },
+        "frames": {
+          "title": "Frames",
+          "type": "integer"
+        },
+        "id": {
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "path": {
+          "title": "Path",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "path",
+        "kind",
+        "frames",
+        "duration_s"
+      ],
+      "title": "Piece",
+      "type": "object"
+    },
+    "TrackPieces": {
+      "additionalProperties": false,
+      "properties": {
+        "dry_stem": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dry Stem"
+        },
+        "error": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why this track's audio could not be prepared (Spanish).",
+          "title": "Error"
+        },
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "kind": {
+          "title": "Kind",
+          "type": "string"
+        },
+        "wet": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wet"
+        },
+        "wet_render_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Wet Render S"
+        }
+      },
+      "required": [
+        "id",
+        "kind"
+      ],
+      "title": "TrackPieces",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "approximations": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Approximations",
+      "type": "array"
+    },
+    "bpm": {
+      "title": "Bpm",
+      "type": "number"
+    },
+    "duration_s": {
+      "title": "Duration S",
+      "type": "number"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "frames": {
+      "title": "Frames",
+      "type": "integer"
+    },
+    "length_bars": {
+      "title": "Length Bars",
+      "type": "integer"
+    },
+    "materials": {
+      "items": {
+        "$ref": "#/$defs/Material"
+      },
+      "title": "Materials",
+      "type": "array"
+    },
+    "oneshots": {
+      "additionalProperties": {
+        "type": "string"
+      },
+      "title": "Oneshots",
+      "type": "object"
+    },
+    "pieces": {
+      "items": {
+        "$ref": "#/$defs/Piece"
+      },
+      "title": "Pieces",
+      "type": "array"
+    },
+    "render_s": {
+      "default": 0.0,
+      "title": "Render S",
+      "type": "number"
+    },
+    "revision": {
+      "title": "Revision",
+      "type": "string"
+    },
+    "sample_rate": {
+      "title": "Sample Rate",
+      "type": "integer"
+    },
+    "source_piece": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Piece id of the exported source.",
+      "title": "Source Piece"
+    },
+    "tracks": {
+      "items": {
+        "$ref": "#/$defs/TrackPieces"
+      },
+      "title": "Tracks",
+      "type": "array"
+    }
+  },
+  "required": [
+    "revision",
+    "sample_rate",
+    "bpm",
+    "length_bars",
+    "frames",
+    "duration_s"
+  ],
+  "title": "SongPiecesResult",
+  "type": "object"
+}

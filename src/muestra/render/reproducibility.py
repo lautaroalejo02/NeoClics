@@ -21,6 +21,7 @@ def render_signature(project, song) -> str:
         refs.update(c.sample for c in track.clips or [] if c.sample)
         if track.pattern:
             refs.update(lane.sample for lane in track.pattern.lanes.values())
+            refs.update(h.sample for h in track.pattern.hits if h.sample)  # WP16
         if track.midi:
             refs.add(track.midi)
         if track.instrument and track.instrument.preset:

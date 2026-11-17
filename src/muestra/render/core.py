@@ -22,10 +22,12 @@ from ..schemas.song import (
     BEATS_PER_BAR,
     Chop,
     Clip,
+    ClipPass,
     MidiNote,
     Song,
     Track,
-    parse_steps,
+    clip_passes,
+    pattern_hits,
     preserve_formants,
 )
 from .audio import CACHE_ABI, cache_read, cache_write, decode, digest, fade, fit, stretch, vinyl
@@ -265,7 +267,10 @@ def place_clips(placements, n_frames: int, lo: int, hi: int) -> tuple[np.ndarray
     start and last end of a contiguous run. When a run reaches the end of
     the song and another starts at frame 0 (inside the track window), the
     last tail wraps onto the song start: the render loops seamlessly.
+    WP16: a placement may carry ``(fade_in, fade_out)`` frames; an edge with an
+    explicit fade (not None) is never joined: it fades to/from silence.
     Returns ``(audio, wraps)``. Placement stays sample-accurate."""
+    placements = [p if len(p) == 6 else (*p, None, None) for p in placements]
     out = np.zeros((n_frames, 2), np.float32)
     order = sorted(range(len(placements)), key=lambda i: (placements[i][0], i))
     nxt: dict[int, int] = {}
@@ -274,27 +279,34 @@ def place_clips(placements, n_frames: int, lo: int, hi: int) -> tuple[np.ndarray
     for i in order:
         frame, end = placements[i][0], placements[i][1]
         waiting = open_ends.get(frame)
-        if waiting:
+        if waiting and placements[i][4] is None:
             j = waiting.pop(0)
             nxt[j], prv[i] = i, j
-        open_ends.setdefault(end, []).append(i)
+        if placements[i][5] is None:
+            open_ends.setdefault(end, []).append(i)
     wraps = False
     if lo == 0 and hi >= n_frames:
-        firsts = [i for i in order if placements[i][0] == 0 and i not in prv]
-        lasts = [i for i in order if placements[i][1] >= n_frames and i not in nxt]
+        firsts = [
+            i for i in order if placements[i][0] == 0 and i not in prv and placements[i][4] is None
+        ]
+        lasts = [
+            i
+            for i in order
+            if placements[i][1] >= n_frames and i not in nxt and placements[i][5] is None
+        ]
         if firsts and lasts:
             nxt[lasts[0]], prv[firsts[0]] = firsts[0], lasts[0]
             wraps = True
 
     def xf(j: int, i: int) -> int:
-        frame_j, end_j, audio_j, fade_j = placements[j]
+        frame_j, end_j, audio_j, fade_j = placements[j][:4]
         tail_j = len(audio_j) - (end_j - frame_j)
         return max(
             0, min(fade_j, placements[i][3], tail_j, (placements[i][1] - placements[i][0]) // 2)
         )
 
     for i in order:
-        frame, end, audio, fade_n = placements[i]
+        frame, end, audio, fade_n, fade_in, fade_out = placements[i]
         length = end - frame
         if length <= 0:
             continue
@@ -304,7 +316,7 @@ def place_clips(placements, n_frames: int, lo: int, hi: int) -> tuple[np.ndarray
             if n:
                 body[:n] *= _equal_power(n)[0][:, None]
         else:
-            n = min(fade_n, length // 2)
+            n = min(fade_n if fade_in is None else fade_in, length // 2)
             if n > 1:
                 body[:n] *= _ramp_in(n)[:, None]
         tail = None
@@ -313,7 +325,7 @@ def place_clips(placements, n_frames: int, lo: int, hi: int) -> tuple[np.ndarray
             if n:
                 tail = audio[length : length + n] * _equal_power(n)[1][:, None]
         else:
-            n = min(fade_n, length // 2)
+            n = min(fade_n if fade_out is None else fade_out, length // 2)
             if n > 1:
                 body[-n:] *= _ramp_in(n)[::-1, None]
         _add(out, body, frame, hi)
@@ -323,6 +335,75 @@ def place_clips(placements, n_frames: int, lo: int, hi: int) -> tuple[np.ndarray
             else:
                 _add(out, tail, end, hi)
     return out, wraps
+
+
+def plain_pass(clip: Clip, ps: ClipPass) -> bool:
+    """A pass that plays the clip's material exactly as WP0-WP15 did."""
+    return (
+        ps.material_start == 0
+        and ps.stretch == 1
+        and (clip.chop is None or clip.length_beats is None)
+        and ps.pitch_semitones == 0
+        and not ps.reverse
+        and ps.gain_db == 0
+        and ps.fade_in_ms is None
+        and ps.fade_out_ms is None
+    )
+
+
+def pass_audio(project: Project, song: Song, clip: Clip, ps: ClipPass, sr: int, decoded=None):
+    """``(audio_with_tail, fade_frames, fade_in, fade_out)`` for one clip pass with
+    its WP16 trim/stretch/pitch/reverse/gain/fades applied.
+
+    The material window is ``[material_start, material_start + length / stretch)``
+    beats of the chop (or sample) at project tempo. Material past the chop's end
+    is the record continuing at the same warp rate (``chop_audio``'s tail);
+    material before its start re-warps the chop extended to the left."""
+    bpm = song.meta.bpm
+    decoded = {} if decoded is None else decoded
+    material_beats = ps.length / ps.stretch
+    out_frames = beat_frame(ps.length, bpm, sr)
+    start = ps.material_start
+    if clip.chop:
+        chop = next(c for c in song.chops if c.id == clip.chop)
+        xf = xfade_frames(sr, chop.fade_ms)
+        if start < 0:
+            chop = chop.model_copy(
+                update={
+                    "start_offset_beats": chop.start_offset_beats + start,
+                    "length_beats": chop.length_beats - start,
+                }
+            )
+            start = 0.0
+        need = beat_frame(start + material_beats, bpm, sr) + math.ceil(xf / ps.stretch) + 2
+        chop_frames = beat_frame(chop.length_beats, bpm, sr)
+        material = chop_audio(project, chop, sr, bpm, max(xf, need - chop_frames))
+    else:
+        xf = xfade_frames(sr, SAMPLE_FADE_MS)
+        longer = clip.model_copy(update={"length_beats": max(material_beats + max(start, 0), 1e-6)})
+        material = _sample_clip(project, longer, song, sr, decoded, math.ceil(xf / ps.stretch) + 2)
+        if start < 0:
+            pad = np.zeros((beat_frame(-start, bpm, sr), 2), np.float32)
+            material = np.concatenate([pad, material])
+            start = 0.0
+    a = beat_frame(start, bpm, sr)
+    window = fit(material[a:], beat_frame(material_beats, bpm, sr) + math.ceil(xf / ps.stretch) + 1)
+    if ps.stretch != 1:
+        audio = stretch(window, sr, out_frames + xf, ps.pitch_semitones, False)
+    else:
+        audio = fit(window, out_frames + xf)
+        if ps.pitch_semitones:
+            audio = stretch(audio, sr, len(audio), ps.pitch_semitones, False)
+    fade_in = None if ps.fade_in_ms is None else xfade_frames(sr, ps.fade_in_ms)
+    fade_out = None if ps.fade_out_ms is None else xfade_frames(sr, ps.fade_out_ms)
+    if ps.reverse:
+        # A reversed pass has no natural continuation: it fades at both edges.
+        audio = audio[:out_frames][::-1].copy()
+        fade_in = xf if fade_in is None else fade_in
+        fade_out = xf if fade_out is None else fade_out
+    if ps.gain_db:
+        audio = audio * np.float32(10 ** (ps.gain_db / 20))
+    return np.asarray(audio, np.float32), xf, fade_in, fade_out
 
 
 def read_notes(project: Project, track: Track, song: Song | None = None) -> list[MidiNote]:
@@ -396,19 +477,28 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
         )
         if track.clips is not None:
             placements = []
-            for clip in track.clips:
-                if clip.chop and clip.chop in chops:
-                    piece, length, xf = chops[clip.chop]
+            variants: dict = {}
+            for ps in clip_passes(song, track):
+                if ps.mute:
+                    continue
+                clip = track.clips[ps.clip_index]
+                fin = fout = None
+                if plain_pass(clip, ps):
+                    if clip.chop and clip.chop in chops:
+                        piece, _, xf = chops[clip.chop]
+                    else:
+                        piece, _, xf = clip_audio(project, song, clip, sr, decoded)
+                        if clip.chop:
+                            chops[clip.chop] = piece, ps.length, xf
                 else:
-                    piece, length, xf = clip_audio(project, song, clip, sr, decoded)
-                    if clip.chop:
-                        chops[clip.chop] = piece, length, xf
-                start = (clip.at_bar - 1) * BEATS_PER_BAR + clip.offset_beats
-                for repeat in range(clip.repeat):
-                    frame = beat_frame(start + repeat * length, bpm, sr)
-                    # At awkward tempi each grid slot can differ by one frame.
-                    end = beat_frame(start + (repeat + 1) * length, bpm, sr)
-                    placements.append((frame, end, piece, xf))
+                    key = (ps.clip_index, ps.pitch_semitones, ps.reverse, ps.gain_db)
+                    if key not in variants:
+                        variants[key] = pass_audio(project, song, clip, ps, sr, decoded)
+                    piece, xf, fin, fout = variants[key]
+                # At awkward tempi each grid slot can differ by one frame.
+                frame = beat_frame(ps.start0, bpm, sr)
+                end = beat_frame(ps.end0, bpm, sr)
+                placements.append((frame, end, piece, xf, fin, fout))
             placed, wrap = place_clips(placements, n_frames, lo, hi)
             audio += placed
             if wrap:
@@ -416,33 +506,30 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
         elif track.pattern is not None:
             pattern = track.pattern
             all_events = []
-            step = BEATS_PER_BAR / pattern.steps_per_bar
+            by_lane: dict[str, list] = {name: [] for name in pattern.lanes}
+            for hit in pattern_hits(song, track):
+                by_lane[hit.lane].append(hit)
             for name, lane in pattern.lanes.items():
-                ref = (
-                    library.resolve(project, lane.sample)
-                    if lane.sample.startswith("library://")
-                    else project.resolve(lane.sample)
-                )
-                if ref not in decoded:
-                    decoded[ref] = decode(project, ref, sr)[0]
-                # One-shots retain their attacks; tiny fade-out only at file end.
-                sample = pan_gain(fade(decoded[ref], sr, 1, start=False), lane.gain_db, lane.pan)
                 lane_audio = np.zeros_like(audio)
                 hits = []
-                velocities = parse_steps(lane.steps)
-                for bar in range(track.at_bar - 1, song.meta.length_bars, pattern.bars):
-                    for index, velocity in enumerate(velocities):
-                        if velocity is None:
-                            continue
-                        beat = (
-                            bar * BEATS_PER_BAR
-                            + index * step
-                            + (pattern.swing * step / 3 if index % 2 else 0)
+                for hit in by_lane[name]:
+                    key = ("lane", hit.sample, lane.gain_db, lane.pan)
+                    if key not in decoded:
+                        ref = (
+                            library.resolve(project, hit.sample)
+                            if hit.sample.startswith("library://")
+                            else project.resolve(hit.sample)
                         )
-                        frame = beat_frame(beat, bpm, sr)
-                        if lo <= frame < hi:
-                            _add(lane_audio, sample * velocity, frame, hi)
-                            hits.append(frame)
+                        if ref not in decoded:
+                            decoded[ref] = decode(project, ref, sr)[0]
+                        # One-shots retain their attacks; tiny fade-out only at file end.
+                        decoded[key] = pan_gain(
+                            fade(decoded[ref], sr, 1, start=False), lane.gain_db, lane.pan
+                        )
+                    frame = beat_frame(hit.beat0, bpm, sr)
+                    if lo <= frame < hi:
+                        _add(lane_audio, decoded[key] * hit.velocity, frame, hi)
+                        hits.append(frame)
                 lanes[track.id, name] = lane_audio
                 lane_audio[lo:hi] = fade(lane_audio[lo:hi], sr, start=False)
                 events[track.id, name] = [] if track.mute else hits

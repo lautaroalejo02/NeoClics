@@ -60,6 +60,7 @@ __all__ = [
     "load_analysis",
     "save_analysis",
     "validate_song",
+    "validate_song_model",
     "chop_times",
 ]
 
@@ -322,6 +323,9 @@ def _check_files_exist(project: Project, song: Song) -> list[Issue]:
         if track.pattern:
             for lane, spec in track.pattern.lanes.items():
                 check_ref(spec.sample, f"tracks[{ti}].pattern.lanes.{lane}.sample")
+            for hi, hit in enumerate(track.pattern.hits):
+                if hit.sample is not None:
+                    check_ref(hit.sample, f"tracks[{ti}].pattern.hits[{hi}].sample")
         if track.midi is not None:
             check_ref(track.midi, f"tracks[{ti}].midi")
     return issues
@@ -627,6 +631,14 @@ def validate_song(
         song = load_song(project)
     except MuestraError as e:
         return e.issues
+    return validate_song_model(project, song, check_files=check_files, check_plugins=check_plugins)
+
+
+def validate_song_model(
+    project: Project, song: Song, *, check_files: bool = True, check_plugins: bool | None = None
+) -> list[Issue]:
+    """``validate_song`` for an in-memory song (the editor validates an edit
+    before writing it)."""
     issues = song.check()
     if check_files:
         issues += _check_files_exist(project, song)

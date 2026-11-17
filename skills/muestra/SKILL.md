@@ -27,7 +27,7 @@ separadores. Guardá `song.yaml` como UTF-8.
 1. `muestra doctor --project <p>` (o `project.open`): proyecto, librería indexada, plugins, ffmpeg.
 2. `feedback.read` con el último `next_cursor` que guardaste (0 si es la primera vez).
 3. `versions.list` y la métrica de la última versión (`versions.get` → `metrics_summary`).
-4. `song.get`. Recién ahí decidí qué cambiar.
+4. `song.state` (o `song.get`): la canción actual y sus cambios sin guardar. Recién ahí decidí qué cambiar.
 
 Que el humano tenga la UI abierta: `muestra serve --project <p> --open` en otra terminal.
 
@@ -47,8 +47,13 @@ cambió y qué escuchar → leer su feedback → cambiar pocas cosas → repetir
 - Compases y beats son 1-indexados; `range_bars` es `[inicio, fin)`; `start_downbeat` es
   índice 1-based de `downbeats_s`; `clip:<track>:<i>` usa índice 0-based. Unidades por sufijo:
   `_s`, `_ms`, `_hz`, `_db`, `_beats`, `_bars`, `pitch_semitones`.
-- Editá `song.yaml` a mano (conservá comentarios). Nunca edites `cache/`, `renders/`,
-  `sources/` ni `feedback.jsonl`. Validá siempre antes de renderizar.
+- Editá `song.yaml` a mano (conservá comentarios) o con `song.edit` (ops por ruta, atómicas,
+  validadas). Nunca edites `cache/`, `renders/`, `sources/` ni `feedback.jsonl`. Validá
+  siempre antes de renderizar.
+- El humano también edita el arreglo en el browser (vista "Arreglo"): antes de tocar nada
+  leé `song.state` (revisión y "cambios sin guardar" en castellano). Esos cambios son suyos:
+  no los pises; si renderizás entran en tu versión, nombralos en el `summary`. Sus pedidos
+  sobre una selección ("sacá esto") traen exactamente qué señaló ([feedback.md](feedback.md)).
 - Con `warp.mode: resample` el tempo cambia el tono: calculá `meta.bpm` antes de elegir el
   bajo ([recipes/future-funk.md](recipes/future-funk.md#tempo-y-tono)).
 - Una grilla mal leída (doble/mitad de tempo, el uno corrido) se arregla en la fuente con

@@ -68,6 +68,7 @@ from __future__ import annotations
 import math
 import re
 import types
+from dataclasses import dataclass
 from typing import Annotated, Literal, Union, get_args, get_origin  # noqa: UP035
 
 import annotated_types
@@ -111,6 +112,13 @@ __all__ = [
     "fx_field_bounds",
     "parse_automation_target",
     "parse_steps",
+    "InstanceOverride",
+    "PatternHit",
+    "DrumHit",
+    "ClipPass",
+    "pattern_hits",
+    "clip_passes",
+    "lane_bar_steps",
 ]
 
 #: v0 is 4/4 only; meta.time_signature is a Literal["4/4"] placeholder.
@@ -208,6 +216,21 @@ class Chop(ContractModel):
 # ---------------------------------------------------------------------------
 
 
+class InstanceOverride(ContractModel):
+    """Override for ONE repeat of a clip (WP16): ``instances: {3: {mute: true}}``.
+
+    Keys of ``Clip.instances`` are 1-based repeat numbers (1 = the first pass).
+    Values are relative to the clip: ``gain_db`` adds to the clip's gain,
+    ``pitch_semitones`` adds a length-preserving shift on top of the material,
+    ``reverse`` plays that pass backwards (XOR with the clip's ``reverse``).
+    """
+
+    mute: bool = False
+    gain_db: float = Field(default=0.0, ge=-60.0, le=24.0)
+    pitch_semitones: float = Field(default=0.0, ge=-24.0, le=24.0)
+    reverse: bool = False
+
+
 class Clip(ContractModel):
     """Places a chop or a library sample on a track's grid.
 
@@ -216,6 +239,18 @@ class Clip(ContractModel):
     boundary, never looped — use ``repeat`` to tile) and may carry their
     own ``warp``; the renderer resolves the source BPM from the library
     index.
+
+    WP16 (all optional, defaults = the WP0 behaviour):
+
+    * ``length_beats`` on a chop clip trims it: each pass is that many beats
+      (default: the chop's length). ``trim_start_beats`` skips that many beats
+      of the material at the start of every pass (negative = starts earlier in
+      the record). Material outside the chop is rendered from the source.
+    * ``stretch`` time-stretches the material keeping its pitch: a pass uses
+      ``length_beats / stretch`` beats of material and lasts ``length_beats``.
+    * ``gain_db``, ``reverse``, ``fade_in_ms``/``fade_out_ms`` (fade every pass
+      to/from silence instead of the seam crossfade) apply to every pass;
+      ``instances`` overrides single passes.
     """
 
     chop: IdStr | None = None
@@ -228,6 +263,27 @@ class Clip(ContractModel):
         description="Beat offset added to at_bar; may be negative or fractional.",
     )
     repeat: int = Field(default=1, ge=1, le=4096)
+    trim_start_beats: float = Field(
+        default=0.0,
+        ge=-128.0,
+        le=4096.0,
+        description="Beats of material skipped at the start of every pass (WP16).",
+    )
+    stretch: float = Field(
+        default=1.0,
+        ge=0.25,
+        le=4.0,
+        description="Time-stretch keeping pitch: a pass plays length_beats/stretch "
+        "beats of material over length_beats beats (WP16).",
+    )
+    gain_db: float = Field(default=0.0, ge=-60.0, le=24.0)
+    reverse: bool = False
+    fade_in_ms: float | None = Field(default=None, ge=0.0, le=10000.0)
+    fade_out_ms: float | None = Field(default=None, ge=0.0, le=10000.0)
+    instances: dict[int, InstanceOverride] = Field(
+        default_factory=dict,
+        description="Per-pass overrides keyed by 1-based repeat number (WP16).",
+    )
 
     @model_validator(mode="after")
     def _exactly_one_source(self) -> Clip:
@@ -240,12 +296,11 @@ class Clip(ContractModel):
                 },
             )
         if self.chop is not None:
-            if self.length_beats is not None or self.warp is not None:
+            if self.warp is not None:
                 raise PydanticCustomError(
                     "clip_source",
-                    "'length_beats' and 'warp' are only valid on 'sample' clips; "
-                    "a chop clip takes them from the chop.",
-                    {"hint": "Remove 'length_beats'/'warp' or use 'sample'."},
+                    "'warp' is only valid on 'sample' clips; a chop clip takes it from the chop.",
+                    {"hint": "Remove 'warp' (change the chop's warp instead) or use 'sample'."},
                 )
         elif self.length_beats is None:
             raise PydanticCustomError(
@@ -253,7 +308,25 @@ class Clip(ContractModel):
                 "'sample' clips require 'length_beats' (grid occupancy in beats).",
                 {"hint": "Add 'length_beats'; audio is truncated at the boundary."},
             )
+        for k in self.instances:
+            if not 1 <= k <= self.repeat:
+                raise PydanticCustomError(
+                    "out_of_range",
+                    "instances key {k} is not a pass of this clip (1..{n}).",
+                    {
+                        "k": k,
+                        "n": self.repeat,
+                        "hint": "Keys are 1-based repeat numbers: 1 is the first pass.",
+                    },
+                )
         return self
+
+    def pass_beats(self, chop_length_beats: float) -> float:
+        """Grid length of one pass (``chop_length_beats`` = the chop's length;
+        for sample clips their own ``length_beats``)."""
+        if self.length_beats is not None:
+            return self.length_beats
+        return max(0.0, (chop_length_beats - self.trim_start_beats) * self.stretch)
 
 
 def clip_span_beats(clip: Clip, chop_length_beats: float) -> tuple[float, float]:
@@ -263,7 +336,7 @@ def clip_span_beats(clip: Clip, chop_length_beats: float) -> tuple[float, float]
     ``length_beats`` for sample clips).
     """
     start = (clip.at_bar - 1) * BEATS_PER_BAR + clip.offset_beats
-    return start, start + clip.repeat * chop_length_beats
+    return start, start + clip.repeat * clip.pass_beats(chop_length_beats)
 
 
 _STEP_CHARS = {
@@ -316,12 +389,38 @@ def parse_steps(steps: str) -> list[float | None]:
 
 
 class PatternLane(ContractModel):
-    """One instrument lane of a drum pattern."""
+    """One instrument lane of a drum pattern.
+
+    ``overrides`` (WP16) replaces single bars: ``{7: "x...x.......x..."}`` =
+    in SONG bar 7 this lane plays that bar instead of the pattern (one bar of
+    ``steps_per_bar`` step chars; all rests = the lane is silent in that bar).
+    ``steps`` may be omitted (all rests) for a lane that only has overrides or
+    free ``hits``.
+    """
 
     sample: FileRef
-    steps: StepStr
+    steps: StepStr = ""
     gain_db: float = Field(default=0.0, ge=-60.0, le=24.0)
     pan: float = Field(default=0.0, ge=-1.0, le=1.0)
+    overrides: dict[int, StepStr] = Field(
+        default_factory=dict,
+        description="Per-bar exceptions: song bar (1-indexed) -> that bar's steps (WP16).",
+    )
+
+
+class PatternHit(ContractModel):
+    """A free-timed drum hit (WP16): any beat, not only the step grid.
+
+    ``beat`` is 1-indexed from the song start (like notes); ``lane`` names a
+    lane of the pattern (its sample, gain and pan); ``sample`` optionally
+    plays another sound for this hit only. Swing does not move free hits.
+    Performance pads (WP17) record into this list.
+    """
+
+    beat: float = Field(ge=1.0, description="1-indexed song beat (fractional allowed).")
+    lane: LaneName
+    velocity: float = Field(default=1.0, gt=0.0, le=1.0)
+    sample: FileRef | None = None
 
 
 class Pattern(ContractModel):
@@ -332,12 +431,15 @@ class Pattern(ContractModel):
 
     ``swing`` in [0, 1] delays every odd-indexed (off) step by
     ``swing * step / 3``: 0 is straight, 1 is full triplet swing.
+
+    ``hits`` (WP16) are free-timed hits on top of the steps.
     """
 
     steps_per_bar: int = Field(default=16, ge=1, le=64)
     bars: int = Field(default=1, ge=1, le=4096)
     lanes: dict[LaneName, PatternLane] = Field(min_length=1)
     swing: float = Field(default=0.0, ge=0.0, le=1.0)
+    hits: list[PatternHit] = Field(default_factory=list)
 
 
 def _to_midi_pitch(v: object) -> object:
@@ -919,6 +1021,18 @@ class Song(ContractModel):
                         length = chop_lengths[clip.chop]
                     else:
                         length = clip.length_beats or 0.0
+                    if clip.pass_beats(length) <= 1e-9:
+                        issues.append(
+                            Issue(
+                                path=f"{base}.trim_start_beats",
+                                code="out_of_range",
+                                message=f"Clip trims {clip.trim_start_beats:g} beats off a "
+                                f"{length:g}-beat chop: nothing is left to play.",
+                                hint="Use a smaller trim_start_beats or set length_beats.",
+                                value=clip.trim_start_beats,
+                            )
+                        )
+                        continue
                     if clip.at_bar > self.meta.length_bars:
                         issues.append(
                             Issue(
@@ -960,7 +1074,7 @@ class Song(ContractModel):
                 issues += self._check_phrase_placements(track, ti)
             if track.pattern is not None:
                 issues += _check_pattern(
-                    track.pattern, f"tracks[{ti}].pattern", self.meta.length_bars
+                    track.pattern, f"tracks[{ti}].pattern", self.meta.length_bars, track
                 )
             for fi, fx in enumerate(track.fx):
                 if isinstance(fx, SidechainFx):
@@ -1354,14 +1468,19 @@ def _check_fx_ids(fx_list: list[_FxBase], path: str) -> list[Issue]:
     return issues
 
 
-def _check_pattern(pattern: Pattern, path: str, length_bars: int) -> list[Issue]:
-    """Check step-string lengths. ``length_bars`` is the song length; patterns
-    tile every ``bars`` bars and the last tile is truncated silently."""
+def _check_pattern(
+    pattern: Pattern, path: str, length_bars: int, track: Track | None = None
+) -> list[Issue]:
+    """Check step-string lengths, per-bar overrides and free hits. ``length_bars``
+    is the song length; patterns tile every ``bars`` bars and the last tile is
+    truncated silently."""
     issues = []
     expected = pattern.steps_per_bar * pattern.bars
+    at = track.at_bar if track is not None else 1
+    until = (track.until_bar if track is not None else None) or length_bars + 1
     for lane, spec in pattern.lanes.items():
         n = len(spec.steps.replace(" ", ""))
-        if n != expected:
+        if n != expected and n != 0:
             issues.append(
                 Issue(
                     path=f"{path}.lanes.{lane}.steps",
@@ -1369,8 +1488,59 @@ def _check_pattern(pattern: Pattern, path: str, length_bars: int) -> list[Issue]
                     message=f"Lane {lane!r} has {n} steps but the pattern "
                     f"needs steps_per_bar * bars = "
                     f"{pattern.steps_per_bar} * {pattern.bars} = {expected}.",
-                    hint=f"Make the steps string {expected} characters long (spaces ignored).",
+                    hint=f"Make the steps string {expected} characters long (spaces ignored), "
+                    "or omit it for a lane with only overrides/hits.",
                     value=spec.steps,
+                )
+            )
+        for bar, steps in spec.overrides.items():
+            where = f"{path}.lanes.{lane}.overrides.{bar}"
+            if not at <= bar < until:
+                issues.append(
+                    Issue(
+                        path=where,
+                        code="out_of_range",
+                        message=f"Lane {lane!r} overrides bar {bar}, outside the track "
+                        f"window (bars {at} to {until - 1}).",
+                        hint="Override keys are SONG bars (1-indexed) inside the track window.",
+                        value=bar,
+                    )
+                )
+            m = len(steps.replace(" ", ""))
+            if m != pattern.steps_per_bar:
+                issues.append(
+                    Issue(
+                        path=where,
+                        code="pattern_length",
+                        message=f"Override of bar {bar} has {m} steps; one bar is "
+                        f"steps_per_bar = {pattern.steps_per_bar}.",
+                        hint=f"Write exactly {pattern.steps_per_bar} step chars for that bar.",
+                        value=steps,
+                    )
+                )
+    lo_beat = (at - 1) * BEATS_PER_BAR + 1
+    hi_beat = (until - 1) * BEATS_PER_BAR + 1
+    for i, hit in enumerate(pattern.hits):
+        where = f"{path}.hits[{i}]"
+        if hit.lane not in pattern.lanes:
+            issues.append(
+                Issue(
+                    path=f"{where}.lane",
+                    code="ref_not_found",
+                    message=f"Hit {i} uses lane {hit.lane!r}, which the pattern does not have.",
+                    hint="Use one of: " + ", ".join(pattern.lanes) + " (or add that lane).",
+                    value=hit.lane,
+                )
+            )
+        if not lo_beat - 1e-9 <= hit.beat < hi_beat - 1e-9:
+            issues.append(
+                Issue(
+                    path=f"{where}.beat",
+                    code="out_of_range",
+                    message=f"Hit {i} at beat {hit.beat:g} is outside the track window "
+                    f"(beats {lo_beat:g} to {hi_beat:g}, end exclusive).",
+                    hint="Free hits use 1-indexed song beats inside the track window.",
+                    value=hit.beat,
                 )
             )
     return issues
@@ -1410,4 +1580,171 @@ def expand_phrases(song: Song, track: Track) -> list[MidiNote]:
                         velocity=note.velocity,
                     )
                 )
+    return out
+
+
+# ---------------------------------------------------------------------------
+# event expansion (WP16): the ONE definition of "which hit/pass sounds when",
+# shared by the renderer, ears, the musical diff and the editor.
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DrumHit:
+    """One drum hit of a pattern track, after tiling, overrides and swing.
+
+    ``beat0`` is 0-based song beats (0 = bar 1 beat 1, swing included);
+    ``origin`` is ``pattern`` (the tiled steps), ``override`` (a per-bar
+    exception) or ``free`` (``pattern.hits[index]``). ``bar``/``step`` locate a
+    grid hit (song bar, 0-based step in the bar); free hits have ``step=None``.
+    """
+
+    beat0: float
+    lane: str
+    velocity: float
+    origin: Literal["pattern", "override", "free"]
+    bar: int
+    step: int | None
+    index: int | None
+    sample: str
+
+
+def _lane_velocities(pattern: Pattern, lane: PatternLane) -> list[float | None]:
+    v = parse_steps(lane.steps)
+    return v if v else [None] * (pattern.steps_per_bar * pattern.bars)
+
+
+def pattern_hits(song: Song, track: Track) -> list[DrumHit]:
+    """Every hit of a pattern track inside its window, sorted by time.
+
+    Grid positions use exactly the renderer's arithmetic of WP0-WP15 (tile
+    start bar * 4 + index * step), so songs without overrides render
+    bit-identically."""
+    pattern = track.pattern
+    if pattern is None:
+        return []
+    step = BEATS_PER_BAR / pattern.steps_per_bar
+    until = track.until_bar or song.meta.length_bars + 1
+    lo, hi = (track.at_bar - 1) * BEATS_PER_BAR, (until - 1) * BEATS_PER_BAR
+    swing = pattern.swing * step / 3
+    out: list[DrumHit] = []
+    for name, lane in pattern.lanes.items():
+        velocities = _lane_velocities(pattern, lane)
+        for bar0 in range(track.at_bar - 1, song.meta.length_bars, pattern.bars):
+            for index, velocity in enumerate(velocities):
+                song_bar = bar0 + index // pattern.steps_per_bar + 1
+                if velocity is None or song_bar in lane.overrides:
+                    continue
+                beat = bar0 * BEATS_PER_BAR + index * step + (swing if index % 2 else 0)
+                if lo - 1e-9 <= beat < hi - 1e-9:
+                    out.append(
+                        DrumHit(
+                            beat,
+                            name,
+                            velocity,
+                            "pattern",
+                            song_bar,
+                            index % pattern.steps_per_bar,
+                            None,
+                            lane.sample,
+                        )
+                    )
+        for song_bar, steps in sorted(lane.overrides.items()):
+            for s_index, velocity in enumerate(parse_steps(steps)):
+                if velocity is None:
+                    continue
+                beat = (
+                    (song_bar - 1) * BEATS_PER_BAR + s_index * step + (swing if s_index % 2 else 0)
+                )
+                if lo - 1e-9 <= beat < hi - 1e-9:
+                    out.append(
+                        DrumHit(
+                            beat, name, velocity, "override", song_bar, s_index, None, lane.sample
+                        )
+                    )
+    for i, hit in enumerate(pattern.hits):
+        lane = pattern.lanes.get(hit.lane)
+        beat = hit.beat - 1
+        if lane is None or not lo - 1e-9 <= beat < hi - 1e-9:
+            continue
+        bar = int(math.floor(beat / BEATS_PER_BAR + 1e-9)) + 1
+        out.append(
+            DrumHit(beat, hit.lane, hit.velocity, "free", bar, None, i, hit.sample or lane.sample)
+        )
+    return sorted(out, key=lambda h: (h.beat0, h.lane))
+
+
+def lane_bar_steps(pattern: Pattern, lane: PatternLane, bar: int, at_bar: int) -> list:
+    """Velocities of one SONG bar of a lane (override or the tiled pattern)."""
+    if bar in lane.overrides:
+        return parse_steps(lane.overrides[bar])
+    velocities = _lane_velocities(pattern, lane)
+    tile = (bar - at_bar) % pattern.bars
+    return velocities[tile * pattern.steps_per_bar : (tile + 1) * pattern.steps_per_bar]
+
+
+@dataclass(frozen=True)
+class ClipPass:
+    """One audible pass (repeat) of a clip, overrides resolved.
+
+    ``start0`` is 0-based song beats; ``length`` grid beats; the pass plays
+    material beats ``[material_start, material_start + length / stretch)`` of
+    the chop/sample (0 = the chop's start)."""
+
+    clip_index: int
+    instance: int
+    start0: float
+    end0: float
+    length: float
+    material_start: float
+    stretch: float
+    gain_db: float
+    pitch_semitones: float
+    reverse: bool
+    mute: bool
+    fade_in_ms: float | None
+    fade_out_ms: float | None
+    chop: str | None
+    sample: str | None
+
+
+def clip_passes(song: Song, track: Track) -> list[ClipPass]:
+    """Every pass of every clip of a clip track (muted passes included, flagged)."""
+    if track.clips is None:
+        return []
+    chops = {c.id: c for c in song.chops}
+    out: list[ClipPass] = []
+    for ci, clip in enumerate(track.clips):
+        if clip.chop is not None:
+            chop = chops.get(clip.chop)
+            if chop is None:
+                continue
+            base = chop.length_beats
+        else:
+            base = clip.length_beats or 0.0
+        length = clip.pass_beats(base)
+        if length <= 0:
+            continue
+        start = (clip.at_bar - 1) * BEATS_PER_BAR + clip.offset_beats
+        for r in range(clip.repeat):
+            o = clip.instances.get(r + 1)
+            out.append(
+                ClipPass(
+                    clip_index=ci,
+                    instance=r + 1,
+                    start0=start + r * length,
+                    end0=start + (r + 1) * length,
+                    length=length,
+                    material_start=clip.trim_start_beats,
+                    stretch=clip.stretch,
+                    gain_db=clip.gain_db + (o.gain_db if o else 0.0),
+                    pitch_semitones=o.pitch_semitones if o else 0.0,
+                    reverse=clip.reverse != (o.reverse if o else False),
+                    mute=bool(o and o.mute),
+                    fade_in_ms=clip.fade_in_ms,
+                    fade_out_ms=clip.fade_out_ms,
+                    chop=clip.chop,
+                    sample=clip.sample,
+                )
+            )
     return out

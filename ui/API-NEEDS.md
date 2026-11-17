@@ -165,3 +165,18 @@ Client side only. AudioWorklet needs a **secure context**: from a phone over
 plain `http://192.168.x.y:8765` the worklet does not exist, and the app uses
 the native fallback (DynamicsCompressor + hard-bounded WaveShaper). Serving
 over HTTPS (or `localhost`) gives the better limiter.
+
+# WP16 — the arrangement editor
+
+| Tool / event | Used for |
+|---|---|
+| `song.state` | boot of the Arreglo view (`song`, `revision`), the "N cambios sin guardar (vs vNNN)" badge (`dirty`, `changes`) and the version summary (`summary`) |
+| `song.edit {ops, base_revision}` | every manual edit, undo, redo and "Descartar" (`revert_to`); reads `revision`, `song`, `rebased`, `applied`, `inverse`; `edit_conflict` → reload |
+| `song.pieces {revision, dry, wet, instruments, tracks?, samples?, source?, stem?}` | chop materials, one-shots, wet stems per track, sound-browser audition (`samples`), source view audio (`source`) |
+| `render {summary, request, agent: "muestra-editor"}` (job) | "Guardar versión"; `render {draft: true}` for `F` |
+| `library.search` | "Cambiar sonido" |
+| `feedback.append` with `comment.selection` + `song_revision` | "Pedile al agente" |
+| WS `song.changed` | reload when the agent (or anyone) changed song.yaml; our own writes are recognised by revision |
+| WS `draft.created`, `version.created`, `job.updated` | render final / saved version |
+
+Pieces are served by `/files` (they live under `cache/previews/pieces/`).

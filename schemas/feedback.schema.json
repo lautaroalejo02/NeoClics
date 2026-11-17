@@ -116,8 +116,39 @@
       "title": "ChopChoiceEvent",
       "type": "object"
     },
+    "ClipRef": {
+      "additionalProperties": false,
+      "properties": {
+        "clip": {
+          "description": "0-based clip index in tracks.<track>.clips.",
+          "minimum": 0,
+          "title": "Clip",
+          "type": "integer"
+        },
+        "instance": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "1-based pass (repeat).",
+          "title": "Instance"
+        }
+      },
+      "required": [
+        "clip"
+      ],
+      "title": "ClipRef",
+      "type": "object"
+    },
     "CommentEvent": {
       "additionalProperties": false,
+      "description": "Free text. WP16: with selection it is a request about exactly those\nelements (\"Pedile al agente\"); song_revision is the song.state revision\nthe human was looking at.",
       "properties": {
         "at_s": {
           "anyOf": [
@@ -131,6 +162,30 @@
           ],
           "default": null,
           "title": "At S"
+        },
+        "selection": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Selection"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "song_revision": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{16}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Song Revision"
         },
         "text": {
           "minLength": 1,
@@ -185,6 +240,108 @@
       "title": "CommentEvent",
       "type": "object"
     },
+    "HitRef": {
+      "additionalProperties": false,
+      "properties": {
+        "bar": {
+          "description": "Song bar (1-indexed).",
+          "minimum": 1,
+          "title": "Bar",
+          "type": "integer"
+        },
+        "beat": {
+          "description": "1-indexed song beat of the hit.",
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "index": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "pattern.hits index (free hits).",
+          "title": "Index"
+        },
+        "lane": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Lane",
+          "type": "string"
+        },
+        "step": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "0-based grid step; null = free hit.",
+          "title": "Step"
+        }
+      },
+      "required": [
+        "lane",
+        "bar",
+        "beat"
+      ],
+      "title": "HitRef",
+      "type": "object"
+    },
+    "NoteRef": {
+      "additionalProperties": false,
+      "properties": {
+        "beat": {
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "index": {
+          "description": "0-based index in tracks.<track>.notes.",
+          "minimum": 0,
+          "title": "Index",
+          "type": "integer"
+        },
+        "phrase": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The note belongs to this phrase.",
+          "title": "Phrase"
+        },
+        "pitch": {
+          "maximum": 127,
+          "minimum": 0,
+          "title": "Pitch",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "index",
+        "beat",
+        "pitch"
+      ],
+      "title": "NoteRef",
+      "type": "object"
+    },
     "RatingEvent": {
       "additionalProperties": false,
       "properties": {
@@ -221,6 +378,192 @@
         "value"
       ],
       "title": "RatingEvent",
+      "type": "object"
+    },
+    "Selection": {
+      "additionalProperties": false,
+      "description": "What the human pointed at in the editor (WP16). Positions are musical:\nstart_beat/end_beat are 1-indexed song beats, end exclusive.",
+      "properties": {
+        "automation": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Automation target path.",
+          "title": "Automation"
+        },
+        "chop": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Chop"
+        },
+        "clips": {
+          "items": {
+            "$ref": "#/$defs/ClipRef"
+          },
+          "title": "Clips",
+          "type": "array"
+        },
+        "end_beat": {
+          "anyOf": [
+            {
+              "minimum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "End Beat"
+        },
+        "excerpt": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The selected elements as they were (song.yaml values).",
+          "title": "Excerpt"
+        },
+        "hits": {
+          "items": {
+            "$ref": "#/$defs/HitRef"
+          },
+          "title": "Hits",
+          "type": "array"
+        },
+        "label": {
+          "description": "Spanish description, e.g. 'bombo, comp\u00e1s 7'.",
+          "minLength": 1,
+          "title": "Label",
+          "type": "string"
+        },
+        "lane": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lane"
+        },
+        "notes": {
+          "items": {
+            "$ref": "#/$defs/NoteRef"
+          },
+          "title": "Notes",
+          "type": "array"
+        },
+        "paths": {
+          "description": "song.edit paths of the selected elements (versions.diff grammar).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Paths",
+          "type": "array"
+        },
+        "points": {
+          "description": "0-based automation point indices.",
+          "items": {
+            "type": "integer"
+          },
+          "title": "Points",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source"
+        },
+        "source_s": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "[start_s, end_s) inside the source (source view).",
+          "title": "Source S"
+        },
+        "start_beat": {
+          "anyOf": [
+            {
+              "minimum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Start Beat"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track"
+        }
+      },
+      "required": [
+        "label"
+      ],
+      "title": "Selection",
       "type": "object"
     }
   },

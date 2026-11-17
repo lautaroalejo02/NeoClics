@@ -96,6 +96,29 @@ tracks:
   gain_db: -10
 ```
 
+### Cortar, recortar y editar una sola repetición (WP16)
+
+Para cambiar UNA pasada de un clip repetido no lo desarmes: `instances` (claves 1-based =
+número de repetición) silencia, baja, sube de tono o da vuelta solo esa pasada. En un clip
+de chop, `length_beats` lo recorta (cada pasada dura eso) y `trim_start_beats` saltea el
+comienzo del material; `stretch` lo estira sin cambiar el tono (una pasada usa
+`length_beats / stretch` beats de material). También `gain_db`, `reverse` y
+`fade_in_ms`/`fade_out_ms` por clip.
+
+```yaml fragment
+tracks:
+- id: sample
+  clips:
+  - {chop: c1, at_bar: 1, repeat: 8, instances: {3: {mute: true}, 6: {pitch_semitones: 12}}}
+- id: stutter
+  clips:
+  - {chop: c1, at_bar: 13, repeat: 4, length_beats: 1, trim_start_beats: 2, gain_db: -3}
+  - {chop: c1, at_bar: 15, length_beats: 8, stretch: 2, reverse: true, fade_out_ms: 400}
+```
+
+El editor del browser escribe esto mismo (y `song.edit` desde un agente): son las formas
+canónicas, mantenelas así en vez de desarmar el clip en muchos.
+
 ## Patrones de batería
 
 ```yaml fragment
@@ -136,6 +159,32 @@ Patrones útiles (16 pasos): four-on-the-floor `x...x...x...x...`; clap 2 y 4
 `x.o.x.o.x.o.x.o.` / `xoxoxoxoxoxoxoxo`; bombo disco con empuje `x...x...x...x..x`.
 Para que un lane suene en otra ventana que el resto, ponelo en otro track (ej. `kick` solo
 desde el compás 1 y `drums` desde el 5): el sidechain puede apuntar a ese track.
+
+### Una excepción en un compás y golpes sueltos (WP16)
+
+`overrides` cambia UN compás de un lane sin tocar el patrón: la clave es el compás de la
+CANCIÓN (1-indexado) y el valor los pasos de ese compás (`steps_per_bar` caracteres; todo
+`.` = ese lane calla en ese compás). `hits` son golpes fuera de la grilla:
+`{beat, lane, velocity?, sample?}` con `beat` 1-indexado desde el inicio del tema (como las
+notas); el swing no los mueve. Un lane puede no tener `steps` si solo tiene overrides/hits.
+
+```yaml fragment
+tracks:
+- id: drums
+  pattern:
+    steps_per_bar: 16
+    lanes:
+      kick: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav", steps: "x...x...x...x...", overrides: {7: "x...x.......x...", 16: "x...x...x...x.xx"}}
+      clap: {sample: "library://kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav", steps: "....x.......x...", overrides: {8: "................"}}
+    hits:
+    - {beat: 30.5, lane: clap, velocity: 0.6}
+    - {beat: 63.75, lane: kick, sample: "library://kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav"}
+```
+
+"Sacá el bombo del tercer tiempo del compás 7" es exactamente el override de arriba (o
+`song.edit` con `{op: hit, track: drums, lane: kick, bar: 7, step: 8, velocity: null}`,
+paso 0-based dentro del compás). El diff lo describe así: "Saqué el bombo de la batería
+del tercer tiempo del compás 7".
 
 ## Instrumentos: frases que se repiten (lo normal)
 

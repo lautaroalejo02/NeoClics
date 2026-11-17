@@ -49,7 +49,9 @@ def _http_schema(spec):
 
 #: tools a client on another device may call when the server listens on the
 #: LAN (WP13): reading + the two things the listening UI writes.
-REMOTE_WRITE_TOOLS = frozenset({"feedback.append", "chops.choose"})
+# WP16: the editor writes song.yaml through song.edit (no filesystem paths) and asks
+# for pieces; both are safe for the token-authenticated phone UI.
+REMOTE_WRITE_TOOLS = frozenset({"feedback.append", "chops.choose", "song.edit", "song.pieces"})
 TOKEN_COOKIE = "muestra_token"
 LOOPBACK_NAMES = frozenset({"127.0.0.1", "::1", "localhost"})
 

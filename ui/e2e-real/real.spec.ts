@@ -39,6 +39,12 @@ function cliRender(project: string, summary: string): Promise<{ code: number | n
   });
 }
 
+// These flows are the listening room ("Escuchar versiones"); the arrangement
+// editor has its own spec (editor.spec.ts).
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("muestra.view", "escuchar"));
+});
+
 test("real API: load, play, A/B, mute, comment reaches feedback.jsonl", async ({ page, request }, info) => {
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));

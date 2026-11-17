@@ -293,6 +293,13 @@ def compact_result(result: ToolResult, project: Path | None = None) -> str:
     import json
 
     location = str(project) if project else "No project selected"
+    if result.ok and result.tool == "feedback.read" and isinstance(result.data, dict):
+        d = result.data
+        lines = [f"feedback: {d.get('count', 0)} events · next_cursor {d.get('next_cursor')}"]
+        lines += d.get("digest") or []
+        if d.get("skipped"):
+            lines.append(f"skipped lines: {json.dumps(d['skipped'], ensure_ascii=False)}")
+        return f"Project: {location}\n" + "\n".join(lines)
     if result.ok and result.tool == "render" and isinstance(result.data, dict):
         try:
             return f"Project: {location}\n" + _render_text(result.data)

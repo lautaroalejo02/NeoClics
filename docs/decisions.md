@@ -914,3 +914,81 @@ on v010 and all of `session-codex`; a handful of honest extremes in the
 documented. Additive contract: `Metrics.balance` (`BalanceReport`),
 `MetricsDelta.balance_delta_db`; older `metrics.json` keep validating.
 Cost: ~0.13 s on a 16-bar 48 kHz render.
+
+### 2026-11-17 — WP16 arrangement editor: per-event control, song.edit, pieces
+
+The owner wants to see and touch the arrangement ("control atómico", "sacá esto",
+quitar un golpe, estirar, cortar). The data model was atomic but a single drum hit or
+one pass of a repeated clip could only be changed by unrolling the pattern/clip.
+Contract changes, all **additive** (old songs parse and render bit-identically,
+`tests/render/test_wp16_events.py::test_defaults_render_bit_identically_through_the_new_paths`):
+
+- `PatternLane.overrides: {<song bar>: <one bar of steps>}` replaces single bars of a
+  lane (mute/add/replace/velocity are all "write that bar"). Chosen over per-hit
+  exception lists because it reads like the steps an LLM and a human already know.
+  `PatternLane.steps` may be omitted (all rests). Override bars must lie in the track
+  window and be exactly `steps_per_bar` long (`out_of_range`, `pattern_length`).
+- `Pattern.hits: [{beat, lane, velocity?, sample?}]`: free-timed hits (1-indexed song
+  beats like notes, no swing, optional per-hit sound). The performance-pads follow-up
+  (WP17) records into it; `song.edit {op: add_hits, quantize: off|step|beat}` is its API.
+- `Clip.instances: {<1-based pass>: {mute, gain_db, pitch_semitones, reverse}}` overrides
+  one pass of a repeated clip; `Clip.length_beats` is now allowed on chop clips (trim),
+  plus `trim_start_beats`, `stretch` (keeps pitch), `gain_db`, `reverse`,
+  `fade_in_ms`/`fade_out_ms`. Material outside the chop continues the record at the same
+  warp rate (right) or re-warps the chop extended to the left. An "unroll" op was
+  rejected: 8 near-identical clips are harder to read than one `instances` line.
+- One expansion (`schemas.song.pattern_hits`, `clip_passes`) is used by the renderer,
+  the ears timeline, the musical diff and (mirrored in TypeScript) the browser editor.
+  Diff paths: `tracks.<t>.pattern.lanes.<l>.overrides.<bar>`, `tracks.<t>.pattern.hits[i]`
+  (aligned like notes), `tracks.<t>.clips[i].instances.<n>.<field>`. Spanish:
+  "Saqué el bombo de la batería del tercer tiempo del compás 7", "Muteé la repetición 3
+  del clip del chop c1 del sample".
+- Tools `song.edit`, `song.state` (readonly), `song.pieces` (package `muestra.editor`,
+  registered in `registry._TOOL_PACKAGES`). `song.edit` is atomic and validated (only
+  issues the song did not already have block), writes through the ruamel round trip,
+  returns `applied` + `inverse` primitive ops, and journals before/after bytes under
+  `cache/edits/` so undo/redo restore song.yaml byte-for-byte. Concurrency rule: ops
+  are id-addressed and carry `expect` (the value they replace); when the file changed
+  since `base_revision` they are re-applied and succeed iff every expect holds
+  (`rebased: true`), else `edit_conflict` and nothing is written. Revision = first 16
+  hex of sha256(song.yaml). A write that would not re-read as the intended song is
+  refused (ruamel bug: emptying a commented block list).
+- `song.pieces`: chop materials (the renderer's own `chop_audio`), one-shots, instrument
+  dry stems and per-track WET stems rendered at gain 0 dB / pan centre / unmuted (the
+  browser fader applies gain and the pan law relative to centre; measured equal to the
+  render stem within 1e-5). Files under `cache/previews/pieces/` (served by `/files`),
+  named by content, pruned to 400 files / 2.5 GB. A track whose audio fails reports
+  `error` and does not block the others.
+- `CommentEvent.selection` + `song_revision` (additive): what the human pointed at
+  (track, lane, beat range, clip/pass, hits, notes, automation points, chop/source
+  region, `paths`, `excerpt`). `feedback.read` adds `digest` (one line per event; the
+  MCP text shows it) with the `song.edit` op that acts on a selection.
+- LAN: `song.edit` and `song.pieces` join the remote-allowed write tools (no filesystem
+  paths; library refs resolve only inside library roots).
+- `render_signature` and file validation include per-hit samples.
+- Editing is not versioning: `song.edit` never commits. "Guardar versión" is `render`
+  with `summary = song.state.summary` ("Edición manual: ...").
+
+### 2026-11-17 — WP16 editor: in-flight edits, what the browser mix is, measurements
+
+- **In-flight edit rule (UI).** Edits apply locally at once and are sent in order
+  (whatever is queued goes in one `song.edit` call) with the revision they were made on.
+  The server re-applies them on a newer file when every touched element still holds its
+  `expect` (the agent edited something else: the edit lands on top, toast "quedó
+  encima"); otherwise nothing is written, the editor reloads the file and says "el agente
+  cambió eso mismo: no pisé su cambio". With nothing in flight, an external change just
+  reloads (selection kept if it still exists). Undo entries survive external changes and
+  are replayed with the same rule.
+- **Editing is not versioning.** Only "Guardar versión" (`render` with
+  `summary = song.state.summary`, `agent = muestra-editor`) creates a version.
+  "Descartar" = `song.edit {op: revert_to, version}` (undoable).
+- **Browser mix.** A track plays its wet stem when `wetFingerprint` (UI mirror of
+  `editor.pieces.wet_song`) matches; measured equal to the render's stem to -145 dB
+  (float precision) on every track of a real project. A just-edited track plays its dry
+  events (exact content, instant) with highpass/lowpass (same Butterworth design),
+  gain fx and an event-triggered sidechain approximation until its wet arrives
+  (measured: sample track level +0.04 dB / residual -13 dB; drums +2.1 dB because the
+  compressor is not approximated). Instruments keep their previous render until the new
+  one arrives. Not reproduced at all: the master chain (fx, `target_lufs` loop, safety
+  limiter); the mix goes through the stem-bus limiter and is level-matched to the last
+  render's stems/mix ratio. `F` plays a draft render of the current state.
