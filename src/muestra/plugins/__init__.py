@@ -1,1 +1,1 @@
-"""Stub package - implemented by a later work package (see docs/spec.md section 12)."""
+"""Plugin hosting seam (WP3 owns the implementation)."""

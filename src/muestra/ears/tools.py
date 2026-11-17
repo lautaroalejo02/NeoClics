@@ -8,7 +8,7 @@ from ..schemas._base import RelPath, VersionStr
 from ..schemas.metrics import Metrics
 from ..toolbase import ProjectScoped, ToolOutput
 
-__all__ = ["EarsAnalyzeParams", "EarsAnalyzeResult", "ears_analyze"]
+__all__ = ["EarsAnalyzeParams", "EarsAnalyzeResult", "ears_analyze", "TOOLS"]
 
 _WP = "WP6"
 
@@ -29,3 +29,15 @@ def ears_analyze(p: EarsAnalyzeParams) -> EarsAnalyzeResult:
     masking, grid alignment, tonal coherence, clicks, optional style
     similarity)."""
     raise NotImplementedError(_WP)
+
+
+#: tools exported by this subpackage (collected by muestra.registry).
+TOOLS = [
+    (
+        "ears.analyze",
+        ears_analyze,
+        EarsAnalyzeParams,
+        EarsAnalyzeResult,
+        {"long_running": True, "cli": ("ears", "analyze")},
+    ),
+]

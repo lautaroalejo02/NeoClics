@@ -1,52 +1,53 @@
-"""Tool stubs owned by WP4 (sample library): library.index / library.search."""
+"""Tool stubs owned by WP4 (sample library): library.index /
+library.search.
+
+Resolution seam: ``muestra.library.core.lookup``/``resolve`` read the
+``.muestra-index.json`` inside each ``[library] roots`` dir.
+"""
 
 from __future__ import annotations
 
 from pydantic import Field
 
-from ..schemas._base import ContractModel, KeyStr, RelPath
+from ..schemas._base import RelPath
+from ..schemas.config import LIBRARY_INDEX_FILE
+from ..schemas.library import LibraryHit
 from ..toolbase import ProjectScoped, ToolOutput
 
 __all__ = [
-    "LibraryHit",
     "LibraryIndexParams",
     "LibraryIndexResult",
     "LibrarySearchParams",
     "LibrarySearchResult",
     "library_index",
     "library_search",
+    "TOOLS",
 ]
 
 _WP = "WP4"
 
 
 class LibraryIndexParams(ProjectScoped):
-    path: str = Field(description="Directory to index (added to muestra.toml library).")
+    path: str = Field(description="Library root to index (added to muestra.toml [library] roots).")
 
 
 class LibraryIndexResult(ToolOutput):
     indexed: int = Field(ge=0)
-    index_path: RelPath = Field(description="Project-relative path of the index file.")
+    index_path: RelPath = Field(
+        description=f"Path of the index file ('{LIBRARY_INDEX_FILE}' inside the root)."
+    )
 
 
 def library_index(p: LibraryIndexParams) -> LibraryIndexResult:
-    """Index a sample directory: BPM, key, type and tags per file."""
+    """Index a sample directory: BPM, key, type and tags per file, into
+    ``<root>/.muestra-index.json``."""
     raise NotImplementedError(_WP)
-
-
-class LibraryHit(ContractModel):
-    uri: str = Field(description="library:// URI usable in song.yaml.")
-    path: RelPath = Field(description="Path relative to its library dir.")
-    bpm: float | None = None
-    key: KeyStr | None = None
-    type: str | None = Field(default=None, description="e.g. kick/snare/clap/hat/loop/oneshot.")
-    tags: list[str] = Field(default_factory=list)
 
 
 class LibrarySearchParams(ProjectScoped):
     query: str = Field(default="", description="Free-text query; empty lists all.")
     bpm: float | None = Field(default=None, gt=0)
-    key: KeyStr | None = None
+    key: str | None = Field(default=None, description="Key filter, e.g. 'F#m'.")
     type: str | None = None
     limit: int = Field(default=20, ge=1, le=200)
 
@@ -56,5 +57,25 @@ class LibrarySearchResult(ToolOutput):
 
 
 def library_search(p: LibrarySearchParams) -> LibrarySearchResult:
-    """Search the index: text query plus optional bpm/key/type filters."""
+    """Search the library roots' indexes: text query plus optional
+    bpm/key/type filters."""
     raise NotImplementedError(_WP)
+
+
+#: tools exported by this subpackage (collected by muestra.registry).
+TOOLS = [
+    (
+        "library.index",
+        library_index,
+        LibraryIndexParams,
+        LibraryIndexResult,
+        {"long_running": True, "cli": ("library", "index")},
+    ),
+    (
+        "library.search",
+        library_search,
+        LibrarySearchParams,
+        LibrarySearchResult,
+        {"readonly": True, "cli": ("library", "search")},
+    ),
+]
