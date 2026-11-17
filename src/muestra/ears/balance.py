@@ -203,7 +203,7 @@ def measure_balance(ctx: RenderContext) -> tuple[BalanceReport | None, list[Alar
             members[role].append(tid)
 
     # --- pattern tracks: per-lane event-window loudness ---------------
-    found_kick_lane = False
+    kl = kick_lane(ctx)  # kick-named lane, else the lane with most 40-150 Hz
     for t in ctx.song.tracks:
         if t.pattern is None or t.mute or t.id not in ctx.stems:
             continue
@@ -218,19 +218,10 @@ def measure_balance(ctx: RenderContext) -> tuple[BalanceReport | None, list[Alar
             if p is None:
                 continue
             lanes_db[f"{t.id}.{lane}"] = round(_lufs(p), 1)
-            is_kick = lane.lower() in _KICK_NAMES or lane.lower().startswith("kick")
-            role = "kick" if is_kick else "drums"
-            found_kick_lane = found_kick_lane or role == "kick"
-            add(role, t.id, p)
-    if not found_kick_lane:
-        kl = kick_lane(ctx)  # energy fallback: the lane with most 40-150 Hz
-        if kl is not None:
-            hits = np.array([e.t for e in tl.lane_hits(kl[0]).get(kl[1], [])])
-            if hits.size:
-                p = _lane_power(ctx, kl[0], kl[1], hits, 1.0)
-                if p:
-                    lanes_db[f"{kl[0]}.{kl[1]}"] = round(_lufs(p), 1)
-                    add("kick", kl[0], p)
+            is_kick = (
+                lane.lower() in _KICK_NAMES or lane.lower().startswith("kick") or (t.id, lane) == kl
+            )
+            add("kick" if is_kick else "drums", t.id, p)
 
     # --- sustained tracks ---------------------------------------------
     used = {tid for m in members.values() for tid in m}
@@ -261,7 +252,10 @@ def measure_balance(ctx: RenderContext) -> tuple[BalanceReport | None, list[Alar
     levels = {r: _lufs(p) for r, p in powers.items()}
     order = sorted(levels, key=lambda r: -levels[r])
     loudest = order[0]
-    levels_db = {r: round(levels[r] - levels[loudest], 1) for r in order}
+    levels_db = {}
+    for r in order:
+        rel = round(levels[r] - levels[loudest], 1)
+        levels_db[r] = 0.0 if rel == 0 else rel  # no "-0" in the readout
 
     # keep only the loudest member track per role (the one the fix should name)
     reps = {r: [max(member_power[r], key=member_power[r].get)] for r in member_power}
