@@ -25,6 +25,7 @@ tool into the ``ToolResult`` envelope.
 
 from __future__ import annotations
 
+import inspect
 import re
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -90,7 +91,9 @@ def _collect() -> dict[str, ToolSpec]:
         for entry in module.TOOLS:
             name, func, params, result, *rest = entry
             flags = rest[0] if rest else {}
-            doc = (func.__doc__ or "").strip().split("\n")[0]
+            # first paragraph, unwrapped (a first LINE cut sentences mid-way)
+            paragraph = inspect.cleandoc(func.__doc__ or "").split("\n\n")[0]
+            doc = " ".join(paragraph.split())
             if name in registry:
                 raise MuestraError.one(
                     "internal_error",

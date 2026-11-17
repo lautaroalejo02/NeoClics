@@ -325,7 +325,7 @@ def _created_at(prior, info):
         return prior.created_at
     if info is not None:
         try:
-            return datetime.fromisoformat(info.committed_at)
+            return datetime.fromisoformat(info.committed_at).astimezone(UTC)
         except ValueError:
             pass
     return datetime.now(UTC)

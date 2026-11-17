@@ -28,8 +28,7 @@ def neural_beats(audio: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarray]:
         raise MuestraError.one(
             "missing_dependency",
             f"Beat tracking requires beat-this: {exc}",
-            hint="Run uv sync; the official final0 MIT model downloads "
-            "on first use.",
+            hint="Run uv sync; the official final0 MIT model downloads on first use.",
         ) from exc
     torch.set_num_threads(max(1, int(os.environ.get("MUESTRA_CPU_THREADS", "2"))))
     tracker = Audio2Beats(checkpoint_path="final0", device="cpu", float16=False, dbn=False)

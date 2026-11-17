@@ -11,6 +11,7 @@ from pathlib import Path
 from ..feedback.store import EVENT_ADAPTER
 from ..schemas.api import WsEvent
 from ..schemas.chops import ChopCandidateSet
+from ..schemas.metrics import Metrics
 from ..schemas.render_meta import RenderMeta
 from .summary import read_model
 
@@ -101,7 +102,14 @@ class ProjectWatcher:
                 meta = read_model(path.with_name("meta.json"), RenderMeta)
                 if meta is None:
                     continue
-                events.append(("version.created", {"version": meta["version"], "meta": meta}))
+                # Re-announced (upsert) when metrics.json lands after meta.json.
+                metrics = read_model(path.with_name("metrics.json"), Metrics)
+                events.append(
+                    (
+                        "version.created",
+                        {"version": meta["version"], "meta": meta, "metrics": metrics},
+                    )
+                )
             elif relative.startswith("cache/chops/"):
                 candidate = read_model(path, ChopCandidateSet)
                 if candidate is None:

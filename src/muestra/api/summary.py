@@ -8,6 +8,7 @@ from pydantic import BaseModel, ValidationError
 
 from ..project.core import open_project
 from ..registry import REGISTRY
+from ..schemas.analysis import Analysis
 from ..schemas.chops import ChopCandidateSet
 from ..schemas.metrics import Metrics
 from ..schemas.render_meta import RenderMeta
@@ -78,12 +79,22 @@ def project_summary(runtime: Runtime) -> dict:
                     "message": "Incomplete or invalid candidate set.",
                 }
             )
+    analyses = {}
+    for path in sorted((root / "cache/analysis").glob("*.json")):
+        if path.name.endswith(".meta.json"):
+            continue
+        analysis = read_model(path, Analysis)
+        if analysis is not None:
+            analyses[analysis["source_id"]] = analysis
     return {
         "project_path": str(root),
         "config": project.config.model_dump(mode="json"),
         "song": (song.data or {}).get("song"),
         "versions": versions,
         "candidate_sets": candidates,
+        # cache/analysis/<src>.json (sections, downbeats) for the chop panel;
+        # /files stays audio-only.
+        "analyses": analyses,
         "feedback": feedback_aggregate(events),
         "feedback_cursor": (feedback.data or {}).get("next_cursor", 0),
         "issues": [
