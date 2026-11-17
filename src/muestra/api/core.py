@@ -214,7 +214,11 @@ class Runtime:
                 root = Path(prepared.get("dir", ".")).expanduser().resolve() / prepared["name"]
             # All transports cooperate on the same OS-backed lock, including readers.
             lock = nullcontext()
-            if root and spec.name.startswith("feedback.") and is_project_dir(root):
+            if (
+                root
+                and (spec.name.startswith("feedback.") or spec.name == "chops.choose")
+                and is_project_dir(root)
+            ):
                 import portalocker
 
                 path = root / "cache/locks/feedback.lock"
