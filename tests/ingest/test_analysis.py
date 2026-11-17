@@ -51,3 +51,11 @@ def test_key_profile_and_silence():
     assert estimate.tonic == "G" and estimate.mode == "major"
     assert 0 < estimate.confidence <= 1
     assert estimate_key(np.zeros((12, 10))) is None
+
+
+def test_inconsistent_meter_is_rejected_before_cache(rhythmic_project):
+    project, source_id, _ = rhythmic_project
+    beats = np.arange(0.25, 17, 0.5)
+    with pytest.raises(MuestraError, match="four beats"):
+        analyze(project, source_id, tracker=lambda audio, sr: (beats, beats[::3]))
+    assert not project.path(f"cache/analysis/{source_id}.meta.json").exists()

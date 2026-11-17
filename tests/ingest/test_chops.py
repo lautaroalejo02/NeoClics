@@ -74,3 +74,32 @@ def test_stale_grid_cannot_be_chosen(rhythmic_project):
     save_analysis(project, analysis)
     with pytest.raises(MuestraError, match="changed since"):
         choose(project, result.pick.candidate_id, "loop", "manual", None)
+
+
+def test_interrupted_preview_reserves_id(rhythmic_project, monkeypatch):
+    project, source_id, _ = rhythmic_project
+
+    def broken(*args):
+        raise RuntimeError("renderer failed")
+
+    monkeypatch.setattr("muestra.render.core.render_chop", broken)
+    with pytest.raises(RuntimeError, match="renderer failed"):
+        find(project, source_id, ChopQuery(stem="mix", n=1))
+    monkeypatch.undo()
+    result, _ = find(project, source_id, ChopQuery(stem="mix", n=1))
+    assert result.set_id == "cs002"
+
+
+def test_global_set_ids_across_sources(rhythmic_project, tmp_path):
+    from muestra.ingest.storage import import_source
+
+    project, source_id, analysis = rhythmic_project
+    first, _ = find(project, source_id, ChopQuery(stem="mix", n=1))
+    data, sr = sf.read(project.path(analysis.file))
+    another = tmp_path / "another.wav"
+    sf.write(another, data * 0.5, sr)
+    new_id, rel = import_source(project, another, None)
+    new_analysis = analysis.model_copy(update={"source_id": new_id, "file": rel})
+    save_analysis(project, new_analysis)
+    second, _ = find(project, new_id, ChopQuery(stem="mix", n=1))
+    assert first.set_id == "cs001" and second.set_id == "cs002"

@@ -15,6 +15,7 @@ class FakeBackend:
 
     def separate(self, source, output, model, progress=None):
         self.calls += 1
+        output.mkdir(parents=True, exist_ok=True)
         audio, sr = decode(source)
         outputs = {}
         for name in STEMS:
@@ -49,7 +50,7 @@ def test_failure_never_marks_cache_complete(rhythmic_project):
         def separate(self, *args):
             raise RuntimeError("interrupted")
 
-    with pytest.raises(RuntimeError, match="interrupted"):
+    with pytest.raises(MuestraError, match="interrupted"):
         separate(project, source_id, backend=Broken())
     assert not list(project.path(f"cache/stems/{source_id}").glob("*/manifest.json"))
     assert not project.path(".muestra-ingest.lock").exists()
@@ -84,3 +85,46 @@ def test_backend_rejects_unaligned_stems(rhythmic_project):
 
     with pytest.raises(MuestraError, match="frame-aligned"):
         separate(project, source_id, backend=Unaligned())
+
+
+def test_mel_cascade_output_names_and_float_intermediate(rhythmic_project, tmp_path, monkeypatch):
+    import sys
+    from types import SimpleNamespace
+
+    from muestra.ingest.separation import LocalBackend
+
+    project, _, analysis = rhythmic_project
+    cache = tmp_path / "models"
+    cache.mkdir()
+    (cache / "vocals_mel_band_roformer.ckpt").touch()
+    (cache / "vocals_mel_band_roformer.yaml").touch()
+    monkeypatch.setenv("MUESTRA_MODEL_DIR", str(cache))
+    monkeypatch.setitem(
+        sys.modules, "torch", SimpleNamespace(set_num_threads=lambda _: None, device=lambda x: x)
+    )
+
+    class FakeSeparator:
+        def __init__(self, **kwargs):
+            self.output = Path(kwargs["output_dir"])
+
+        def load_model(self, filename):
+            assert filename == "vocals_mel_band_roformer.ckpt"
+
+        def separate(self, source, custom_output_names):
+            assert sf.info(source).subtype == "FLOAT"
+            assert custom_output_names["other"] == "instrumental"
+            audio, sr = decode(Path(source))
+            sf.write(self.output / "vocals.wav", audio * 0.2, sr, subtype="FLOAT")
+            sf.write(self.output / "instrumental.wav", audio * 0.8, sr, subtype="FLOAT")
+            return ["vocals.wav", "instrumental.wav"]
+
+    monkeypatch.setitem(
+        sys.modules, "audio_separator.separator", SimpleNamespace(Separator=FakeSeparator)
+    )
+    monkeypatch.setattr(LocalBackend, "_demucs", lambda self, *args: FakeBackend().separate(*args))
+    paths = LocalBackend().separate(
+        project.path(analysis.file), tmp_path / "outputs", "mel-roformer+htdemucs"
+    )
+    separated = [decode(path)[0] for path in paths.values()]
+    original, _ = decode(project.path(analysis.file))
+    assert np.allclose(sum(separated), original, atol=1e-6)

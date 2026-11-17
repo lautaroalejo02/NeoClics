@@ -148,11 +148,29 @@ class LocalBackend:
                 log_level=logging.WARNING,
                 mdxc_params={"batch_size": 1, "overlap": 4},
             )
+            separator.torch_device = torch.device("cpu")
+            separator.torch_device_mps = None
             separator.load_model(weights.name)
             report(progress, 0.1, "Separating vocals with Mel-Band RoFormer (CPU)")
-            paths = separator.separate(str(source))
-            vocal = next(Path(tmp) / p for p in paths if "(Vocals)" in str(p))
-            instrumental = next(Path(tmp) / p for p in paths if "(Instrumental)" in str(p))
+            # Float WAV prevents an mp3/m4a input from making the wrapper choose PCM16.
+            audio, sr = decode(source)
+            floating_source = Path(tmp) / "input-float.wav"
+            sf.write(floating_source, stereo(audio), sr, subtype="FLOAT")
+            separator.separate(
+                str(floating_source),
+                custom_output_names={
+                    "vocals": "vocals",
+                    "other": "instrumental",
+                    "instrumental": "instrumental",
+                },
+            )
+            vocal, instrumental = Path(tmp) / "vocals.wav", Path(tmp) / "instrumental.wav"
+            if not vocal.is_file() or not instrumental.is_file():
+                raise MuestraError.one(
+                    "separation_error",
+                    "RoFormer did not return vocals and instrumental.",
+                    hint="Use model='htdemucs' and check the installed audio-separator version.",
+                )
             result = self._demucs(instrumental, output, "htdemucs", progress)
             secondary, ssr = decode(result["vocals"])
             other, _ = decode(result["other"])
@@ -194,6 +212,15 @@ def separate(
     directory = project.path(f"cache/stems/{source_id}/{key}")
     manifest = directory / "manifest.json"
     backend = backend or backend_for(project.config.separation.backend)
+    last_progress = 0.0
+    callback = progress
+
+    def monotonic_progress(value, message):
+        nonlocal last_progress
+        last_progress = max(last_progress, float(value))
+        report(callback, last_progress, message)
+
+    progress = monotonic_progress
     with project_lock(project):
         if manifest.is_file():
             data = read_json(manifest)
@@ -217,10 +244,23 @@ def separate(
                     hint="Run uv sync --extra ingest. Current Demucs requires Windows or Apple "
                     "Silicon macOS with the shared NumPy 2 stack.",
                 ) from exc
+            except MuestraError:
+                raise
+            except Exception as exc:
+                raise MuestraError.one(
+                    "separation_error",
+                    f"{model} separation failed: {exc}",
+                    hint="Check ffmpeg, disk space and network access for official weights. "
+                    "Retry with model='htdemucs'; no completed cache was published.",
+                ) from exc
             if set(outputs) != set(STEMS):
                 raise MuestraError.one("invalid_audio", "Backend must return exactly four stems.")
             formats = [sf.info(path) for path in outputs.values()]
-            if len({(i.frames, i.samplerate, i.channels) for i in formats}) != 1:
+            if (
+                len({(i.frames, i.samplerate, i.channels) for i in formats}) != 1
+                or formats[0].frames <= 0
+                or formats[0].channels != 2
+            ):
                 raise MuestraError.one("invalid_audio", "Backend stems are not frame-aligned.")
             directory.mkdir(parents=True, exist_ok=True)
             for name, path in outputs.items():

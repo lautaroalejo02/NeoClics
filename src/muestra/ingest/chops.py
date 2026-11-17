@@ -148,6 +148,7 @@ def score_loop(audio, sr, start, end, beats, stem, vocal=None, reference=None) -
 
 def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandidateSet, Path]:
     analysis = load_analysis(project, source_id)
+    original_fingerprint = fingerprint(project, source_id, analysis)
     stem = query.stem or "other"
     audio, sr = decode(stem_path(project, analysis, stem))
     vocal = None
@@ -169,6 +170,8 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
     lengths = [query.length_beats] if query.length_beats else [4.0, 8.0, 16.0, 32.0]
     proposals = []
     reference = float(np.sqrt(np.mean(np.square(audio), dtype=np.float64)))
+    grid = np.asarray(analysis.beats_s)
+    downbeat_indices = np.array([np.argmin(abs(grid - beat)) for beat in analysis.downbeats_s])
     for index in range(1, len(analysis.downbeats_s) + 1):
         for length in lengths:
             if length > 128:
@@ -177,6 +180,15 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
             if timing is None:
                 continue
             start, end = timing
+            start_index = downbeat_indices[index - 1]
+            required = start_index + np.arange(0, int(length // 4) + 1) * 4
+            if not np.all(np.isin(required, downbeat_indices)):
+                continue
+            inside = downbeat_indices[
+                (downbeat_indices >= start_index) & (downbeat_indices <= start_index + length)
+            ]
+            if np.any(np.diff(inside) != 4):
+                continue
             if not any(start >= s.start_s and end <= s.end_s for s in sections):
                 continue
             score = score_loop(audio, sr, start, end, analysis.beats_s, stem, vocal, reference)
@@ -201,10 +213,24 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
             hint="Try a shorter length, another section or stem='mix'.",
         )
     with project_lock(project):
+        if (
+            fingerprint(project, source_id, load_analysis(project, source_id))
+            != original_fingerprint
+        ):
+            raise MuestraError.one(
+                "stale_candidates",
+                "Source or analysis changed while candidates were scored.",
+                hint="Run source.find_chops again.",
+            )
         # Shared next_set_id is source-local; the public id has no source component,
         # so take max+1 over ALL sources to guarantee global uniqueness.
         directories = {source_id, *(p.parent.name for p in set_paths(project))}
-        set_id = f"cs{max(int(next_set_id(project, s)[2:]) for s in directories):03d}"
+        next_number = max(int(next_set_id(project, s)[2:]) for s in directories)
+        # Interrupted preview rendering also reserves its id; never collide on retry.
+        for preview_path in project.path("cache/previews").glob("*/cs*"):
+            if re.fullmatch(r"cs\d{3,}", preview_path.name):
+                next_number = max(next_number, int(preview_path.name[2:]) + 1)
+        set_id = f"cs{next_number:03d}"
         candidates = []
         preview_dir = project.path(f"cache/previews/{source_id}/{set_id}")
         preview_dir.mkdir(parents=True, exist_ok=False)

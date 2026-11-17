@@ -16,7 +16,7 @@ from .audio import decode
 from .separation import Progress, report
 from .storage import digest, project_lock, read_json, source_file, write_json
 
-ANALYSIS_METHOD = "beat-this-final0-minimal+chroma-ks+novelty-v1"
+ANALYSIS_METHOD = "beat-this-final0-minimal+chroma-ks+novelty-v2"
 BeatTracker = Callable[[np.ndarray, int], tuple[np.ndarray, np.ndarray]]
 
 
@@ -89,6 +89,12 @@ def spectral_features(audio: np.ndarray, sr: int) -> tuple[np.ndarray, np.ndarra
     for pc in range(12):
         chroma[pc] = magnitude[valid][pitch_classes == pc].sum(axis=0)
     return times, magnitude, chroma
+
+
+def meter_consistency(beats, downbeats) -> float | None:
+    """Fraction of inferred bars containing exactly four beat intervals (v0 meter)."""
+    indices = [int(np.argmin(abs(np.asarray(beats) - beat))) for beat in downbeats]
+    return float(np.mean(np.diff(indices) == 4)) if len(indices) > 1 else None
 
 
 def estimate_key(chroma: np.ndarray) -> KeyEstimate | None:
@@ -216,6 +222,16 @@ def analyze(
             raise MuestraError.one("grid_mismatch", "Silent audio has no reliable beat grid.")
         report(progress, 0.15, "Tracking beats and downbeats with Beat This! final0")
         beats, downbeats = validate_grid(*(tracker or neural_beats)(audio, sr), duration)
+        consistency = meter_consistency(beats, downbeats)
+        if consistency is not None and consistency < 0.75:
+            raise MuestraError.one(
+                "grid_mismatch",
+                f"Only {consistency:.0%} of inferred bars contain four beats; "
+                "the recording's meter or downbeat grid is uncertain.",
+                hint="Muestra v0 requires 4/4. Audition the click overlay with "
+                "muestra.ingest.validation; use a verified 4/4 excerpt. "
+                "No speculative grid was cached.",
+            )
         intervals = np.diff(beats)
         bpm = float(60 / np.median(intervals))
         if not 0 < bpm < 400:
@@ -248,6 +264,7 @@ def analyze(
                 "identity": identity,
                 "method": ANALYSIS_METHOD,
                 "tempo_interval_spread": float(spread),
+                "four_beat_bar_consistency": consistency,
             },
         )
         report(progress, 1, "Analysis ready; audition downbeats on old or noisy records")
