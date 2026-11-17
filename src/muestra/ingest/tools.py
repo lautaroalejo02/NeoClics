@@ -1,8 +1,14 @@
-"""Tool stubs owned by WP1 (ingest): source.* and chops.choose.
+"""Tool stubs owned by WP1 (ingest): source.* and chops.choose /
+chops.list.
 
-WP1 implements these; WP0 only fixes the typed interface. Candidate sets
-persist to cache/chops/<source_id>/<set_id>.json; previews to
+WP1 implements these; WP0 only fixes the typed interface. Candidate
+sets persist to cache/chops/<source_id>/<set_id>.json; previews to
 cache/previews/<source_id>/<set_id>/.
+
+Programmatic song.yaml edits (``source.import`` registering a source,
+``chops.choose`` writing a chop) go through
+``muestra.project.edit_song_document`` (ruamel round-trip) — never a
+wholesale rewrite, so comments, ordering and omitted defaults survive.
 """
 
 from __future__ import annotations
@@ -11,7 +17,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ..schemas._base import IdStr, RelPath
+from ..schemas._base import CandidateIdStr, IdStr, RelPath
 from ..schemas.analysis import Analysis
 from ..schemas.chops import ChopAdjust, ChopCandidateSet
 from ..schemas.song import Chop, StemName
@@ -28,11 +34,15 @@ __all__ = [
     "SourceFindChopsResult",
     "ChopsChooseParams",
     "ChopsChooseResult",
+    "ChopsListParams",
+    "ChopsListResult",
     "source_import",
     "source_separate",
     "source_analyze",
     "source_find_chops",
     "chops_choose",
+    "chops_list",
+    "TOOLS",
 ]
 
 _WP = "WP1"
@@ -51,7 +61,8 @@ class SourceImportResult(ToolOutput):
 
 
 def source_import(p: SourceImportParams) -> SourceImportResult:
-    """Copy an audio file into sources/ and register it in song.yaml."""
+    """Copy an audio file into sources/ and register it in song.yaml
+    (ruamel round-trip edit — comments and ordering survive)."""
     raise NotImplementedError(_WP)
 
 
@@ -121,9 +132,10 @@ def source_find_chops(p: SourceFindChopsParams) -> SourceFindChopsResult:
 
 
 class ChopsChooseParams(ProjectScoped):
-    candidate_id: str = Field(
-        description="Global candidate id '<set_id>/<local_id>', e.g. 'cs001/cand2'."
+    candidate_id: CandidateIdStr = Field(
+        description="Global candidate id 'csNNN/candN', e.g. 'cs001/cand2'."
     )
+    chop_id: IdStr = Field(description="Id of the chop to create or replace in song.yaml.")
     adjust: ChopAdjust | None = Field(
         default=None, description="Beat deltas to start/length (mode manual)."
     )
@@ -136,11 +148,77 @@ class ChopsChooseParams(ProjectScoped):
 
 class ChopsChooseResult(ToolOutput):
     set_id: str
-    candidate_id: str
-    chop: Chop = Field(description="The resulting chop to write into song.yaml.")
+    candidate_id: CandidateIdStr
+    chop: Chop = Field(description="The chop written into song.yaml.")
 
 
 def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
-    """Fix a candidate from a find_chops set into a Chop (optionally adjusted);
-    marks the set as chosen. Manual choices are recorded in feedback.jsonl."""
+    """Fix a candidate from a find_chops set into a Chop (optionally
+    adjusted) and write it into song.yaml as ``chop_id`` via a ruamel
+    round-trip edit; marks the set as chosen. Manual choices are
+    recorded in feedback.jsonl."""
     raise NotImplementedError(_WP)
+
+
+class ChopsListParams(ProjectScoped):
+    source_id: IdStr | None = Field(
+        default=None, description="Filter candidate sets by source; omit for all."
+    )
+
+
+class ChopsListResult(ToolOutput):
+    sets: list[ChopCandidateSet] = Field(
+        default_factory=list, description="Candidate sets under cache/chops/."
+    )
+
+
+def chops_list(p: ChopsListParams) -> ChopsListResult:
+    """List persisted chop-candidate sets (optionally for one source)."""
+    raise NotImplementedError(_WP)
+
+
+#: tools exported by this subpackage (collected by muestra.registry).
+TOOLS = [
+    (
+        "source.import",
+        source_import,
+        SourceImportParams,
+        SourceImportResult,
+        {"cli": ("source", "import")},
+    ),
+    (
+        "source.separate",
+        source_separate,
+        SourceSeparateParams,
+        SourceSeparateResult,
+        {"long_running": True, "cli": ("source", "separate")},
+    ),
+    (
+        "source.analyze",
+        source_analyze,
+        SourceAnalyzeParams,
+        SourceAnalyzeResult,
+        {"long_running": True, "cli": ("source", "analyze")},
+    ),
+    (
+        "source.find_chops",
+        source_find_chops,
+        SourceFindChopsParams,
+        SourceFindChopsResult,
+        {"long_running": True, "cli": ("source", "find-chops")},
+    ),
+    (
+        "chops.choose",
+        chops_choose,
+        ChopsChooseParams,
+        ChopsChooseResult,
+        {"cli": ("chops", "choose")},
+    ),
+    (
+        "chops.list",
+        chops_list,
+        ChopsListParams,
+        ChopsListResult,
+        {"readonly": True, "cli": ("chops", "list")},
+    ),
+]

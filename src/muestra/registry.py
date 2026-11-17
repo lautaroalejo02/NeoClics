@@ -1,87 +1,42 @@
-"""Single registry of every section-8 tool.
+"""Single registry of every section-8 tool — collected, not listed.
+
+Tool registration is DECENTRALISED: each subpackage exposes a ``TOOLS``
+list in its own ``tools.py`` of ``(name, func, params, result, flags)``
+tuples; this module only collects them from a fixed list of
+subpackages. WPs add tools by editing their own subpackage — this file
+never needs to change for that (merge-safe).
 
 ``REGISTRY`` maps tool names (``"source.find_chops"``) to a
-:class:`ToolSpec` with the callable, its params model and its result
-model. WP7 generates MCP tools, CLI commands and API routes mechanically
-from this table; JSON Schemas for every params/result model are exported
-to ``schemas/tools/`` (see ``muestra.schemas.export``).
+:class:`ToolSpec` with the callable, its params/result models and the
+routing flags WP7 generates interfaces from:
 
-Calling convention: ``fn(params) -> result`` where params is the params
-model instance. ``run_tool`` wraps any tool into the ``ToolResult``
-envelope.
+* ``mcp_name`` — the MCP tool name: dots replaced by underscores
+  (``source_find_chops``);
+* ``readonly`` — the tool doesn't modify the project (HTTP GET route);
+* ``long_running`` — over HTTP it returns ``{job_id}`` and progress via
+  ``GET /jobs/<id>``; over MCP/CLI it simply blocks;
+* ``cli`` — ``(group, action)``: ``("source", "import")`` means
+  ``muestra source import``; a ``None`` action means the group IS the
+  command (top-level ``muestra render`` / ``muestra preview``).
+
+Calling convention: ``fn(params) -> result``. ``run_tool`` wraps any
+tool into the ``ToolResult`` envelope.
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from pydantic import BaseModel, ValidationError
 
-from .ears.tools import EarsAnalyzeParams, EarsAnalyzeResult, ears_analyze
 from .errors import Issue, MuestraError, ToolResult, issues_from_validation_error
-from .feedback.tools import FeedbackReadParams, FeedbackReadResult, feedback_read
-from .ingest.tools import (
-    ChopsChooseParams,
-    ChopsChooseResult,
-    SourceAnalyzeParams,
-    SourceAnalyzeResult,
-    SourceFindChopsParams,
-    SourceFindChopsResult,
-    SourceImportParams,
-    SourceImportResult,
-    SourceSeparateParams,
-    SourceSeparateResult,
-    chops_choose,
-    source_analyze,
-    source_find_chops,
-    source_import,
-    source_separate,
-)
-from .library.tools import (
-    LibraryIndexParams,
-    LibraryIndexResult,
-    LibrarySearchParams,
-    LibrarySearchResult,
-    library_index,
-    library_search,
-)
-from .project.tools import (
-    ProjectCreateParams,
-    ProjectCreateResult,
-    ProjectOpenParams,
-    ProjectOpenResult,
-    SongGetParams,
-    SongGetResult,
-    SongValidateParams,
-    SongValidateResult,
-    project_create,
-    project_open,
-    song_get,
-    song_validate,
-)
-from .render.tools import (
-    PreviewParams,
-    PreviewResult,
-    RenderParams,
-    RenderResult,
-    preview,
-    render,
-)
-from .versions.tools import (
-    VersionsDiffParams,
-    VersionsDiffResult,
-    VersionsListParams,
-    VersionsListResult,
-    VersionsRestoreParams,
-    VersionsRestoreResult,
-    versions_diff,
-    versions_list,
-    versions_restore,
-)
 
 __all__ = ["ToolSpec", "REGISTRY", "tool_spec", "run_tool"]
+
+_MCP_NAME_RE = re.compile(r"^[a-zA-Z0-9_-]{1,64}$")
 
 
 @dataclass(frozen=True)
@@ -92,59 +47,71 @@ class ToolSpec:
     params: type[BaseModel]
     result: type[BaseModel] | None
     description: str
-
-
-def _spec(
-    name: str,
-    func: Callable,
-    params: type[BaseModel],
-    result: type[BaseModel] | None,
-) -> ToolSpec:
-    doc = (func.__doc__ or "").strip().split("\n")[0]
-    return ToolSpec(
-        name=name,
-        group=name.split(".", 1)[0],
-        func=func,
-        params=params,
-        result=result,
-        description=doc,
+    mcp_name: str
+    readonly: bool = False
+    long_running: bool = False
+    cli: tuple[str, str | None] | None = field(
+        default=None,
+        metadata={
+            "doc": "(group, action); action None = the group is the "
+            "top-level command ('render', 'preview')."
+        },
     )
 
 
-#: name -> ToolSpec, in spec section-8 order.
-REGISTRY: dict[str, ToolSpec] = {
-    s.name: s
-    for s in [
-        _spec("project.create", project_create, ProjectCreateParams, ProjectCreateResult),
-        _spec("project.open", project_open, ProjectOpenParams, ProjectOpenResult),
-        _spec("source.import", source_import, SourceImportParams, SourceImportResult),
-        _spec("source.separate", source_separate, SourceSeparateParams, SourceSeparateResult),
-        _spec("source.analyze", source_analyze, SourceAnalyzeParams, SourceAnalyzeResult),
-        _spec(
-            "source.find_chops",
-            source_find_chops,
-            SourceFindChopsParams,
-            SourceFindChopsResult,
-        ),
-        _spec("chops.choose", chops_choose, ChopsChooseParams, ChopsChooseResult),
-        _spec("preview", preview, PreviewParams, PreviewResult),
-        _spec("library.index", library_index, LibraryIndexParams, LibraryIndexResult),
-        _spec("library.search", library_search, LibrarySearchParams, LibrarySearchResult),
-        _spec("song.get", song_get, SongGetParams, SongGetResult),
-        _spec("song.validate", song_validate, SongValidateParams, SongValidateResult),
-        _spec("render", render, RenderParams, RenderResult),
-        _spec("versions.list", versions_list, VersionsListParams, VersionsListResult),
-        _spec("versions.diff", versions_diff, VersionsDiffParams, VersionsDiffResult),
-        _spec(
-            "versions.restore",
-            versions_restore,
-            VersionsRestoreParams,
-            VersionsRestoreResult,
-        ),
-        _spec("feedback.read", feedback_read, FeedbackReadParams, FeedbackReadResult),
-        _spec("ears.analyze", ears_analyze, EarsAnalyzeParams, EarsAnalyzeResult),
-    ]
-}
+#: fixed list of subpackages whose tools.py TOOLS lists are collected.
+_TOOL_PACKAGES = (
+    "project",
+    "ingest",
+    "render",
+    "library",
+    "versions",
+    "feedback",
+    "ears",
+)
+
+
+def _mcp_name(name: str) -> str:
+    """Tool name -> MCP name: dots to underscores, validated."""
+    mcp = name.replace(".", "_")
+    if not _MCP_NAME_RE.match(mcp):
+        raise MuestraError.one(
+            "internal_error",
+            f"Tool name {name!r} produces invalid MCP name {mcp!r}.",
+        )
+    return mcp
+
+
+def _collect() -> dict[str, ToolSpec]:
+    registry: dict[str, ToolSpec] = {}
+    for pkg in _TOOL_PACKAGES:
+        module = __import__(f"muestra.{pkg}.tools", fromlist=["TOOLS"])
+        for entry in module.TOOLS:
+            name, func, params, result, *rest = entry
+            flags = rest[0] if rest else {}
+            doc = (func.__doc__ or "").strip().split("\n")[0]
+            if name in registry:
+                raise MuestraError.one(
+                    "internal_error",
+                    f"Duplicate tool registration {name!r}.",
+                )
+            registry[name] = ToolSpec(
+                name=name,
+                group=name.split(".", 1)[0],
+                func=func,
+                params=params,
+                result=result,
+                description=doc,
+                mcp_name=_mcp_name(name),
+                readonly=bool(flags.get("readonly", False)),
+                long_running=bool(flags.get("long_running", False)),
+                cli=flags.get("cli"),
+            )
+    return registry
+
+
+#: name -> ToolSpec, collected from every tool subpackage's TOOLS.
+REGISTRY: dict[str, ToolSpec] = _collect()
 
 
 def tool_spec(name: str) -> ToolSpec:
