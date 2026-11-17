@@ -224,6 +224,24 @@ def test_ids_account_for_renders_dirs_and_feedback(project):
     assert next_version_id(project) == "v010"
 
 
+def test_hand_written_commit_titled_like_a_version_does_not_bump_ids(project):
+    (project.root / "notes.txt").write_text("x")
+    write_song(project, song_text())
+    git(project, "add", "-A")
+    git(
+        project,
+        "-c",
+        "user.name=a",
+        "-c",
+        "user.email=b@c",
+        "commit",
+        "-q",
+        "-m",
+        "v100: mi release a mano",
+    )
+    assert next_version_id(project) == "v001"
+
+
 def test_free_text_in_feedback_does_not_bump_ids(project):
     project.feedback_path.write_text(
         json.dumps(
@@ -351,3 +369,16 @@ def test_parent_follows_manual_reset_to_an_older_version(project):
     assert suggest_parent(project) == "v001"
     assert fake_render(project) == "v003"
     assert commit_info(project.root, "v003").parent == "v001"
+
+
+def test_project_folder_with_spaces_and_accents(tmp_path):
+    proj = create_project(tmp_path / "mi canción ñandú (v2)")
+    v = fake_render(proj, request="ñ", summary="canción")
+    assert v == "v001"
+    assert commit_info(proj.root, v).summary == "canción"
+
+
+def test_use_config_only_without_identity_still_versions(project, global_gitconfig):
+    global_gitconfig.write_text("[user]\n\tuseConfigOnly = true\n", encoding="utf-8")
+    record_version(project, "v001", None, "x", None, None)
+    assert git(project, "log", "-1", "--format=%an", "v001") == "Muestra"

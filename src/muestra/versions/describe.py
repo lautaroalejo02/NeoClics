@@ -712,7 +712,7 @@ class _Describer:
             chops = sorted({c["chop"] for c in clips if c.get("chop")})
             samples = sorted({_base(c["sample"]) for c in clips if c.get("sample")})
             bits = [f"chop {c}" for c in chops] + [f"sample {s}" for s in samples]
-            return f"{len(clips)} {_plural(len(clips), 'clip', 'clips')} de {_join(bits)}"
+            return f"{len(clips)} {_plural(len(clips), 'clip', 'clips')} ({_join(bits)})"
         if tb.get("pattern") is not None:
             lanes = [_bare(_lane_np(k)) for k in tb["pattern"]["lanes"]]
             return "patrón de batería: " + _join(lanes)

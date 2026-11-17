@@ -588,11 +588,19 @@ def _history_versions(root: Path) -> set[int]:
     """Version numbers of Muestra version commits anywhere in history (survives
     deleted tags)."""
     nums: set[int] = set()
-    proc = _git(root, "log", "--all", "--format=%s", check=False)
+    proc = _git(
+        root,
+        "log",
+        "--all",
+        "-E",
+        "--grep=^Muestra-Version: v[0-9]{3,}$",
+        "--format=%B",
+        check=False,
+    )
     if proc.returncode != 0:
         return nums
     for line in _text(proc.stdout).splitlines():
-        m = _SUBJECT_VERSION_RE.match(line.strip())
+        m = re.match(r"^Muestra-Version: (v\d{3,})$", line.strip())
         if m:
             nums.add(int(m.group(1)[1:]))
     return nums
@@ -852,7 +860,17 @@ def _commit_versioned(
             args[2:2] = ["-p", head]
         sha = _git_out(root, *args, input=message.encode("utf-8"), config=ident)
     old = head or "0" * 40
-    upd = _git(root, "update-ref", "-m", "muestra: version commit", ref, sha, old, check=False)
+    upd = _git(
+        root,
+        "update-ref",
+        "-m",
+        "muestra: version commit",
+        ref,
+        sha,
+        old,
+        config=ident,  # the reflog entry needs an identity too (user.useConfigOnly)
+        check=False,
+    )
     if upd.returncode != 0:
         raise MuestraError.one(
             "git_error",
@@ -1038,7 +1056,7 @@ def record_version(
     except MuestraError:
         ref = _branch_ref(root)
         if ref and previous:  # undo our commit so a failed tag leaves no stray version
-            _git(root, "update-ref", ref, previous, sha, check=False)
+            _git(root, "update-ref", ref, previous, sha, config=ident, check=False)
             _git(root, "reset", "-q", "--", *VERSIONED_PATHS, check=False)
         raise
     return sha
