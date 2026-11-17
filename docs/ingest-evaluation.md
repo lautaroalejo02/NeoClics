@@ -73,3 +73,58 @@ not filtered BSS Eval. Wrong-source simultaneous projection into other:
 vocals .11295% -> .09251%, bass .02744% -> .02520%, drums .08574% -> .07608%.
 These are correlated-source attribution proxies, NOT isolated audible bleed.
 RoFormer and actual four-minute throughput measurements are still pending.
+
+## Acoustic hardening checkpoint
+
+Full 23-track remeasurement: beat F70 **.899166 -> .941285**, downbeat F70
+**.851565 -> .895043**. Speed Metal changes from 0 -> .96875 beat F70 and
+0 -> 1.0 downbeat F70; no other track's beat/downbeat F70 changes. Half-time
+parity is selected by onset evidence only at >=16 beats and >1.5:1 contrast.
+Weak evidence retains the old parity. The original tracker arrays remain
+available for reversible regridding. Existing manual grids/song chops do not
+move on cache upgrades. Structural regularity alone no longer claims verified
+bar phase: automatic confidence is capped at .55 and `ask_human` is true.
+
+Pulse-free regions additionally need distinct onset support at >=40% of beats
+(minimum two) to count as reliable. Cached spectral evidence is reused, and
+regrid checks the new grid against audio. Drift/pickup/shuffle, pulse-free
+intro, strong/ambiguous parity and manual-cache preservation have fast tests.
+`uv run pytest tests/ingest -q`: **71 passed, 3 skipped**, 54.40 s on the
+shared laptop. Whole-repository validation is still pending.
+
+False-reliable track-time falls **.072436 -> .043409**; conditional
+false-reliable macro fraction **.167930 -> .120311**. Marked reliable time
+**.736613 -> .731276**; actually correct complete-bar time **.664177 -> .703733**.
+This is not elimination of the dangerous case: Gospel remains half-time and
+some structurally consistent bars remain wrong. No new global tempo-octave
+policy or automatic downbeat phase shift is justified by this set.
+
+Reference-drums and 50:50 reference-drums/mix runs completed for all 23 tracks.
+These are **oracle input ablations**, not measurements of estimated Demucs
+drums. Preliminary beat/downbeat F70: drums .909177/.840109, fusion
+.889389/.820355. The final consistent-version comparison is pending. This
+does not justify replacing the mix-first default.
+
+The 23 tracks contain no annotated keys. The harness now compares KS summed
+chroma with an independent frame-normalized weighted diatonic-scale cosine
+estimator, and tests harmonic reference stems only where reconstruction passes
+the gate. Confidence-bin accuracy is emitted only for supplied labelled keys.
+There is no defensible real-recording key accuracy/calibration claim yet.
+
+Disco 20 s RoFormer cascade completed: **450.57 s**, **2785 MiB** sampled peak;
+drums/bass/vocals/other SDR **15.22/14.79/17.18/9.47 dB**. Wrong-source
+projection into other: vocals **.01307%**, bass **.02203%**, drums **.09794%**.
+Compared with htdemucs, vocal projection falls ~8.6x but drums increase.
+Actual four-minute Demucs / fine-tuned runs are in progress; RoFormer at four
+minutes is not yet measured and cannot inherit a 20-second peak-RAM figure.
+
+An additive CLI now produces instrumental/no-drums sums as **ordinary source
+files**, preserving a parent-grid snapshot and remeasuring key/loudness/pulse
+reliability without neural retracking. No schema, song, renderer, API, UI or
+ears files were changed. Agent-facing native-tool integration is still needed.
+
+Correct-grid chop evaluation: **1,216** 8/16-beat loops across all 23 tracks;
+macro Spearman **.201231** against the held-out 200-ms seam/join proxy.
+Mean proxy **.435608** across all candidates, **.499486** among top-three
+ranked candidates. Phrase-start annotations do not exist here; harmonic return
+does not prove a phrase boundary. Scoring changes are not yet justified.

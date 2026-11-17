@@ -165,7 +165,8 @@ def write_report(path, results):
         "Reference sums worse than -25 dB residual are refused. No listening claims.",
         "Peak RSS samples the process tree every 100 ms, including model load.",
         "",
-        "| Track | Model | Audio s | Separation s | Peak MiB | drums SDR | bass SDR | vocals SDR | other SDR |",
+        "| Track | Model | Audio s | Separation s | Peak MiB | "
+        "drums SDR | bass SDR | vocals SDR | other SDR |",
         "|---|---|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for result in results:
@@ -175,7 +176,9 @@ def write_report(path, results):
         ]
         formatted = " | ".join("n/a" if score is None else f"{score:.2f}" for score in scores)
         rows.append(
-            f"| {result['id']} | {result['model']} | {result.get('audio_s', 0):.1f} | {result.get('separation_s', 0):.2f} | {result.get('peak_rss_mib', 0):.1f} | {formatted} |"
+            f"| {result['id']} | {result['model']} | {result.get('audio_s', 0):.1f} | "
+            f"{result.get('separation_s', 0):.2f} | "
+            f"{result.get('peak_rss_mib', 0):.1f} | {formatted} |"
         )
     rows += ["", "```json", json.dumps(results, indent=2), "```", ""]
     path.write_text("\n".join(rows), encoding="utf-8", newline="\n")

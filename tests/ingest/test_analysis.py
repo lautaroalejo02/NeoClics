@@ -53,6 +53,24 @@ def test_key_profile_and_silence():
     assert estimate_key(np.zeros((12, 10))) is None
 
 
+def test_quality_upgrade_never_moves_a_manually_verified_grid(rhythmic_project):
+    from muestra.ingest.regrid import regrid
+    from muestra.ingest.storage import read_json, write_json
+
+    project, source_id, fixture = rhythmic_project
+    beats = np.arange(0.25, 17, 0.25)
+    analyze(project, source_id, tracker=lambda *args: (beats, beats[::4]))
+    manual = regrid(project, source_id, tempo_factor=0.5, beat_phase=1).analysis
+    metadata_path = project.path(f"cache/analysis/{source_id}.meta.json")
+    metadata = read_json(metadata_path)
+    metadata["quality_version"] = "older-audio-evidence"
+    write_json(metadata_path, metadata)
+    cached = analyze(project, source_id, tracker=lambda *args: pytest.fail("Do not retrack cache"))
+    assert cached.beats_s == manual.beats_s
+    assert cached.downbeats_s == manual.downbeats_s
+    assert cached.grid.origin == "manual"
+
+
 def test_inconsistent_meter_is_cached_with_reliability(rhythmic_project):
     project, source_id, _ = rhythmic_project
     beats = np.arange(0.25, 17, 0.5)

@@ -220,6 +220,8 @@ def assess(
         bar_conf = round(min(1.0, max(0.0, consistency)), 3)
     if origin == "manual":
         bar_conf = max(bar_conf, 0.9)
+    else:
+        bar_conf = min(bar_conf, 0.55)
 
     alternatives: list[GridAlternative] = []
     for f in TEMPO_FACTORS:
@@ -382,12 +384,18 @@ def auto_correct(
     tempo_range: tuple[float, float] = DEFAULT_TEMPO_RANGE,
     *,
     apply: bool = True,
+    beat_strength: np.ndarray | None = None,
 ) -> Analysis:
     """Pick the tempo octave in ``tempo_range`` (``apply=False``: only report)."""
     raw = raw_of(analysis)
     raw_beats = np.asarray(raw.beats_s)
     factor = choose_factor(raw.bpm_global, tempo_range) if apply else 1.0
     phase = default_beat_phase(raw_beats, np.asarray(raw.downbeats_s)) if factor == 0.5 else 0
+    acoustic_phase = False
+    if factor == 0.5 and beat_strength is not None:
+        from .pulse import supported_half_phase
+
+        phase, acoustic_phase = supported_half_phase(beat_strength, phase)
     consistency = meter_consistency(raw.beats_s, raw.downbeats_s)
     history = []
     if factor != 1.0:
@@ -395,6 +403,10 @@ def auto_correct(
             GridStep(at=datetime.now(UTC), origin="auto", tempo_factor=factor, beat_phase=phase)
         )
     note = ""
+    if acoustic_phase:
+        note = (
+            "La paridad de beats tiene respaldo de ataques espectrales; el uno sigue sin verificar."
+        )
     suggested = choose_factor(raw.bpm_global, tempo_range)
     if not apply and suggested != 1.0:
         lo, hi = tempo_range

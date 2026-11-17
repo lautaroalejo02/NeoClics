@@ -119,11 +119,27 @@ def key_error(reference, estimate) -> str:
 
 
 def key_alternative(chroma) -> dict | None:
-    from .analysis import estimate_key
-
-    normalized = chroma / np.maximum(chroma.sum(axis=0), 1e-12)
-    estimate = estimate_key(normalized)
-    return estimate.model_dump() if estimate else None
+    if not np.any(chroma > 1e-8):
+        return None
+    normalized = chroma / np.maximum(np.linalg.norm(chroma, axis=0), 1e-12)
+    votes = []
+    names = ["C", "C#", "D", "Eb", "E", "F", "F#", "G", "Ab", "A", "Bb", "B"]
+    for mode, scale in (("major", [0, 2, 4, 5, 7, 9, 11]), ("minor", [0, 2, 3, 5, 7, 8, 10])):
+        template = np.zeros(12)
+        template[scale] = 1
+        template[[0, 7]] = [3, 2]
+        template /= np.linalg.norm(template)
+        for tonic in range(12):
+            scores = np.roll(template, tonic) @ normalized
+            votes.append((float(np.mean(scores)), tonic, mode))
+    votes.sort(reverse=True)
+    best, tonic, mode = votes[0]
+    return {
+        "tonic": names[tonic],
+        "mode": mode,
+        "confidence": float(np.clip((best - votes[1][0]) / 0.2, 0, 1)),
+        "method": "frame-normalized weighted diatonic scale cosine (not calibrated)",
+    }
 
 
 def load_tracks(path: Path) -> tuple[Path, list[dict]]:
@@ -170,10 +186,33 @@ def aggregate(results) -> dict:
         for label in ("correct", "relative", "parallel", "fifth", "other", "missing")
     }
     means["key_annotated"] = sum("key_error" in result for result in results)
+    means["key_confidence_bins"] = []
+    for lower, upper in ((0, 0.25), (0.25, 0.5), (0.5, 0.75), (0.75, 1.000001)):
+        labelled = [
+            result
+            for result in results
+            if "key_error" in result
+            and result.get("key")
+            and lower <= result["key"]["confidence"] < upper
+        ]
+        means["key_confidence_bins"].append(
+            {
+                "range": [lower, min(1, upper)],
+                "n": len(labelled),
+                "observed_exact_accuracy": float(
+                    np.mean([result["key_error"] == "correct" for result in labelled])
+                )
+                if labelled
+                else None,
+            }
+        )
     means["tracks"] = len(results)
     means["annotated_tracks"] = len(annotated)
     means["failed_tracks"] = sum("error" in result for result in results)
     means["analysis_s"] = sum(result.get("analysis_s", 0) for result in results)
+    means["analysis_cached_tracks"] = sum(
+        result.get("analysis_cache_present", False) for result in results
+    )
     return means
 
 
@@ -228,7 +267,9 @@ def write_report(path, results):
     path.write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
 
 
-def evaluate_track(root: Path, track: dict, work: Path, previews=True, input_mode="mix") -> dict:
+def evaluate_track(
+    root: Path, track: dict, work: Path, previews=True, input_mode="mix", fresh=False
+) -> dict:
     from muestra.project import create_project, load_analysis, open_project
 
     from .analysis import spectral_features
@@ -261,6 +302,10 @@ def evaluate_track(root: Path, track: dict, work: Path, previews=True, input_mod
     if input_mode != "mix":
         audio_path.unlink()
         audio_path = project.resolve(imported.file)
+    metadata_path = project.path(f"cache/analysis/{imported.source_id}.meta.json")
+    if fresh:
+        metadata_path.unlink(missing_ok=True)
+    cached = metadata_path.exists()
     started = time.perf_counter()
     output = source_analyze(
         SourceAnalyzeParams(project=str(project_root), source_id=imported.source_id)
@@ -274,6 +319,7 @@ def evaluate_track(root: Path, track: dict, work: Path, previews=True, input_mod
         "reference_strength": track.get("reference_strength", "none; audition only"),
         "audio": str(audio_path),
         "analysis_s": elapsed,
+        "analysis_cache_present": cached,
         "bpm": analysis.bpm_global,
         "tempo_variable": analysis.tempo_variable,
         "key": analysis.key.model_dump() if analysis.key else None,
@@ -294,6 +340,19 @@ def evaluate_track(root: Path, track: dict, work: Path, previews=True, input_mod
     audio, sr = decode(audio_path)
     _, _, chroma = spectral_features(audio, sr)
     result["key_frame_normalized"] = key_alternative(chroma)
+    if input_mode == "mix" and track.get("reference_stems"):
+        from .analysis import estimate_key
+        from .separation_evaluation import reference_audio, reference_consistency
+
+        mix, ref_sr, references = reference_audio(root, track)
+        consistency = reference_consistency(mix, references)
+        result["reference_consistency"] = consistency
+        harmonic = [references[name] for name in ("other", "bass") if name in references]
+        if harmonic and consistency["usable"]:
+            _, _, harmonic_chroma = spectral_features(sum(harmonic), ref_sr)
+            estimated = estimate_key(harmonic_chroma)
+            result["key_harmonic_reference"] = estimated.model_dump() if estimated else None
+            result["key_harmonic_alternative"] = key_alternative(harmonic_chroma)
     if track.get("key"):
         result["key_error"] = key_error(track["key"], result["key"])
         result["key_alternative_error"] = key_error(track["key"], result["key_frame_normalized"])
@@ -319,6 +378,9 @@ def main():
     parser.add_argument("--only", nargs="*")
     parser.add_argument("--input-mode", choices=["mix", "drums", "fusion"], default="mix")
     parser.add_argument("--no-previews", action="store_true")
+    parser.add_argument(
+        "--fresh", action="store_true", help="Re-run model analysis in audit projects"
+    )
     args = parser.parse_args()
     root, tracks = load_tracks(args.input.resolve())
     work = (args.work or args.report.parent / "evaluation-projects").resolve()
@@ -328,7 +390,9 @@ def main():
             continue
         print(f"Analyzing {track['id']} ({args.input_mode})", flush=True)
         try:
-            result = evaluate_track(root, track, work, not args.no_previews, args.input_mode)
+            result = evaluate_track(
+                root, track, work, not args.no_previews, args.input_mode, args.fresh
+            )
         except Exception as exc:
             result = {
                 "id": track["id"],

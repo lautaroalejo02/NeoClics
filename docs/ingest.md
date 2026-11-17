@@ -292,6 +292,93 @@ Valid nonrhythmic audio produces descriptors and an unavailable grid
 (`bpm_global=null`, empty arrays, zero confidence); preview plays explicitly
 labelled audio without clicks. Silence and undecodable audio remain errors.
 
+## WP19: repeatable quality evaluation
+
+See `docs/ingest-evaluation.md` for measured results and limitations. Audio is
+never downloaded during ordinary tests. Prepare the explicitly CC-BY-NC-SA
+MDB Drums collection (noncommercial evaluation only):
+
+```powershell
+uv run python -m muestra.ingest.evaluation_data "$HOME/Documents/MuestraLibrary/_test-audio/eval/mdb-drums"
+```
+
+Evaluate the owner's own local songs, with confidence, alternative grids,
+key alternatives, reliability maps and click previews, **without annotations**:
+
+```powershell
+uv run --with mir-eval python -m muestra.ingest.evaluation "C:/path/to/your/songs" --report "$HOME/Documents/MuestraLibrary/_test-audio/eval/own-songs.md"
+```
+
+This runs the real `source.import` and `source.analyze` tools in separate audit
+projects, never modifying an existing song project. Results are persisted after
+each track as Markdown and JSON. Preview paths and listening instructions are
+included per track. The default audition is the first 20 s, including a possible
+nonrhythmic intro; full-file maps show later windows to audition with
+`source.preview_grid(window_s=[start,end])`. Re-runs reuse caches (recorded in
+the JSON); `--fresh` reruns analysis. A single local audio file also works.
+
+For annotations, pass `.../mdb-drums/manifest.json` instead of the songs folder.
+Manifest tracks have `id`, `title`, `audio`, optional `beats` (two columns:
+seconds and 1-based beat position), optional `key: {tonic, mode}`, and optional
+`reference_stems: {drums: [path], bass: [path], other: [path], vocals: [path]}`.
+Relative paths resolve beside the manifest. Missing labels remain unmeasured,
+never guessed from tracker agreement. CML/AML use the optional `mir-eval`
+package supplied by `--with`; it is not a new product dependency.
+`--input-mode drums` / `fusion` compare **reference** drums / 50:50 drum+mix
+inputs, not separated stems. Reference reconstruction validity is reported for
+the mix; badly aligned released multitracks must not support SDR claims.
+
+`python -m muestra.ingest.separation_evaluation MANIFEST --report separation.md`
+measures the three supported models in isolated CPU subprocesses with bounded
+timeouts, reference SDR/SI-SDR, wrong-source projection and sampled peak RSS.
+Use `--duration 240 --only disco --timeout 1800` for a measured four-minute
+repetition (explicitly labelled, not four minutes of unique performance).
+`python -m muestra.ingest.chop_evaluation MANIFEST --report chops.md` evaluates
+8/16-beat ranking on reference grids. It reports seam/harmonic proxies and
+Spearman correlation, **not** human phrase-start or perceptual accuracy.
+
+### Conservative acoustic evidence
+
+Half-time beat parity can now override majority downbeat parity only with at
+least 16 tracked beats and >1.5:1 onset-strength evidence. Spectral flux in
+35-180 Hz and 180-4000 Hz is measured independently of neural meter labels.
+This does not solve tempo-octave selection generally, or distinguish beat 1
+from beat 3. The 70-160 BPM range policy remains, and genuinely fast/slow
+material still needs human confirmation. Automatic bar-phase confidence is
+capped at .55: consistent four-beat bars are **not** verification of the one.
+Manual corrections retain their confidence and are never silently upgraded.
+Existing song chops also prevent a quality upgrade from moving their grid.
+
+Reliable bars additionally require at least two distinct spectral onsets within
+70 ms of beats (at least 40% of the beats); silence and sustained-tone intros
+cannot qualify merely because the tracker emitted a regular grid. Pulse
+evidence is cached in the analysis sidecar and reused; explicit regrid measures
+it against the new grid. The timestamps can still include speculative intro
+beats, but their pulse-free bars are unverified. This is a conservative
+evidence filter, not a probability of correctness or an independent downbeat
+detector. Mix-first remains the cheap default; separation does not move grids.
+
+### Instrumental and no-drums chop sources
+
+After `source.separate`, build sample-aligned sums without changing stem enums
+or the renderer/song contract:
+
+```powershell
+uv run python -m muestra.ingest.derived_mix PROJECT SOURCE --kind instrumental --import-as src-inst
+uv run python -m muestra.ingest.derived_mix PROJECT SOURCE --kind no-drums --import-as src-nodrums
+```
+
+Instrumental = drums+bass+other; no-drums = bass+vocals+other. These are FLOAT
+WAV sums with no normalization, not subtraction from a potentially inconsistent
+original mix. Provenance contains model and component hashes. Omit `--import-as`
+to only get the derived WAV path. With it, an ordinary source is registered and
+inherits a **snapshot** of the parent's full-file grid, with newly measured key,
+loudness and reliability (no neural retracking). Parent corrections do not
+silently move that snapshot. Request `source.find_chops(source_id=src-inst,
+stem=mix)` or `source_id=src-nodrums`. A native agent-facing tool/UI selector
+would require a separate integration; neither existing stem enum nor schema
+has been extended here.
+
 Independent synthesized ground truth: 64 drum beats drift gradually from
 0.48 to 0.56 seconds per beat. With 70 ms one-to-one matching, the interior
 56 beats yield precision **0.9298**, recall **0.9464**, F1 **0.9381**, median

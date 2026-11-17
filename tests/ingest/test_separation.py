@@ -74,6 +74,28 @@ def test_modal_is_explicitly_unimplemented(tmp_path):
         ModalBackend().separate(Path("in"), tmp_path, "htdemucs")
 
 
+@pytest.mark.parametrize("kind", ["instrumental", "no-drums"])
+def test_derived_mix_uses_three_aligned_stems_and_keeps_grid(rhythmic_project, kind):
+    from muestra.ingest.analysis import analyze
+    from muestra.ingest.derived_mix import derive_mix, import_derived
+    from muestra.project import load_analysis
+
+    project, source_id, original = rhythmic_project
+    separate(project, source_id, backend=FakeBackend())
+    path = derive_mix(project, source_id, kind)
+    combined, sr = decode(path)
+    source, _ = decode(project.resolve(original.file))
+    assert np.allclose(combined, source * 0.75, atol=1e-7)
+    assert derive_mix(project, source_id, kind) == path
+    new_id, _ = import_derived(project, source_id, kind, "src-derived")
+    derived = load_analysis(project, new_id)
+    assert derived.beats_s == original.beats_s
+    assert derived.downbeats_s == original.downbeats_s
+    assert derived.stems is None and sr == original.sample_rate
+    cached = analyze(project, new_id, tracker=lambda *args: pytest.fail("Do not retrack excerpts"))
+    assert cached.beats_s == original.beats_s
+
+
 def test_backend_rejects_unaligned_stems(rhythmic_project):
     project, source_id, _ = rhythmic_project
 
