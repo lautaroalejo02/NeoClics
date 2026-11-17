@@ -239,6 +239,7 @@ def write_report(path, results):
     ]
     for result in results:
         rel = result.get("reliability", {})
+        marked = rel.get("reliable_fraction", result.get("reliable_time_fraction", 0))
 
         def number(value):
             return "n/a" if value is None else f"{value:.3f}"
@@ -248,8 +249,8 @@ def write_report(path, results):
             f"({number(result.get('tempo', {}).get('reference_bpm'))}) | "
             f"{number(result.get('beats', {}).get('f70'))} | "
             f"{number(result.get('downbeats', {}).get('f70'))} | "
-            f"{number(100 * rel.get('reliable_fraction', 0))} | "
-            f"{number(100 * rel.get('false_reliable_track_fraction', 0))} | "
+            f"{number(100 * marked)} | "
+            f"{number(100 * rel['false_reliable_track_fraction'] if rel else None)} | "
             f"{number(result.get('analysis_s'))} |"
         )
     for result in results:
@@ -259,7 +260,11 @@ def write_report(path, results):
                 f"## {result['title']}",
                 "",
                 "```json",
-                json.dumps(result, indent=2, ensure_ascii=False),
+                json.dumps(
+                    {key: value for key, value in result.items() if key != "grid_snapshot"},
+                    indent=2,
+                    ensure_ascii=False,
+                ),
                 "```",
             ]
         )
@@ -267,8 +272,42 @@ def write_report(path, results):
     path.write_text("\n".join(rows) + "\n", encoding="utf-8", newline="\n")
 
 
+def separated_input(audio_path, work, track_id, model, max_seconds):
+    import soundfile as sf
+
+    from muestra.project import create_project, open_project
+
+    from .audio import decode
+    from .tools import SourceImportParams, SourceSeparateParams, source_import, source_separate
+
+    directory = work / track_id / f"separation-{model}"
+    project = (
+        open_project(directory)
+        if (directory / "muestra.toml").exists()
+        else create_project(directory)
+    )
+    audio, sr = decode(audio_path)
+    if max_seconds is not None:
+        audio = audio[: round(max_seconds * sr)]
+    temporary = directory / "input.wav"
+    sf.write(temporary, audio, sr, subtype="PCM_16")
+    imported = source_import(SourceImportParams(project=str(directory), path=str(temporary)))
+    temporary.unlink()
+    output = source_separate(
+        SourceSeparateParams(project=str(directory), source_id=imported.source_id, model=model)
+    )
+    return project.resolve(imported.file), project.resolve(output.stems["drums"])
+
+
 def evaluate_track(
-    root: Path, track: dict, work: Path, previews=True, input_mode="mix", fresh=False
+    root: Path,
+    track: dict,
+    work: Path,
+    previews=True,
+    input_mode="mix",
+    fresh=False,
+    separation_model=None,
+    max_seconds=None,
 ) -> dict:
     from muestra.project import create_project, load_analysis, open_project
 
@@ -284,13 +323,18 @@ def evaluate_track(
         else create_project(project_root)
     )
     audio_path = root / track["audio"]
+    drum_path = None
+    if separation_model is not None:
+        audio_path, drum_path = separated_input(
+            audio_path, work, track["id"], separation_model, max_seconds
+        )
     if input_mode != "mix":
         import soundfile as sf
 
         drum_paths = track.get("reference_stems", {}).get("drums", [])
-        if not drum_paths:
+        if not drum_paths and drum_path is None:
             raise ValueError("No reference drum stems available")
-        drums, drum_sr = decode(root / drum_paths[0])
+        drums, drum_sr = decode(drum_path or root / drum_paths[0])
         if input_mode == "fusion":
             mix, mix_sr = decode(audio_path)
             if mix_sr != drum_sr or len(mix) != len(drums):
@@ -316,19 +360,40 @@ def evaluate_track(
         "id": track["id"],
         "title": track["title"],
         "input_mode": input_mode,
+        "rhythm_stems": (
+            None
+            if input_mode == "mix"
+            else separation_model or "published reference stems (oracle)"
+        ),
         "reference_strength": track.get("reference_strength", "none; audition only"),
         "audio": str(audio_path),
         "analysis_s": elapsed,
         "analysis_cache_present": cached,
         "bpm": analysis.bpm_global,
         "tempo_variable": analysis.tempo_variable,
+        "duration_s": analysis.duration_s,
+        "sections": [section.model_dump() for section in analysis.sections],
         "key": analysis.key.model_dump() if analysis.key else None,
         "grid": output.grid.model_dump(mode="json") if output.grid else None,
         "reliability_map": analysis.reliability.model_dump() if analysis.reliability else None,
+        "reliable_time_fraction": sum(
+            region.end_s - region.start_s
+            for region in analysis.reliability.regions
+            if region.reliable
+        )
+        / analysis.duration_s
+        if analysis.reliability
+        else 0,
         "analysis_path": str(project.resolve(output.analysis_path)),
+        "grid_snapshot": {
+            "beats_s": analysis.beats_s,
+            "downbeats_s": analysis.downbeats_s,
+            "raw": analysis.grid.raw.model_dump() if analysis.grid else None,
+        },
     }
     if track.get("beats"):
         annotation = np.loadtxt(root / track["beats"], ndmin=2)
+        annotation = annotation[annotation[:, 0] <= analysis.duration_s]
         reference_beats = annotation[:, 0]
         reference_downs = annotation[annotation[:, 1] == 1, 0]
         result["beats"] = event_metrics(reference_beats, analysis.beats_s)
@@ -340,7 +405,7 @@ def evaluate_track(
     audio, sr = decode(audio_path)
     _, _, chroma = spectral_features(audio, sr)
     result["key_frame_normalized"] = key_alternative(chroma)
-    if input_mode == "mix" and track.get("reference_stems"):
+    if input_mode == "mix" and track.get("reference_stems") and max_seconds is None:
         from .analysis import estimate_key
         from .separation_evaluation import reference_audio, reference_consistency
 
@@ -381,7 +446,15 @@ def main():
     parser.add_argument(
         "--fresh", action="store_true", help="Re-run model analysis in audit projects"
     )
+    parser.add_argument(
+        "--separate-model", choices=["htdemucs", "htdemucs_ft", "mel-roformer+htdemucs"]
+    )
+    parser.add_argument(
+        "--max-seconds", type=float, help="Only with --separate-model: paired short-clip cohort"
+    )
     args = parser.parse_args()
+    if args.max_seconds is not None and (args.max_seconds <= 0 or args.separate_model is None):
+        parser.error("--max-seconds requires a positive duration and --separate-model")
     root, tracks = load_tracks(args.input.resolve())
     work = (args.work or args.report.parent / "evaluation-projects").resolve()
     results = []
@@ -391,7 +464,14 @@ def main():
         print(f"Analyzing {track['id']} ({args.input_mode})", flush=True)
         try:
             result = evaluate_track(
-                root, track, work, not args.no_previews, args.input_mode, args.fresh
+                root,
+                track,
+                work,
+                not args.no_previews,
+                args.input_mode,
+                args.fresh,
+                args.separate_model,
+                args.max_seconds,
             )
         except Exception as exc:
             result = {

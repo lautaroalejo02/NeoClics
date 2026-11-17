@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import numpy as np
 import pytest
@@ -68,3 +69,28 @@ def test_inconsistent_reference_mixes_are_refused():
     sources = {name: generator.normal(size=(500, 2)) for name in ("drums", "bass", "other")}
     assert reference_consistency(sum(sources.values()), sources)["usable"]
     assert not reference_consistency(generator.normal(size=(500, 2)), sources)["usable"]
+
+
+def test_owner_command_without_annotations_writes_clicks_and_no_accuracy(
+    rhythmic_project,
+    tmp_path,
+    monkeypatch,
+):
+    from muestra.ingest.evaluation import evaluate_track, write_report
+
+    project, _, analysis = rhythmic_project
+    monkeypatch.setattr(
+        "muestra.ingest.analysis.neural_beats",
+        lambda *args: (
+            np.asarray(analysis.beats_s),
+            np.asarray(analysis.downbeats_s),
+        ),
+    )
+    track = {"id": "own-song", "title": "Unlabelled", "audio": str(project.resolve(analysis.file))}
+    result = evaluate_track(tmp_path, track, tmp_path / "audit")
+    assert "beats" not in result and "key_error" not in result
+    assert result["previews"] and all(Path(path).is_file() for path in result["previews"])
+    assert result["grid"]["ask_human"]
+    assert result["reliability_map"]["regions"]
+    write_report(tmp_path / "owner-report.md", [result])
+    assert (tmp_path / "owner-report.json").is_file()

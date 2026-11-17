@@ -15,6 +15,49 @@ from .chops import score_loop
 from .storage import write_json
 
 
+def production_proposals(root, track, analysis_record):
+    from .evaluation import match_events
+    from .tools import SourceFindChopsParams, source_find_chops
+
+    annotation = np.loadtxt(root / track["beats"], ndmin=2)
+    reference_beats = annotation[:, 0]
+    downs = annotation[annotation[:, 1] == 1, 0]
+    analysis_path = Path(analysis_record["analysis_path"])
+    project_root = analysis_path.parents[2]
+    proposals = []
+    errors = []
+    for length in (8, 16):
+        try:
+            output = source_find_chops(
+                SourceFindChopsParams(
+                    project=str(project_root),
+                    source_id=analysis_path.stem,
+                    stem="mix",
+                    length_beats=length,
+                    n=3,
+                )
+            )
+            for candidate in output.set.candidates:
+                truth = reference_beats[
+                    (reference_beats >= candidate.start_s - 0.07)
+                    & (reference_beats <= candidate.end_s + 0.07)
+                ]
+                boundary_matches = match_events(downs, [candidate.start_s, candidate.end_s])
+                proposals.append(
+                    {
+                        "start_s": candidate.start_s,
+                        "end_s": candidate.end_s,
+                        "length_beats": length,
+                        "true_downbeat_start": bool(np.any(abs(downs - candidate.start_s) <= 0.07)),
+                        "true_downbeat_boundaries": len(boundary_matches) == 2,
+                        "true_beat_count": len(truth) == length + 1,
+                    }
+                )
+        except Exception as exc:
+            errors.append(f"{length} beats: {type(exc).__name__}: {exc}")
+    return {"proposals": proposals, "errors": errors}
+
+
 def objective_proxy(audio, sr, start, end):
     first, last = round(start * sr), round(end * sr)
     mono = audio.mean(axis=1)
@@ -110,13 +153,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("manifest", type=Path)
     parser.add_argument("--report", type=Path, required=True)
+    parser.add_argument("--analysis-report", type=Path)
     args = parser.parse_args()
     root = args.manifest.resolve().parent
     tracks = json.loads(args.manifest.read_text(encoding="utf-8"))["tracks"]
+    analysis_records = {}
+    if args.analysis_report:
+        analysis_records = {
+            item["id"]: item
+            for item in json.loads(args.analysis_report.read_text(encoding="utf-8"))["results"]
+        }
     results = []
     for track in tracks:
         print(track["id"], flush=True)
         results.append(evaluate(root, track))
+        if track["id"] in analysis_records:
+            results[-1]["production"] = production_proposals(
+                root, track, analysis_records[track["id"]]
+            )
         values = [row for result in results for row in result["lengths"]]
         aggregate = {
             "tracks": len(results),
@@ -131,6 +185,16 @@ def main():
                 np.mean([row["all_proxy"] for row in values if row["all_proxy"] is not None])
             ),
         }
+        proposed = [
+            proposal
+            for result in results
+            for proposal in result.get("production", {}).get("proposals", [])
+        ]
+        aggregate["production_candidates"] = len(proposed)
+        for field in ("true_downbeat_start", "true_downbeat_boundaries", "true_beat_count"):
+            aggregate[f"production_{field}_fraction"] = (
+                float(np.mean([item[field] for item in proposed])) if proposed else None
+            )
         write_json(args.report.with_suffix(".json"), {"aggregate": aggregate, "results": results})
         rows = [
             "# Chop evaluation on reference grids",

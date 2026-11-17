@@ -128,3 +128,60 @@ macro Spearman **.201231** against the held-out 200-ms seam/join proxy.
 Mean proxy **.435608** across all candidates, **.499486** among top-three
 ranked candidates. Phrase-start annotations do not exist here; harmonic return
 does not prove a phrase boundary. Scoring changes are not yet justified.
+
+## Loop scoring and paired-stem checkpoint
+
+The scorer now checks **both 80/320-ms continuation contexts** plus the actual
+sample join, normalized by the natural local 95th-percentile derivative.
+Weights and tonal/energy/onset/drift components are unchanged. It catches a
+bad end sample that the old AFTER-end comparison never saw, and delayed
+harmonic mismatch beyond the old 80-ms window. Two generated-signal regression
+tests cover those exact failures. Full 1,216-loop remeasurement gives Spearman
+**.201231 -> .870479**, top-three proxy **.499486 -> .726128** (all-loop mean
+unchanged .435608). Every metadata-genre stratum improves in the paired
+experiment, not just the overall mean. This is a **development-set proxy**,
+not held-out musical/perceptual validation; the alternate 200-ms horizon is
+not an independent source of phrase labels.
+
+A paired **estimated htdemucs drum** cohort (Britpop, Disco, Funk Jazz, same
+first 20 seconds and cropped published annotations) gives mix/drums/fusion
+beat and downbeat F70 **1.0/1.0 in all three modes**. Their source.analyze wall
+totals are 11.89/18.51/21.45 s, **excluding separation**, which is shared and
+cached in a separate audit project. This small/easy cohort does not establish
+that estimated drums help difficult tracks. It does support keeping cheap
+mix-first analysis, and prevents confusing the 23-track oracle drum ablation
+with a real separation experiment. `evaluation --separate-model htdemucs
+--max-seconds 20 --input-mode drums|fusion` reruns this comparison.
+
+Parity-only reliability ablation (recompute `assess_reliability` without pulse
+evidence on the corrected cached grids) equals the combined real-track map.
+Thus **all observed real-track F70 and false-reliable improvements come from
+the parity fix**, not the new pulse filter. The filter rejects generated
+silence/sustained-tone intros without changing this already-pulsed corpus.
+Its benefit on real drumless/nonrhythmic intros is still unverified.
+
+Key-estimator agreement: KS vs weighted scale cosine **18/23**. On the ten
+reference-reconstruction-valid tracks, mix KS vs harmonic-reference KS agrees
+**8/10**. These are agreement, not accuracy: Country 1 changes G major ->
+D major; Punk changes D minor -> G major. No real-key accuracy or calibrated
+confidence is established, and the product key estimator remains unchanged.
+
+Actual four-minute Disco repetition, htdemucs: **402.63 s**, **2977 MiB**
+sampled process-tree peak, SDR drums/bass/vocals/other
+**14.17/14.16/14.32/8.02 dB**. Peak includes reference-scoring buffers as well
+as separator/model load, so it is not app-only separation RAM. The fine-tuned
+four-minute run and additional 20-second quality controls are still running.
+
+### Restricted datasets not acquired
+
+The official MUSDB18 page explicitly requires a manually reviewed access
+request for the full dataset: https://sigsep.github.io/datasets/musdb.html.
+MedleyDB/MedleyDB 2.0 full audio similarly requires Zenodo access requests:
+https://medleydb.weebly.com/downloads.html. No form or account was submitted.
+The freely distributed MDB Drums subset above needs neither. The MUSDB short
+preview was not needed once this larger annotated subset was obtained.
+
+Potential training overlap between these common MIR tracks and pretrained
+models has **not** been audited. These are not demonstrated held-out model
+test tracks. Relative in-corpus comparisons and CPU costs must not be sold
+as generalisation to the owner's recordings.

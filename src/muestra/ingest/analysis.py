@@ -202,7 +202,11 @@ def _song_chops_on(project: Project, source_id: str) -> bool:
 
 
 def _grid_on_cache_hit(
-    project: Project, source_id: str, analysis: Analysis, tempo_range: tuple[float, float] | None
+    project: Project,
+    source_id: str,
+    analysis: Analysis,
+    tempo_range: tuple[float, float] | None,
+    pulse: PulseEvidence | None = None,
 ) -> Analysis:
     """Keep manual corrections; upgrade pre-WP12 analyses without moving song chops."""
     from . import grid as g
@@ -210,17 +214,20 @@ def _grid_on_cache_hit(
     current = analysis.grid
     if len(analysis.beats_s) < 2 or not analysis.downbeats_s or analysis.bpm_global is None:
         return analysis
+    strength = pulse.at(g.raw_of(analysis).beats_s) if pulse is not None else None
     if current is None:
         # Written before WP12: the effective grid IS the tracker grid. Apply the
         # automatic octave only when no song chop depends on this grid.
         apply = not _song_chops_on(project, source_id)
-        return g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE, apply=apply)
+        return g.auto_correct(
+            analysis, tempo_range or g.DEFAULT_TEMPO_RANGE, apply=apply, beat_strength=strength
+        )
     if (
         current.origin == "auto"
         and tempo_range is not None
         and tuple(tempo_range) != tuple(current.tempo_range_bpm)
     ):
-        return g.auto_correct(analysis, tempo_range)
+        return g.auto_correct(analysis, tempo_range, beat_strength=strength)
     return analysis
 
 
@@ -260,13 +267,13 @@ def analyze(
             analysis = load_analysis(project, source_id)
             analysis.stems = Stems(**separated["stems"]) if separated else None
             analysis.separation_model = separated.get("model")
-            analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range)
             if "pulse" in metadata and metadata.get("quality_version") == QUALITY_VERSION:
                 pulse = PulseEvidence.from_dict(metadata["pulse"])
             else:
                 audio, sr = decode(path)
                 pulse = pulse_evidence(audio, sr)
                 metadata["pulse"] = pulse.to_dict()
+            analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range, pulse)
             if (
                 metadata.get("quality_version") != QUALITY_VERSION
                 and analysis.grid is not None

@@ -71,6 +71,16 @@ def test_quality_upgrade_never_moves_a_manually_verified_grid(rhythmic_project):
     assert cached.grid.origin == "manual"
 
 
+def test_explicit_range_on_cache_retains_onset_supported_parity(rhythmic_project):
+    project, source_id, _ = rhythmic_project
+    beats = np.arange(0.25, 17, 0.25)
+    initial = analyze(project, source_id, tracker=lambda *args: (beats, beats[1::4]))
+    assert initial.grid.beat_phase == 0
+    updated = analyze(project, source_id, tempo_range=(70, 155))
+    assert updated.grid.beat_phase == 0
+    assert updated.beats_s == initial.beats_s
+
+
 def test_inconsistent_meter_is_cached_with_reliability(rhythmic_project):
     project, source_id, _ = rhythmic_project
     beats = np.arange(0.25, 17, 0.5)

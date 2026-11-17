@@ -327,6 +327,12 @@ package supplied by `--with`; it is not a new product dependency.
 `--input-mode drums` / `fusion` compare **reference** drums / 50:50 drum+mix
 inputs, not separated stems. Reference reconstruction validity is reported for
 the mix; badly aligned released multitracks must not support SDR claims.
+For actual estimated-stem comparisons, use `--separate-model htdemucs` in
+each mode (shared separation cache); optional `--max-seconds 20` builds a
+paired short-clip cohort and crops annotations to the same audio duration.
+Do not compare those short-clip results to a whole-file run. JSON also freezes
+raw/effective grid snapshots; mutable analysis-cache paths are not the only
+record of a newly generated report.
 
 `python -m muestra.ingest.separation_evaluation MANIFEST --report separation.md`
 measures the three supported models in isolated CPU subprocesses with bounded
@@ -336,6 +342,9 @@ repetition (explicitly labelled, not four minutes of unique performance).
 `python -m muestra.ingest.chop_evaluation MANIFEST --report chops.md` evaluates
 8/16-beat ranking on reference grids. It reports seam/harmonic proxies and
 Spearman correlation, **not** human phrase-start or perceptual accuracy.
+Add `--analysis-report after.json` to also measure the real
+`source.find_chops` proposals against the annotations, with their current
+reliability filtering; it writes ordinary candidate previews in audit projects.
 
 ### Conservative acoustic evidence
 

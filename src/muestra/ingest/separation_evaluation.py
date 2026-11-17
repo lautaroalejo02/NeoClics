@@ -163,7 +163,8 @@ def write_report(path, results):
         "make this an attribution proxy, not an identifiable physical decomposition.",
         "Reference-to-mix gains are fitted ONCE from the input, never to an estimate.",
         "Reference sums worse than -25 dB residual are refused. No listening claims.",
-        "Peak RSS samples the process tree every 100 ms, including model load.",
+        "Peak RSS samples the process tree every 100 ms, including model load and",
+        "reference-scoring buffers; it is not app-only separation RAM.",
         "",
         "| Track | Model | Audio s | Separation s | Peak MiB | "
         "drums SDR | bass SDR | vocals SDR | other SDR |",
