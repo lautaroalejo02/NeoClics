@@ -61,7 +61,7 @@ def tempo_metrics(reference_bpm, estimated_bpm) -> dict:
         "estimated_bpm": estimated_bpm,
         "absolute_pct": 100 * abs(ratio - 1),
         "octave": label if abs(ratio / factor - 1) <= 0.04 else "other",
-        "strict_correct": abs(ratio - 1) <= 0.04,
+        "strict_correct": bool(abs(ratio - 1) <= 0.04),
     }
 
 
@@ -256,8 +256,11 @@ def evaluate_track(root: Path, track: dict, work: Path, previews=True, input_mod
                 raise ValueError("Reference drum/mix sample alignment differs")
             drums = (mix + drums) / 2
         audio_path = project_root / f"{input_mode}.wav"
-        sf.write(audio_path, drums, drum_sr, subtype="FLOAT")
+        sf.write(audio_path, drums, drum_sr, subtype="PCM_16")
     imported = source_import(SourceImportParams(project=str(project_root), path=str(audio_path)))
+    if input_mode != "mix":
+        audio_path.unlink()
+        audio_path = project.resolve(imported.file)
     started = time.perf_counter()
     output = source_analyze(
         SourceAnalyzeParams(project=str(project_root), source_id=imported.source_id)
