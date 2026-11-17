@@ -68,6 +68,38 @@
       "title": "Chop",
       "type": "object"
     },
+    "RepeatChange": {
+      "additionalProperties": false,
+      "properties": {
+        "clip": {
+          "description": "0-based clip index on the track.",
+          "title": "Clip",
+          "type": "integer"
+        },
+        "new_repeat": {
+          "title": "New Repeat",
+          "type": "integer"
+        },
+        "old_repeat": {
+          "title": "Old Repeat",
+          "type": "integer"
+        },
+        "track": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Track",
+          "type": "string"
+        }
+      },
+      "required": [
+        "track",
+        "clip",
+        "old_repeat",
+        "new_repeat"
+      ],
+      "title": "RepeatChange",
+      "type": "object"
+    },
     "Warp": {
       "additionalProperties": false,
       "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
@@ -95,6 +127,19 @@
   },
   "additionalProperties": false,
   "properties": {
+    "agent_todo": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the agent must still change in song.yaml, if anything.",
+      "title": "Agent Todo"
+    },
     "candidate_id": {
       "description": "Global chop candidate id '<csNNN>/<candN>', e.g. 'cs001/cand2'.",
       "pattern": "^cs\\d{3,}/cand\\d+$",
@@ -105,11 +150,47 @@
       "$ref": "#/$defs/Chop",
       "description": "The chop written into song.yaml."
     },
+    "chop_id": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Id actually written: chop_id, or a NEW id when the new length cannot keep the clips' span (then see agent_todo).",
+      "title": "Chop Id"
+    },
     "files": {
       "items": {
         "type": "string"
       },
       "title": "Files",
+      "type": "array"
+    },
+    "message": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Spanish, shown to the human.",
+      "title": "Message"
+    },
+    "repeat_changes": {
+      "description": "Clip repeats rescaled so each clip keeps its span in beats.",
+      "items": {
+        "$ref": "#/$defs/RepeatChange"
+      },
+      "title": "Repeat Changes",
       "type": "array"
     },
     "set_id": {

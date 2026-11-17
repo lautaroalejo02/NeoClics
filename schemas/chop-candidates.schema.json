@@ -242,6 +242,21 @@
           "title": "Candidate Id",
           "type": "string"
         },
+        "chop_id": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The song.yaml chop id actually written (WP13: may be a new id).",
+          "title": "Chop Id"
+        },
         "mode": {
           "enum": [
             "auto",

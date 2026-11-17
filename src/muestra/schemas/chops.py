@@ -104,6 +104,10 @@ class ChosenRecord(ContractModel):
     mode: Literal["auto", "manual"]
     adjust: ChopAdjust = Field(default_factory=ChopAdjust)
     at: AwareDatetime
+    chop_id: IdStr | None = Field(
+        default=None,
+        description="The song.yaml chop id actually written (WP13: may be a new id).",
+    )
 
 
 class ChopCandidateSet(ContractModel):

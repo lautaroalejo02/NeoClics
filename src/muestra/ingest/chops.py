@@ -292,17 +292,72 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
         return candidate_set, path
 
 
+def _free_chop_id(song, base: str) -> str:
+    taken = {c.id for c in song.chops}
+    stem = re.sub(r"-\d+$", "", base)[:60]
+    n = 2
+    while f"{stem}-{n}" in taken:
+        n += 1
+    return f"{stem}-{n}"
+
+
+def _repeat_plan(song, chop_id: str, new_length: float):
+    """Keep every clip's span when the chop's length changes (WP13 finding 2).
+
+    Returns ``(changes, clean)``: ``changes`` = ``[(track_id, clip_index,
+    old_repeat, new_repeat)]``; ``clean`` is False when some clip's span
+    (old length x repeat) is not a whole number of new lengths."""
+    old = next((c for c in song.chops if c.id == chop_id), None)
+    if old is None or abs(old.length_beats - new_length) < 1e-9:
+        return [], True
+    changes, clean = [], True
+    for track in song.tracks:
+        for index, clip in enumerate(track.clips or []):
+            if clip.chop != chop_id:
+                continue
+            ratio = old.length_beats * clip.repeat / new_length
+            if ratio >= 1 - 1e-9 and abs(ratio - round(ratio)) < 1e-9:
+                if round(ratio) != clip.repeat:
+                    changes.append((track.id, index, clip.repeat, round(ratio)))
+            else:
+                clean = False
+    return changes, clean
+
+
 def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust: ChopAdjust | None):
+    """Write a candidate into song.yaml as ``chop_id``.
+
+    Returns ``(set, chop, path, outcome)``; ``outcome`` has ``chop_id`` (the
+    id actually written), ``repeat_changes``, ``message`` (Spanish, for the
+    human) and ``agent_todo`` (what the agent must still wire in, or None).
+    A manual choice is recorded in feedback.jsonl BEFORE anything can fail,
+    so the agent always learns what the human picked.
+    """
     set_id = candidate_id.split("/")[0]
     with project_lock(project):
         matches = [p for p in set_paths(project) if p.stem == set_id]
         if len(matches) != 1:
-            raise MuestraError.one("ref_not_found", f"Candidate set {set_id} missing or ambiguous.")
+            raise MuestraError.one(
+                "ref_not_found",
+                f"No encuentro la tanda de candidatos {set_id}.",
+                hint="Pedile al agente que busque candidatos de nuevo (source.find_chops).",
+            )
         path = matches[0]
         candidate_set = read_set(path)
         candidate = next((c for c in candidate_set.candidates if c.id == candidate_id), None)
         if candidate is None:
-            raise MuestraError.one("ref_not_found", f"Unknown candidate {candidate_id}.")
+            raise MuestraError.one(
+                "ref_not_found",
+                f"No existe el candidato {candidate_id}.",
+                hint=f"Elegí uno de: {', '.join(c.id for c in candidate_set.candidates)}.",
+            )
+        adjust = adjust or ChopAdjust()
+        now = datetime.now(UTC)
+        if mode == "manual":
+            append_event(
+                project,
+                ChopChoiceEvent(ts=now, candidate_id=candidate_id, adjust=adjust),
+            )
         analysis = load_analysis(project, candidate.source_id)
         meta = path.with_suffix(".meta.json")
         if meta.exists() and read_json(meta)["fingerprint"] != fingerprint(
@@ -310,10 +365,10 @@ def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust:
         ):
             raise MuestraError.one(
                 "stale_candidates",
-                "Source, stems or grid changed since this proposal.",
+                "El audio o la grilla de la fuente cambiaron desde que se propusieron "
+                "estos candidatos.",
                 hint="Run source.find_chops again before choosing.",
             )
-        adjust = adjust or ChopAdjust()
         try:
             chop = Chop(
                 id=chop_id,
@@ -330,19 +385,34 @@ def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust:
             is None
         ):
             raise MuestraError.one(
-                "chop_overrun", "Adjusted chop does not fit the tracked beat grid."
+                "chop_overrun",
+                "Con ese ajuste el corte se sale de los tiempos detectados del tema.",
+                hint="Probá un ajuste más chico de inicio o de largo.",
             )
         stem_path(project, analysis, chop.stem)
         song = load_song(project)
         if chop.source not in {s.id for s in song.sources}:
-            raise MuestraError.one("ref_not_found", "Source is not registered in song.yaml.")
+            raise MuestraError.one(
+                "ref_not_found",
+                "La fuente de este candidato no está en song.yaml.",
+                hint=f"Add source {chop.source} to song.yaml sources first.",
+            )
+        changes, clean = _repeat_plan(song, chop_id, chop.length_beats)
+        written = chop_id if clean else _free_chop_id(song, chop_id)
+        if written != chop_id:
+            chop = chop.model_copy(update={"id": written})
+            changes = []
 
         def mutate(doc):
             chops = doc.setdefault("chops", [])
-            existing = next((c for c in chops if c["id"] == chop_id), None)
+            existing = next((c for c in chops if c["id"] == written), None)
             values = chop.model_dump(mode="json", exclude_defaults=True)
             # Keep a user's warp and fade when replacing an existing chop.
             if existing is None:
+                previous = next((c for c in chops if c["id"] == chop_id), None)
+                for field in ("warp", "fade_ms"):
+                    if previous is not None and field in previous:
+                        values[field] = previous[field]
                 chops.append(values)
             else:
                 for field in (
@@ -353,6 +423,9 @@ def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust:
                     "length_beats",
                 ):
                     existing[field] = getattr(chop, field)
+            tracks = {t["id"]: t for t in doc.get("tracks", [])}
+            for track_id, index, _, repeat in changes:
+                tracks[track_id]["clips"][index]["repeat"] = repeat
             # Validate the whole edit before the round-trip helper writes anything.
             from ..schemas.song import Song
 
@@ -362,15 +435,41 @@ def choose(project: Project, candidate_id: str, chop_id: str, mode: str, adjust:
 
         edit_song_document(project, mutate)
         # Return the actual chop, including any preserved warp/fade settings.
-        chop = next(c for c in load_song(project).chops if c.id == chop_id)
-        now = datetime.now(UTC)
+        chop = next(c for c in load_song(project).chops if c.id == written)
         candidate_set.chosen = ChosenRecord(
-            candidate_id=candidate_id, mode=mode, adjust=adjust, at=now
+            candidate_id=candidate_id, mode=mode, adjust=adjust, at=now, chop_id=written
         )
-        if mode == "manual":
-            append_event(
-                project,
-                ChopChoiceEvent(ts=now, candidate_id=candidate_id, adjust=adjust),
-            )
         write_json(path, candidate_set.model_dump(mode="json"))
-        return candidate_set, chop, path
+        beats = f"{chop.length_beats:g} tiempos"
+        if written != chop_id:
+            message = (
+                f"Listo: guardé tu elección como un chop nuevo, {written} ({beats}), porque "
+                f"no entra justo en el lugar de {chop_id}. El agente lo va a acomodar en el "
+                "arreglo."
+            )
+            agent_todo = (
+                f"The human chose {candidate_id} ({chop.length_beats:g} beats). It was written "
+                f"as NEW chop '{written}' because clips using '{chop_id}' span a number of "
+                f"beats that {chop.length_beats:g} does not divide. Wire it in: point those "
+                f"clips at chop: {written} and set repeat so they keep their span (or change "
+                "the arrangement), validate, render."
+            )
+        elif changes:
+            detail = ", ".join(f"{t} {a}→{b}" for t, _, a, b in changes)
+            message = (
+                f"Listo: el chop {chop_id} ahora dura {beats}; para que el loop siga ocupando "
+                f"lo mismo ajusté las repeticiones ({detail})."
+            )
+            agent_todo = None
+        else:
+            message = f"Listo: el chop {chop_id} quedó como elegiste ({beats})."
+            agent_todo = None
+        outcome = {
+            "chop_id": written,
+            "repeat_changes": [
+                {"track": t, "clip": i, "old_repeat": a, "new_repeat": b} for t, i, a, b in changes
+            ],
+            "message": message,
+            "agent_todo": agent_todo,
+        }
+        return candidate_set, chop, path, outcome

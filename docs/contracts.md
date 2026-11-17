@@ -460,7 +460,16 @@ filters `ts >= since` and must itself be timezone-aware.
 `set_id` (`csNNN`, allocated max+1), `source_id`, `created_at` (aware),
 `query{section?,stem?,length_beats?,n}`, `candidates[]`,
 `pick{candidate_id,justification}?` (the agent's `auto` pick),
-`chosen{candidate_id,mode,adjust,at}?`.
+`chosen{candidate_id,mode,adjust,at,chop_id?}?` (`chop_id`, WP13: the
+song.yaml chop actually written).
+
+`chops.choose` (WP13): a `manual` choice appends its `chop_choice` event
+before anything else can fail. Result adds `chop_id` (written id),
+`repeat_changes[{track, clip, old_repeat, new_repeat}]` (clips rescaled
+to keep their span in beats when the length changed), `message` (Spanish,
+for the human) and `agent_todo` (set when the choice had to be written
+under a NEW id `<chop_id>-N` because the new length does not divide a
+clip's span; the arrangement is then untouched).
 
 `ChopCandidate`: `id` (**global** `csNNN/candN`), `source_id`, `stem`,
 `start_downbeat`, `start_s`, `length_beats`, `end_s`, `local_bpm`,

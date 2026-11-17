@@ -691,3 +691,10 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
 2. **`song.validate` checks instruments** (`check_plugins`, default =
    `check_files`): id-based paths `tracks.<id>.instrument.plugin|preset`,
    hint lists the available aliases inline (never "run plugins.list").
+3. **Manual chop choice is never lost.** `chops.choose` writes the
+   `chop_choice` event first (spec 3 step 4). A length change keeps each
+   clip's span by rescaling `repeat`; when that is not a whole number the
+   choice becomes a new chop `<id>-N` and the result's `agent_todo` says
+   what to wire in (rewriting the arrangement for the human was judged
+   riskier than one explicit agent step). Messages for the human are
+   Spanish.

@@ -286,8 +286,17 @@ arrangement. chops.choose writes the requested chop ID using the shared
 round-trip helper, preserving comments and existing warp/fade settings.
 Start and length adjustments are deltas along the real grid; invalid
 bounds or a resulting song validation failure abort the edit. Manual
-choices append chop_choice feedback; auto choices do not. Both update the
-set's chosen record. chops.list reads the persisted sets.
+choices append chop_choice feedback **first** (WP13: before anything can
+fail, so the agent always learns what the human picked); auto choices do
+not. When the chosen length differs from the existing chop's, every clip
+using it keeps its span: `repeat` is rescaled (8 × 4 beats → 4 × 8 beats,
+reported in `repeat_changes`); when some clip's span is not a whole number
+of new lengths, the choice is written as a NEW chop (`c1-2`, …), the old
+chop and the arrangement stay untouched, and `agent_todo` says exactly
+what to wire in. `message` is a Spanish sentence for the human (the UI
+shows it); errors raised to the UI are Spanish too. Both modes update the
+set's chosen record (`chosen.chop_id` = the id actually written).
+chops.list reads the persisted sets.
 
 ## Owner-run benchmarks and verification
 

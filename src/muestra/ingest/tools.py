@@ -19,7 +19,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from ..schemas._base import CandidateIdStr, IdStr, RelPath
+from ..schemas._base import CandidateIdStr, ContractModel, IdStr, RelPath
 from ..schemas.analysis import Analysis
 from ..schemas.chops import ChopAdjust, ChopCandidateSet
 from ..schemas.song import Chop, StemName
@@ -191,10 +191,30 @@ class ChopsChooseParams(ProjectScoped):
     )
 
 
+class RepeatChange(ContractModel):
+    track: IdStr
+    clip: int = Field(description="0-based clip index on the track.")
+    old_repeat: int
+    new_repeat: int
+
+
 class ChopsChooseResult(ToolOutput):
     set_id: str
     candidate_id: CandidateIdStr
     chop: Chop = Field(description="The chop written into song.yaml.")
+    chop_id: IdStr | None = Field(
+        default=None,
+        description="Id actually written: chop_id, or a NEW id when the new length "
+        "cannot keep the clips' span (then see agent_todo).",
+    )
+    repeat_changes: list[RepeatChange] = Field(
+        default_factory=list,
+        description="Clip repeats rescaled so each clip keeps its span in beats.",
+    )
+    message: str | None = Field(default=None, description="Spanish, shown to the human.")
+    agent_todo: str | None = Field(
+        default=None, description="What the agent must still change in song.yaml, if anything."
+    )
 
 
 def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
@@ -206,12 +226,21 @@ def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
     from .chops import choose
 
     project = open_project(Path(p.project))
-    candidate_set, chop, path = choose(project, p.candidate_id, p.chop_id, p.mode, p.adjust)
+    candidate_set, chop, path, outcome = choose(
+        project, p.candidate_id, p.chop_id, p.mode, p.adjust
+    )
     files = ["song.yaml", path.relative_to(project.root).as_posix()]
     if p.mode == "manual":
         files.append("feedback.jsonl")
     return ChopsChooseResult(
-        set_id=candidate_set.set_id, candidate_id=p.candidate_id, chop=chop, files=files
+        set_id=candidate_set.set_id,
+        candidate_id=p.candidate_id,
+        chop=chop,
+        files=files,
+        chop_id=outcome["chop_id"],
+        repeat_changes=outcome["repeat_changes"],
+        message=outcome["message"],
+        agent_todo=outcome["agent_todo"],
     )
 
 
