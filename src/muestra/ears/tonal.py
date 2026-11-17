@@ -78,9 +78,15 @@ def measure_tonal(ctx: RenderContext) -> tuple[TonalReport, list[Alarm]]:
     chromas: dict[str, np.ndarray] = {}
     for tid in tonal_ids:
         y = ctx.mono(tid)
-        cents, strength = dsp.tuning_cents(y, ctx.sr)
+        peaks = dsp.spectral_peaks(y, ctx.sr)
+        cents, strength = dsp.tuning_cents(y, ctx.sr, peaks=peaks)
         tunings[tid] = (cents, strength)
-        c = dsp.chroma(y, ctx.sr, tuning=cents if strength >= th.tuning_min_strength else 0.0)
+        c = dsp.chroma(
+            y,
+            ctx.sr,
+            tuning=cents if strength >= th.tuning_min_strength else 0.0,
+            peaks=peaks,
+        )
         chromas[tid] = c
         pc, mode, _r, conf = dsp.estimate_key(c)
         tt = TrackTonal(

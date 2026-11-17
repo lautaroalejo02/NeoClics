@@ -100,7 +100,7 @@ def measure_technical(ctx: RenderContext) -> tuple[TechnicalReport, list[Alarm]]
                 )
             )
             continue
-        specs[tid] = dsp.band_frames(ctx.spec(tid), DETAIL_BAND_EDGES_HZ)
+        specs[tid] = dsp.band_frames(ctx.spec(tid, fine=True), DETAIL_BAND_EDGES_HZ)
 
     # inaudible: below the rest of the mix by the margin in every band,
     # in (almost) every frame where the track is playing

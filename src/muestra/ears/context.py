@@ -442,7 +442,7 @@ def _load_song(project: Project, d: Path, version: str) -> Song:
 
 
 def _fit(x: np.ndarray, n: int) -> np.ndarray:
-    """Force (n, 2) stereo float64."""
+    """Force (n, 2) stereo (dtype as read: float32)."""
     if x.shape[1] == 1:
         x = np.repeat(x, 2, axis=1)
     elif x.shape[1] > 2:

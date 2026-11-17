@@ -119,19 +119,14 @@ def _events_basis(
 ) -> tuple[TrackAlignment, list[float]] | None:
     th = ctx.config.thresholds
     tl = ctx.timeline
-    on = dsp.onsets(ctx.mono(key), ctx.sr).strongest(0.1)
-    if len(on) == 0:
-        return None
     exp = np.array(sorted(expected))
     gaps = np.diff(exp)
-    tol = 0.04 if gaps.size == 0 else min(0.04, 0.45 * float(np.min(gaps[gaps > 1e-6], initial=1)))
-    offs, times = [], []
-    for e in exp:
-        j = int(np.argmin(np.abs(on.times - e)))
-        d = on.times[j] - e
-        if abs(d) <= tol:
-            offs.append(d * 1000.0)
-            times.append(float(e))
+    gaps = gaps[gaps > 1e-6]
+    tol = 0.04 if gaps.size == 0 else min(0.04, 0.45 * float(np.min(gaps)))
+    found = dsp.attack_times(ctx.mono(key), ctx.sr, exp, tol)
+    ok = np.isfinite(found)
+    offs = list((found[ok] - exp[ok]) * 1000.0)
+    times = [float(t) for t in exp[ok]]
     if len(offs) < 3:
         return None
     off = np.array(offs)
