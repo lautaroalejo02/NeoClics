@@ -6,6 +6,7 @@ import { formatBarBeat, formatClock } from "../music/time";
 import { useApp, useEngine, useSideLabel, useStore } from "../state/react";
 import { isPending, newestVersionTs } from "../state/derive";
 import { timingOf } from "../state/store";
+import { fmtBpm, fmtDb } from "../text/es";
 import * as I from "./icons";
 import { Waveform, type WaveMarker } from "./Waveform";
 
@@ -72,7 +73,7 @@ export function Player() {
           </span>
           {timing && meta && !hidden && (
             <span className="card-sub mono">
-              {meta.bpm} BPM · {meta.key} · compases {meta.range_bars[0]}–{meta.range_bars[1] - 1}
+              {fmtBpm(meta.bpm)} BPM · {meta.key} · compases {meta.range_bars[0]}–{meta.range_bars[1] - 1}
             </span>
           )}
         </div>
@@ -396,7 +397,7 @@ function ABBar() {
               ? Object.entries(off).some(([, d]) => d < -0.05)
                 ? `Volumen igualado: ${Object.entries(off)
                     .filter(([, d]) => d < -0.05)
-                    .map(([v, d]) => `${v} baja ${Math.abs(d).toFixed(1)} dB`)
+                    .map(([v, d]) => `${v} baja ${fmtDb(Math.abs(d))}`)
                     .join(", ")} (lo más fuerte siempre suena "mejor").`
                 : "Ya suenan igual de fuerte (LUFS)."
               : "No hay LUFS de alguna versión: no puedo igualar el volumen."

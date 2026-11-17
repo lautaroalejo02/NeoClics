@@ -3,29 +3,8 @@ import type { Alarm, Metrics, VersionId } from "../api/types";
 import { formatBarBeat, formatClock } from "../music/time";
 import { useApp, useStore } from "../state/react";
 import { timingOf } from "../state/store";
+import { alarmCopy, fmtDb, fmtLufs, fmtMs, fmtNum, fmtPct, keyLabel, parseKey, sameTonic, severityLabel } from "../text/es";
 import * as I from "./icons";
-
-const ALARM_TITLES: Record<string, string> = {
-  low_end_masking: "Graves que se pisan",
-  masking: "Graves que se pisan",
-  click: "Click en un corte",
-  clicks: "Clicks en los cortes",
-  true_peak: "Pico muy alto",
-  clipping: "Saturación digital (clipping)",
-  alignment: "Fuera de grilla",
-  off_grid: "Fuera de grilla",
-  key: "Fuera de tonalidad",
-  tonal: "Fuera de tonalidad",
-  out_of_key: "Fuera de tonalidad",
-  loudness: "Volumen general",
-  too_quiet: "Muy bajo de volumen",
-  too_loud: "Muy fuerte",
-  spectral: "Balance de frecuencias",
-};
-
-function alarmTitle(code: string): string {
-  return ALARM_TITLES[code] ?? code.replace(/_/g, " ");
-}
 
 interface Tip {
   x: number;
@@ -85,18 +64,18 @@ export function EarsPanel() {
         <div className="metric">
           <h4>Volumen (loudness integrado)</h4>
           <div className="big mono">
-            {lufs.toFixed(1)}
+            {fmtNum(lufs, 1)}
             <small>LUFS</small>
           </div>
           <p>
-            Pico real {m.loudness.true_peak_dbtp.toFixed(1)} dBTP
+            Pico real {fmtNum(m.loudness.true_peak_dbtp, 1)} dBTP
             {m.loudness.clipping ? ` · ¡clipping! (${m.loudness.clipped_samples} muestras)` : " · sin clipping"}
           </p>
           {dl != null && other && (
             <p data-testid="lufs-delta">
               {Math.abs(dl) < 0.3
                 ? `Igual de fuerte que ${other}.`
-                : `${Math.abs(dl).toFixed(1)} dB ${dl > 0 ? "más fuerte" : "más bajo"} que ${other}.`}
+                : `${fmtDb(Math.abs(dl))} ${dl > 0 ? "más fuerte" : "más bajo"} que ${other}.`}
             </p>
           )}
           <LoudnessScale series={series} onTip={showTip} onLeave={() => setTip(null)} />
@@ -116,14 +95,11 @@ export function EarsPanel() {
         </div>
         <div className="metric">
           <h4>Tonalidad, grilla y cortes</h4>
-          <p>
-            {m.tonal.estimated
-              ? `Suena en ${m.tonal.estimated.tonic}${m.tonal.estimated.mode === "minor" ? "m" : ""} (confianza ${Math.round(m.tonal.estimated.confidence * 100)}%), la canción está en ${m.tonal.target_key}: `
-              : `Tonalidad objetivo ${m.tonal.target_key}: `}
-            <strong style={{ color: m.tonal.in_key ? "var(--ok)" : "var(--warn)" }}>{m.tonal.in_key ? "en tono" : "no coincide"}</strong>.
+          <p data-testid="tonal-note">
+            <TonalNote m={m} />
           </p>
           <p>
-            Desfase máximo de transientes: <strong className="mono">{m.alignment.max_abs_offset_ms.toFixed(1)} ms</strong>
+            Desfase máximo de transientes: <strong className="mono">{fmtMs(m.alignment.max_abs_offset_ms)}</strong>
             {m.alignment.max_abs_offset_ms > 10 ? " (se nota, algo está corrido)" : " (dentro de lo normal)"}.
           </p>
           <p>
@@ -131,7 +107,7 @@ export function EarsPanel() {
           </p>
           {m.style_similarity && (
             <p>
-              Parecido a tus referencias: <strong className="mono">{Math.round(m.style_similarity.mean_score * 100)}%</strong>
+              Parecido a tus referencias: <strong className="mono">{fmtPct(m.style_similarity.mean_score)}</strong>
             </p>
           )}
         </div>
@@ -156,24 +132,49 @@ function sev(s: Alarm["severity"]): number {
 }
 
 function AlarmRow({ al, onJump, where }: { al: Alarm; onJump: (() => void) | null; where: string | null }) {
+  const copy = alarmCopy(al.code);
+  // the backend writes its message in Spanish, with the specifics: prefer it
+  const msg = al.message?.trim() ? al.message : copy.explain;
   const content = (
     <>
       <span className="alarm-ic">{al.severity === "info" ? <I.Info /> : <I.Alert />}</span>
       <span>
-        <span className="alarm-title">{alarmTitle(al.code)}</span>
+        <span className="alarm-title">{copy.title}</span>
         {al.track && <span className="tag" style={{ marginLeft: 6 }}>{al.track}</span>}
         <br />
-        <span className="alarm-msg">{al.message}</span>
+        <span className="alarm-msg">{msg}</span>
+        {msg !== copy.explain && <span className="alarm-explain hint"><br />{copy.explain}</span>}
       </span>
-      {where ? <span className="fb-at">{where}</span> : <span className="tag">{al.severity === "error" ? "grave" : al.severity === "warn" ? "ojo" : "aviso"}</span>}
+      {where ? <span className="fb-at">{where}</span> : <span className="tag">{severityLabel(al.severity)}</span>}
     </>
   );
   return onJump ? (
-    <button type="button" className={`alarm ${al.severity}`} onClick={onJump} aria-label={`${alarmTitle(al.code)}: ${al.message}. Ir a ${where}`}>
+    <button type="button" className={`alarm ${al.severity}`} data-code={al.code} onClick={onJump} aria-label={`${copy.title}: ${msg}. Ir a ${where}`}>
       {content}
     </button>
   ) : (
-    <div className={`alarm ${al.severity}`}>{content}</div>
+    <div className={`alarm ${al.severity}`} data-code={al.code}>{content}</div>
+  );
+}
+
+/** "Suena en Eb mayor (confianza 100%), como la canción: en tono". Enharmonic
+ *  spellings are the same note (D# = Eb) and one spelling is shown. */
+function TonalNote({ m }: { m: Metrics }) {
+  const est = m.tonal.estimated;
+  const target = m.tonal.target_key;
+  const pk = parseKey(target);
+  if (!est) return <>Tonalidad objetivo {target}: sin estimación del audio.</>;
+  const same = sameTonic(est.tonic, target);
+  const inKey = m.tonal.in_key || (same && m.tonal.mode_match);
+  // the song's own spelling wins (D# and Eb are the same note: show one)
+  const tonicText = /^\s*[A-Ga-g][#b♯♭]?/.exec(target)?.[0].trim() ?? target;
+  const targetMode = pk?.mode ?? (m.tonal.mode_match ? est.mode : null);
+  return (
+    <>
+      Suena en {keyLabel(est.tonic, est.mode, target)} (confianza {fmtPct(est.confidence)}); la canción está en {keyLabel(tonicText, targetMode, target)}
+      {": "}
+      <strong style={{ color: inKey ? "var(--ok)" : "var(--warn)" }}>{inKey ? "en tono" : "no coincide"}</strong>.
+    </>
   );
 }
 
@@ -200,7 +201,7 @@ function LoudnessScale({ series, onTip, onLeave }: { series: Series; onTip: TipF
   const W = 260;
   const x = (v: number) => 10 + ((Math.min(hi, Math.max(lo, v)) - lo) / (hi - lo)) * (W - 20);
   return (
-    <svg className="chart" viewBox={`0 0 ${W} 56`} role="img" aria-label={series.map((s) => `${s.letter} ${s.v}: ${s.m.loudness.integrated_lufs} LUFS`).join(", ")}>
+    <svg className="chart" viewBox={`0 0 ${W} 56`} role="img" aria-label={series.map((s) => `${s.letter} ${s.v}: ${fmtLufs(s.m.loudness.integrated_lufs)}`).join(", ")}>
       <line className="axis" x1={10} x2={W - 10} y1={26} y2={26} strokeWidth={2} />
       {[-24, -18, -14, -10, -6].map((v) => (
         <g key={v}>
@@ -211,7 +212,7 @@ function LoudnessScale({ series, onTip, onLeave }: { series: Series; onTip: TipF
         </g>
       ))}
       {series.map((s, i) => (
-        <g key={s.v} tabIndex={0} onMouseEnter={(e) => onTip(e, `${s.v}: ${s.m.loudness.integrated_lufs.toFixed(1)} LUFS`)} onFocus={(e) => onTip(e, `${s.v}: ${s.m.loudness.integrated_lufs.toFixed(1)} LUFS`)} onMouseLeave={onLeave} onBlur={onLeave}>
+        <g key={s.v} tabIndex={0} onMouseEnter={(e) => onTip(e, `${s.v}: ${fmtLufs(s.m.loudness.integrated_lufs)}`)} onFocus={(e) => onTip(e, `${s.v}: ${fmtLufs(s.m.loudness.integrated_lufs)}`)} onMouseLeave={onLeave} onBlur={onLeave}>
           <circle cx={x(s.m.loudness.integrated_lufs)} cy={26} r={7} fill={s.color} stroke="var(--bg-2)" strokeWidth={2} />
           {/* A above the line, B below: never collide when close */}
           <text x={x(s.m.loudness.integrated_lufs)} y={i === 0 ? 12 : 46} textAnchor="middle" style={{ fontWeight: 600 }}>
@@ -239,7 +240,7 @@ function SpectralChart({ series, onTip, onLeave }: { series: Series; onTip: TipF
   const groupW = (W - 30) / BANDS.length;
   const barW = Math.min(26, (groupW - 16) / series.length - 2);
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Nivel por banda: ${series.map((s) => `${s.v} graves ${s.m.spectral.mix.low_db} dB, medios ${s.m.spectral.mix.mid_db} dB, agudos ${s.m.spectral.mix.high_db} dB`).join("; ")}`}>
+    <svg className="chart" viewBox={`0 0 ${W} ${H}`} role="img" aria-label={`Nivel por banda: ${series.map((s) => `${s.v} graves ${fmtDb(s.m.spectral.mix.low_db)}, medios ${fmtDb(s.m.spectral.mix.mid_db)}, agudos ${fmtDb(s.m.spectral.mix.high_db)}`).join("; ")}`}>
       {[top, Math.round((top + floor) / 2 / 6) * 6, floor].map((g) => (
         <g key={g}>
           <line className="gridl" x1={30} x2={W} y1={y(g)} y2={y(g)} />
@@ -257,7 +258,7 @@ function SpectralChart({ series, onTip, onLeave }: { series: Series; onTip: TipF
               const x0 = gx + si * (barW + 2);
               const y0 = y(v);
               const h = Math.max(2, y(floor) - y0);
-              const label = `${s.v} · ${b.label}: ${v.toFixed(1)} dB`;
+              const label = `${s.v} · ${b.label}: ${fmtDb(v)}`;
               return (
                 <path
                   key={s.v}
@@ -292,12 +293,12 @@ function MaskingChart({ m, color, onTip, onLeave }: { m: Metrics; color: string;
   const labelW = 64;
   const x = (v: number) => labelW + ((Math.max(floor, v) - floor) / (top - floor)) * (W - labelW - 96);
   return (
-    <svg className="chart" viewBox={`0 0 ${W} ${entries.length * rowH + 4}`} role="img" aria-label={`Energía en graves: ${entries.map(([k, v]) => `${k} ${v} dB`).join(", ")}`}>
+    <svg className="chart" viewBox={`0 0 ${W} ${entries.length * rowH + 4}`} role="img" aria-label={`Energía en graves: ${entries.map(([k, v]) => `${k} ${fmtDb(v)}`).join(", ")}`}>
       {entries.map(([k, v], i) => {
         const yy = i * rowH + 4;
         const w = Math.max(2, x(v) - labelW);
         const dom = k === m.low_end_masking.dominant_track;
-        const label = `${k}: ${v <= -90 ? "silencio" : `${v.toFixed(1)} dB`}${dom ? " (domina)" : ""}`;
+        const label = `${k}: ${v <= -90 ? "silencio" : fmtDb(v)}${dom ? " (domina)" : ""}`;
         return (
           <g key={k} tabIndex={0} onMouseEnter={(e) => onTip(e, label)} onFocus={(e) => onTip(e, label)} onMouseLeave={onLeave} onBlur={onLeave} aria-label={label}>
             <text x={labelW - 6} y={yy + 13} textAnchor="end">
@@ -305,7 +306,7 @@ function MaskingChart({ m, color, onTip, onLeave }: { m: Metrics; color: string;
             </text>
             <path d={`M${labelW},${yy} H${labelW + w - 4} a4,4 0 0 1 4,4 V${yy + 12} a4,4 0 0 1 -4,4 H${labelW} Z`} fill={color} opacity={dom ? 1 : 0.55} />
             <text x={labelW + w + 6} y={yy + 13} style={{ fontWeight: dom ? 700 : 400 }}>
-              {v <= -90 ? "—" : v.toFixed(0)}
+              {v <= -90 ? "—" : fmtNum(v, 0)}
               {dom ? " · domina" : ""}
             </text>
           </g>
@@ -324,8 +325,8 @@ function spectralNote(m: Metrics, om: Metrics | null, other: VersionId | null): 
   if (om && other) {
     const dh = s.high_db - om.spectral.mix.high_db;
     const dlow = s.low_db - om.spectral.mix.low_db;
-    if (Math.abs(dh) >= 1.5) parts.push(`${dh > 0 ? "Más" : "Menos"} brillo que ${other} (${dh > 0 ? "+" : ""}${dh.toFixed(1)} dB en agudos).`);
-    if (Math.abs(dlow) >= 1.5) parts.push(`${dlow > 0 ? "Más" : "Menos"} graves que ${other} (${dlow > 0 ? "+" : ""}${dlow.toFixed(1)} dB).`);
+    if (Math.abs(dh) >= 1.5) parts.push(`${dh > 0 ? "Más" : "Menos"} brillo que ${other} (${fmtDb(dh, { sign: true })} en agudos).`);
+    if (Math.abs(dlow) >= 1.5) parts.push(`${dlow > 0 ? "Más" : "Menos"} graves que ${other} (${fmtDb(dlow, { sign: true })}).`);
   }
   return parts.join(" ");
 }
@@ -334,18 +335,18 @@ function maskingNote(m: Metrics): string {
   const e = Object.entries(m.low_end_masking.energy_db).sort((a, b) => b[1] - a[1]);
   if (e.length < 2) return "";
   const gap = e[0][1] - e[1][1];
-  if (gap < 3) return `${e[0][0]} y ${e[1][0]} compiten en los graves (a ${gap.toFixed(1)} dB): el caso "el bombo se come al sample".`;
-  return `${e[0][0]} manda en los graves con ${gap.toFixed(1)} dB de ventaja.`;
+  if (gap < 3) return `${e[0][0]} y ${e[1][0]} compiten en los graves (a ${fmtDb(gap)}): el caso "el bombo se come al sample".`;
+  return `${e[0][0]} manda en los graves con ${fmtDb(gap)} de ventaja.`;
 }
 
 function MetricsTable({ series }: { series: Series }) {
   const rows: [string, (m: Metrics) => string][] = [
-    ["Loudness (LUFS)", (m) => m.loudness.integrated_lufs.toFixed(1)],
-    ["True peak (dBTP)", (m) => m.loudness.true_peak_dbtp.toFixed(1)],
-    ["Graves (dB)", (m) => m.spectral.mix.low_db.toFixed(1)],
-    ["Medios (dB)", (m) => m.spectral.mix.mid_db.toFixed(1)],
-    ["Agudos (dB)", (m) => m.spectral.mix.high_db.toFixed(1)],
-    ["Desfase máx. (ms)", (m) => m.alignment.max_abs_offset_ms.toFixed(1)],
+    ["Loudness (LUFS)", (m) => fmtNum(m.loudness.integrated_lufs, 1)],
+    ["True peak (dBTP)", (m) => fmtNum(m.loudness.true_peak_dbtp, 1)],
+    ["Graves (dB)", (m) => fmtNum(m.spectral.mix.low_db, 1)],
+    ["Medios (dB)", (m) => fmtNum(m.spectral.mix.mid_db, 1)],
+    ["Agudos (dB)", (m) => fmtNum(m.spectral.mix.high_db, 1)],
+    ["Desfase máx. (ms)", (m) => fmtNum(m.alignment.max_abs_offset_ms, 1)],
     ["Clicks", (m) => String(m.clicks.count)],
     ["Alarmas", (m) => String(m.alarms.length)],
   ];

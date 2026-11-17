@@ -113,14 +113,15 @@ export interface AlarmCopy {
   explain: string;
 }
 
-const BAND_ES: Record<string, { name: string; hz: string }> = {
-  sub: { name: "subgraves", hz: "20–60 Hz" },
-  bass: { name: "graves", hz: "60–250 Hz" },
-  low_mid: { name: "medios bajos", hz: "250–500 Hz" },
-  mid: { name: "medios", hz: "500 Hz–2 kHz" },
-  high_mid: { name: "medios altos", hz: "2–4 kHz" },
-  presence: { name: "presencia", hz: "4–8 kHz" },
-  air: { name: "aire", hz: "8–20 kHz" },
+/** name, range and how to say "too much / too little" of it */
+const BAND_ES: Record<string, { name: string; hz: string; more: string; less: string }> = {
+  sub: { name: "subgraves", hz: "20–60 Hz", more: "Demasiados subgraves", less: "Faltan subgraves" },
+  bass: { name: "graves", hz: "60–250 Hz", more: "Demasiados graves", less: "Faltan graves" },
+  low_mid: { name: "medios bajos", hz: "250–500 Hz", more: "Demasiados medios bajos", less: "Faltan medios bajos" },
+  mid: { name: "medios", hz: "500 Hz–2 kHz", more: "Demasiados medios", less: "Faltan medios" },
+  high_mid: { name: "medios altos", hz: "2–4 kHz", more: "Demasiados medios altos", less: "Faltan medios altos" },
+  presence: { name: "presencia", hz: "4–8 kHz", more: "Demasiada presencia", less: "Falta presencia" },
+  air: { name: "aire", hz: "8–20 kHz", more: "Demasiado aire", less: "Falta aire" },
 };
 
 const ALARMS: Record<string, AlarmCopy> = {
@@ -180,8 +181,8 @@ export function alarmCopy(code: string): AlarmCopy {
     const band = BAND_ES[sp[1]];
     const name = band ? `${band.name} (${band.hz})` : `la banda «${sp[1].replace(/_/g, " ")}»`;
     return sp[2] === "excess"
-      ? { title: `Demasiados ${band ? band.name : "de esa banda"}`, explain: `Hay de más en ${name} comparado con tu referencia: el mix puede sonar pesado o tapado en esa zona.` }
-      : { title: `Faltan ${band ? band.name : "de esa banda"}`, explain: `Hay de menos en ${name} comparado con tu referencia: el mix puede sonar flaco o apagado en esa zona.` };
+      ? { title: band ? band.more : "Demasiado en una banda de frecuencias", explain: `Hay de más en ${name} comparado con tu referencia: el mix puede sonar pesado o tapado en esa zona.` }
+      : { title: band ? band.less : "Falta algo en una banda de frecuencias", explain: `Hay de menos en ${name} comparado con tu referencia: el mix puede sonar flaco o apagado en esa zona.` };
   }
   return { title: "Aviso de los oídos del agente", explain: "El análisis automático marcó algo que esta versión de la app todavía no sabe explicar; el mensaje de abajo tiene el detalle." };
 }
@@ -216,7 +217,7 @@ export function describeChopScore(reasons: readonly string[] | null | undefined)
   const rest: string[] = [];
   for (const r of reasons ?? []) {
     let m: RegExpExecArray | null;
-    if ((m = /Continuidad del loop:\s*([\d.]+)/i.exec(r))) {
+    if ((m = /Continuidad del loop:\s*(\d+(?:\.\d+)?)/i.exec(r))) {
       const v = Number(m[1]);
       facets.push({
         key: "seam",
@@ -224,15 +225,15 @@ export function describeChopScore(reasons: readonly string[] | null | undefined)
         verdict: band(v, [[0.8, "cierra muy bien"], [0.55, "cierra bien"], [0.3, "se nota el salto al repetir"]], "el salto se nota bastante"),
         level: v,
       });
-    } else if ((m = /Pulso estable:\s*([\d.]+)/i.exec(r))) {
+    } else if ((m = /Pulso estable:\s*(\d+(?:\.\d+)?)/i.exec(r))) {
       const v = Number(m[1]);
       facets.push({
         key: "pulse",
         label: "Estabilidad del tempo",
-        verdict: band(v, [[0.8, "firme, casi sin deriva"], [0.5, "algo irregular"]], "el tempo se mueve bastante"),
+        verdict: band(v, [[0.8, "firme, el pulso casi no se mueve"], [0.5, "algo irregular"]], "el tempo se mueve bastante"),
         level: v,
       });
-    } else if ((m = /Energ[ií]a relativa:\s*([\d.]+);?\s*ataques por segundo:\s*([\d.]+)/i.exec(r))) {
+    } else if ((m = /Energ[ií]a relativa:\s*(\d+(?:\.\d+)?);?\s*ataques por segundo:\s*(\d+(?:\.\d+)?)/i.exec(r))) {
       const e = Number(m[1]);
       const hits = Number(m[2]);
       facets.push({
@@ -242,7 +243,7 @@ export function describeChopScore(reasons: readonly string[] | null | undefined)
         level: Math.min(1, hits / 4),
         extra: `${fmtNum(hits, 1)} golpes por segundo · ${band(e, [[0.8, "fuerte"], [0.4, "volumen medio"]], "suave")} para esta fuente`,
       });
-    } else if ((m = /Contenido tonal:\s*([\d.]+);?\s*coincidencia con voz[^:]*:\s*([\d.]+)/i.exec(r))) {
+    } else if ((m = /Contenido tonal:\s*(\d+(?:\.\d+)?);?\s*coincidencia con voz[^:]*:\s*(\d+(?:\.\d+)?)/i.exec(r))) {
       const t = Number(m[1]);
       const bleed = Number(m[2]);
       facets.push({

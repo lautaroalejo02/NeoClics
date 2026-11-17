@@ -1,5 +1,6 @@
 import { isMixerDefault, laneCtl, trackCtl, trackGain } from "../audio/mixer";
 import { useApp, useEngine, useStore } from "../state/react";
+import { fmtDb } from "../text/es";
 import * as I from "./icons";
 
 const KIND: Record<string, string> = { clips: "clips", pattern: "patrón", instrument: "instrumento" };
@@ -64,7 +65,7 @@ export function MixerPanel() {
                 aria-label={`Volumen de ${t.id} en dB`}
                 aria-valuetext={`${c.gainDb} dB`}
               />
-              <span className="db">{c.gainDb > 0 ? "+" : ""}{c.gainDb.toFixed(1)} dB</span>
+              <span className="db">{fmtDb(c.gainDb, { sign: true })}</span>
               {t.lanes.length > 0 && (
                 <div className="lanes" role="group" aria-label={`Carriles de ${t.id}`}>
                   {t.lanes.map((l) => {
