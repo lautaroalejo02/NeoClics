@@ -17,7 +17,7 @@ import { BEATS_PER_BAR, plainSound, scalePitchClasses, tonicOf, trackNotes, voic
 import type { Op } from "../editor/ops";
 import type { Store } from "../state/store";
 import { friendlyError } from "../text/es";
-import { PAD_COLORS, PAD_KEYS, classifyKey, kitSlot, readLayout } from "./keymap";
+import { PAD_COLORS, PAD_KEYS, classifyKey, kitOrder, kitSlot, readLayout } from "./keymap";
 import {
   DEFAULT_QUANTIZE,
   calibrate,
@@ -358,12 +358,14 @@ export class PadsStore {
 
   /** A whole starter kit onto the bank: kick/snare/clap/hats on the bottom row, the rest above. */
   async dropKit(kit: string): Promise<number> {
-    const res = await this.app.client.tool<{ kits: { name: string; lanes: { lane: string; uri: string; present: boolean }[] }[] }>("library_kits", { kit });
+    const res = await this.app.client.tool<{ kits: { name: string; lanes: { lane: string; uri: string; present: boolean }[] }[] }>("library_kits", { name: kit });
     const info = res.kits.find((k) => k.name === kit) ?? res.kits[0];
     if (!info) return 0;
     const used = new Set<number>();
     const pads: PadJson[] = [];
-    for (const l of info.lanes.filter((x) => x.present)) {
+    const present = info.lanes.filter((x) => x.present);
+    for (const name of kitOrder(present.map((x) => x.lane))) {
+      const l = present.find((x) => x.lane === name)!;
       const slot = kitSlot(l.lane, used);
       if (slot < 0) break;
       used.add(slot);
@@ -380,7 +382,8 @@ export class PadsStore {
     if (!t?.pattern) return 0;
     const used = new Set<number>();
     const pads: PadJson[] = [];
-    for (const [name, lane] of Object.entries(t.pattern.lanes)) {
+    for (const name of kitOrder(Object.keys(t.pattern.lanes))) {
+      const lane = t.pattern.lanes[name];
       const slot = kitSlot(name, used);
       if (slot < 0) break;
       used.add(slot);

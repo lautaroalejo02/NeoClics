@@ -79,13 +79,24 @@ export function classifyKey(e: { code: string; ctrlKey?: boolean; metaKey?: bool
 /** Pad colours by role (also the default for a new pad). */
 export const PAD_COLORS = ["#ff5d8f", "#ffb347", "#4fd1c5", "#7aa2ff", "#c792ea", "#a3e635", "#f472b6", "#facc15"];
 
+/** Order in which lanes claim slots (snare before clap, so a kit without a snare
+ *  puts the clap next to the kick). */
+export function kitOrder(names: string[]): string[] {
+  const rank = (n: string) => {
+    const r = n.toLowerCase();
+    const i = [/kick|bombo|bd/, /snare|caja|sd/, /clap|palma/, /ohat|open/, /chat|closed|hh|hat/, /tom/, /crash|ride|cym|plato/].findIndex((re) => re.test(r));
+    return i < 0 ? 99 : i;
+  };
+  return [...names].sort((a, b) => rank(a) - rank(b));
+}
+
 /** A sensible kit layout: lane role -> pad slot (bottom row = drums, middle = extra). */
 export function kitSlot(role: string, used: Set<number>): number {
   const r = role.toLowerCase();
   const pref: [RegExp, number[]][] = [
     [/kick|bombo|bd/, [0, 8]],
-    [/snare|caja|sd/, [1, 9]],
-    [/clap|palma/, [2, 10]],
+    [/snare|caja|sd/, [1, 2, 9]],
+    [/clap|palma/, [1, 2, 10]],
     [/ohat|open/, [4, 12]],
     [/chat|closed|hh|hat/, [3, 11]],
     [/tom/, [5, 13, 14]],
