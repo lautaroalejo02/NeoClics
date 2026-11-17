@@ -154,9 +154,15 @@ the cache keys include modification time and file size. Peaks are audio amplitud
 - All CLI/MCP/HTTP feedback reads and appends take the same OS-backed
   `cache/locks/feedback.lock` through portalocker, including on Windows. `chops.choose` also
   participates because it can record a manual choice. This protects whole
-  Unicode JSONL records and cursor reads across these transports. Direct callers of the
-  feedback package or arbitrary external writers do not participate in that lock; writers
-  should append complete newline-terminated events and use the tools when possible.
+  Unicode JSONL records and cursor reads across these transports. **WP13:** `append_event`
+  itself is now atomic across processes too (an OS lock on
+  `cache/locks/feedback-append.lock` around a single `os.write` of the whole line on an
+  `O_APPEND` descriptor), so direct callers are safe; readers only count lines that end in
+  `
+` (a line being written is read next time, not skipped) and split on `
+` only.
+  Measured with the auditor's script (two processes × 400 appends, Windows): 782 lines
+  before, 800 after.
 - Unexpected tool exceptions return a generic `internal_error` and log a traceback privately
   to `cache/logs/muestra.log` in the acted-on project. An unavailable project cannot provide
   a project log. `NotImplementedError` becomes a clean `not_implemented` on every surface.

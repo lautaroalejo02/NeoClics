@@ -476,7 +476,11 @@ One JSON object/line, discriminated on `type`. Unknown types are errors.
 `muestra.feedback.append_event` / `read_events` return a `ReadPage`:
 `events`, `next_cursor` (line count, for resumable paging),
 `skipped: [{path, line, message, hint}]` — malformed JSON lines and
-invalid events are skipped and reported, never crash a read. `since`
+invalid events are skipped and reported, never crash a read. WP13: appends
+are atomic across processes (OS lock + one write); a final line without
+its `
+` is not read (nor counted in `next_cursor`) until it is complete,
+and an append after such a hand-edited line first adds the newline. `since`
 filters `ts >= since` and must itself be timezone-aware.
 
 ## Chop candidates (`cache/chops/<src>/<set_id>.json`) → `ChopCandidateSet`

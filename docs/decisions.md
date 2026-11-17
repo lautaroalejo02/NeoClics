@@ -728,3 +728,6 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
 8. **One ffmpeg resolver** (`muestra.media`): override, `MUESTRA_FFMPEG`,
    PATH, known install locations; `decode_error` vs `ffmpeg_missing` vs
    `ffmpeg_unusable`. Render's `audio_decode` code became `decode_error`.
+9. **Feedback appends lock across processes** (`cache/locks/feedback-append.lock`,
+   separate from the transports' `feedback.lock` so an in-process tool call holding
+   that one can still append); readers ignore an unterminated last line.
