@@ -135,7 +135,7 @@ test("real API: with renders/ gone every version is still listed, greyed out, wi
     // the old behaviour here was "Todavía no hay ninguna versión"
     await expect(page.getByTestId("empty")).toHaveCount(0);
     await expect(page.getByTestId("no-audio")).toBeVisible({ timeout: 20_000 });
-    if (info.project.name.startsWith("phone")) await page.getByTestId("tab-versions").tap().catch(() => undefined);
+    // (no tabs in this view: the version list sits right under the card)
     for (const v of before) {
       const row = page.getByTestId(`version-${v}`);
       await expect(row).toHaveAttribute("data-noaudio", "true");
