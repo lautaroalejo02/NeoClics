@@ -219,6 +219,8 @@ def test_regrid_retires_stale_candidate_sets(rhythmic_project):
 
     project, source_id, _ = rhythmic_project
     found, _ = find(project, source_id, ChopQuery(stem="mix", length_beats=4, n=1))
+    assert regrid(project, source_id, tempo_factor=1.0).stale_sets == []  # same grid
+    assert set_paths(project, source_id)
     out = regrid(project, source_id, tempo_factor=2.0)
     assert out.stale_sets == [found.set_id]
     assert set_paths(project, source_id) == []

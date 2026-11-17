@@ -223,7 +223,9 @@ def regrid(
         path = project.path(f"cache/analysis/{source_id}.json")
         write_json(path, after.model_dump(mode="json"))
         outcome.files.append(f"cache/analysis/{source_id}.json")
-        outcome.stale_sets = _retire_candidate_sets(project, source_id, outcome.files)
+        grid_moved = before.beats_s != after.beats_s or before.downbeats_s != after.downbeats_s
+        if grid_moved:  # same effective grid (e.g. a no-op call): candidates stay valid
+            outcome.stale_sets = _retire_candidate_sets(project, source_id, outcome.files)
 
     hints = []
     if outcome.stale_sets:
