@@ -73,9 +73,26 @@ def test_index_tool_progress_callback(project):
     calls = []
     library_index(
         LibraryIndexParams(project=str(project.root), workers=1),
-        progress=lambda done, total, rel: calls.append((done, total)),
+        progress=lambda fraction, message=None: calls.append((fraction, message)),
     )
-    assert calls and calls[-1][0] == calls[-1][1]
+    assert calls and calls[-1][0] == 1.0
+    assert all(0.0 <= f <= 1.0 and isinstance(m, str) for f, m in calls)
+
+
+def test_index_tool_progress_through_transport_adapter(project):
+    """Seam: the HTTP/MCP adapter passes progress(fraction, message); the tool
+    used to call it with (done, total, rel) and crashed with internal_error."""
+    from muestra.api.core import invoke_spec
+    from muestra.registry import REGISTRY
+
+    calls = []
+    result = invoke_spec(
+        REGISTRY["library.index"],
+        {"project": str(project.root), "workers": 1},
+        progress=lambda fraction, message=None: calls.append(fraction),
+    )
+    assert result.ok, result.errors
+    assert calls and calls[-1] == 1.0
 
 
 def test_search_tool_result_shape(project, indexed):

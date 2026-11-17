@@ -178,7 +178,7 @@ def write_report(path: Path, results: list[dict]):
         "",
     ]
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("\n".join(rows), encoding="utf-8")
+    path.write_text("\n".join(rows), encoding="utf-8", newline="\n")
 
 
 if __name__ == "__main__":

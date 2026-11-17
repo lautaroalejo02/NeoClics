@@ -95,7 +95,7 @@ def append_event(project: Project, event: FeedbackEvent) -> Path:
     line = json.dumps(EVENT_ADAPTER.dump_python(event, mode="json"), ensure_ascii=False)
     path = project.feedback_path
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as f:
+    with path.open("a", encoding="utf-8", newline="\n") as f:
         f.write(line + "\n")
     return path
 

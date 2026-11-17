@@ -148,7 +148,7 @@
     },
     "DiffEntry": {
       "additionalProperties": false,
-      "description": "One changed value in the musical diff between versions.\n\n``path`` uses ID-based song.yaml addressing, matching the automation\ngrammar: ``chops.c1.warp.pitch_semitones``,\n``tracks.sample.fx.lp.cutoff_hz``,\n``tracks.drums.pattern.lanes.kick.steps``, ``meta.bpm``. Elements\nwithout ids use indices: ``tracks.<id>.clips[<i>]``, and an fx\nwithout an ``id`` is addressed as ``fx[<i>]``.\n``from_`` serializes as ``from``.",
+      "description": "One changed value in the musical diff between versions.\n\n``path`` uses ID-based song.yaml addressing, matching the automation\ngrammar: ``chops.c1.warp.pitch_semitones``,\n``tracks.sample.fx.lp.cutoff_hz``,\n``tracks.drums.pattern.lanes.kick.steps``, ``meta.bpm``. Elements\nwithout ids use indices: ``tracks.<id>.clips[<i>]``, and an fx\nwithout an ``id`` is addressed as ``fx[<i>]``.\n``from_`` serializes as ``from`` in every dump (``serialize_by_alias``),\nwhichever envelope or tool returns it.",
       "properties": {
         "from": {
           "default": null,

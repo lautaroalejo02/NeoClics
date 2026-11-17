@@ -13,7 +13,6 @@ from muestra.render import tools
 from muestra.schemas.metrics import Metrics
 from muestra.schemas.song import Song
 from muestra.versions import core as versions
-from muestra.versions.tools import VersionInfo, VersionsDiffResult, VersionsListResult
 from tests.conftest import EXAMPLE_PROJECT
 
 
@@ -33,18 +32,27 @@ def small_song():
     )
 
 
+_COMMITS = {
+    "a" * 40: versions.CommitInfo(
+        "a" * 40,
+        "2026-11-17T10:00:00+00:00",
+        "v100: sample",
+        {"Muestra-Version": "v100", "Muestra-Parent": "v001"},
+    ),
+    "b" * 40: versions.CommitInfo(
+        "b" * 40, "2026-11-17T09:00:00+00:00", "v001: previous", {"Muestra-Version": "v001"}
+    ),
+}
+
+
 @pytest.fixture
 def version_fakes(monkeypatch):
+    """Fake git history: v001 (b...) exists; a new render records v100 (a...)
+    whose parent the versions package derived as v001."""
     monkeypatch.setattr(versions, "next_version_id", lambda project: "v100")
     monkeypatch.setattr(versions, "record_version", lambda *args: "a" * 40)
-    monkeypatch.setattr(
-        tools,
-        "versions_list",
-        lambda p: VersionsListResult(
-            versions=[VersionInfo(version="v001", git_commit="b" * 40, summary="previous")]
-        ),
-    )
-    monkeypatch.setattr(tools, "versions_diff", lambda p: VersionsDiffResult(a=p.a, b=p.b, diff=[]))
+    monkeypatch.setattr(versions, "version_tags", lambda root: {"v001": "b" * 40})
+    monkeypatch.setattr(versions, "commit_info", lambda root, ref: _COMMITS.get(ref))
 
 
 def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monkeypatch):
@@ -70,7 +78,7 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
             "more pump",
             "sample",
             "agent",
-            "v001",
+            None,  # the versions package derives the parent (honours restore)
         )
         return "a" * 40
 
