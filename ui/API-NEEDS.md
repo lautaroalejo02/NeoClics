@@ -1,100 +1,66 @@
-# What the UI uses from muestra-api (for WP7)
+# What the UI uses from muestra-api
 
 Every HTTP call the UI makes lives in one file, `ui/src/api/client.ts`.
-This list says, for each one, whether it is in the contract
-(`docs/contracts.md`, `src/muestra/schemas/api.py`, `schemas/`) or is an
-**assumption / request**. If the real API differs, the fix goes in
-`client.ts` only.
-
-Legend: **[contrato]** = in the contract as written. **[supuesto]** =
-the contract is silent or ambiguous; the UI assumes this. **[pedido]** =
-not in the contract; please add it (the UI already handles it being missing).
+WP8 wrote this list against the contract before the real API existed;
+WP11 (integration, 2026-11-17) reconciled every item with what
+`src/muestra/api/` really serves. **Each row now describes the real
+behaviour**, verified by `npm run test:e2e:real` (Playwright against the
+real server) and `tests/api/`. The mock (`ui/mock/server.mjs`) mirrors the
+same shapes.
 
 ## Conventions
 
-| What | Status | Notes |
+| What | Status |
+|---|---|
+| Same origin in production: `muestra serve` serves `ui/dist` at `/` (SPA fallback) | **real** (`docs/server.md`) |
+| Base URL override `?api=http://host:port` or `VITE_MUESTRA_API` | UI only; the API allows CORS from the Vite dev origins only |
+| Project-scoped tool params are sent **without** `project` | **real**: the server injects its project; a different one is `project_locked` (409) |
+| Tool calls are `POST /tools/<mcp_name>` with a JSON body | **real** |
+| Tool response = the `ToolResult` envelope `{tool, ok, data, files, errors, hint}` | **real, with HTTP status codes**: 200 ok, 422 expected tool failure, 409 other project, 501 not implemented, 500 internal. The body is always the envelope, so the client reads `ok`/`errors`, never the status (resolved: the UI already parsed the envelope on any status) |
+| `long_running` tools answer 202 `{job_id}` | real; the UI never starts one, it only shows jobs from the websocket |
+
+## Read endpoints (the UI's boot path)
+
+| Endpoint | Real shape | Used for |
 |---|---|---|
-| Same origin in production: the API serves `ui/dist` at `/` | **[supuesto]** | Build uses `base: "./"`, so `ui/dist` can also live under a sub-path. The SPA has no client-side routes: serving `index.html` at `/` is enough. |
-| Base URL override `?api=http://host:port` or `VITE_MUESTRA_API` | UI only | For a UI served from somewhere else. That needs CORS on the API (see below). |
-| Project-scoped tool params are sent **without** `project` (and `project.open` without `path`) | **[contrato]** R11 + **[supuesto]** | R11: one project per server process, routes never carry it. WP7's adapter injects `project` when it is omitted (checked in its worktree). If a client sends a *different* path, WP7 answers `project_locked`; the UI never does. |
-| Tool calls are always `POST /tools/<mcp_name>` with a JSON body | **[contrato]** | The UI never uses the `GET` variant. |
-| Response of a non-long-running tool = the `ToolResult` envelope `{tool, ok, data, files, errors, hint}`, HTTP 200 also when `ok: false` | **[supuesto]** | The UI also copes with non-2xx and non-JSON bodies (shown as an error with the HTTP status). It never calls a `long_running` tool, so it never receives `{job_id}`. |
-| CORS: only needed when the UI is not same-origin (e.g. Vite dev without proxy) | **[pedido, opcional]** | Dev uses Vite's proxy, so not required. |
+| `GET /project` (alias `/project/summary`) | `{project_path, config, song, versions: [{version, meta, metrics, feedback}], candidate_sets, analyses: {src: Analysis}, feedback, feedback_cursor, feedback_skipped, issues}`; versions newest first, only those with a valid `meta.json` | one round-trip at boot; mapped to the UI summary by `summaryFromProjectView()` in `client.ts`. **Resolved:** the UI's guessed `GET /summary` was replaced by this; `analyses` was added server-side for the chop panel |
+| `GET /waveform?path=<audio>&points=N` | `{path, sample_rate, frames, duration_s, points, channels: [{min, max}]}` | waveform before the audio decodes. **Resolved:** replaces the guessed `GET /peaks/...`; converted to `[min, max]` pairs in `client.ts` |
+| `POST /tools/versions_get {version}` | `{version, meta, metrics, song_yaml, ...}` | one version's meta + metrics (e.g. after a `version.created` without meta); getMeta/getMetrics share one request |
+| `GET /files/<project-relative path>` | audio only (wav/flac/mp3/m4a/ogg/aiff) under `renders/` and `cache/previews/`, HTTP Range, `ETag` + `Cache-Control: no-cache` | mix, stems, lane stems, chop previews. **Resolved:** JSON (`meta.json`, `metrics.json`, `cache/analysis/*.json`) is NOT served here — it comes from `/project` and `versions.get` — so the file whitelist stays audio-only |
 
 ## Tools
 
-| Tool (route) | Status | Used for | Fields read |
-|---|---|---|---|
-| `versions.list` (`POST /tools/versions_list`) | **[contrato]** | version history | `versions[].{version, parent, created_at, summary}`. `liked` is ignored: the UI derives ratings from `feedback.read` so they update live. **Fallback:** if it fails (still a WP5 stub returning `not_implemented`), the UI uses `project.open.versions` + each `meta.json`. |
-| `project.open` (`POST /tools/project_open`, body `{}`) | **[contrato]** | title fallback (folder name) and versions fallback | `project_path`, `versions` |
-| `song.get` (`POST /tools/song_get`) | **[contrato]** | title (`song.meta.title`), chop ids (`song.chops[].{id, source}`) to suggest the `chop_id` for `chops.choose` | `song.meta.title`, `song.chops` |
-| `feedback.read` (`POST /tools/feedback_read`, body `{}`) | **[contrato]** | all feedback, newest last | `events` (feedback union). `next_cursor`, `skipped` not used yet (the websocket delivers appends). |
-| `feedback.append` (`POST /tools/feedback_append`, `{event}`) | **[contrato]** | likes, comments (general and timestamped), `ab_choice` | sends a full event **including `ts`** (aware UTC, `...Z`). Every builder is tested against `schemas/feedback.schema.json`. Expects `ok: false` + `errors` on a rejected event. |
-| `chops.list` (`POST /tools/chops_list`, body `{}`) | **[contrato]** | candidate sets | `sets[]` = `ChopCandidateSet` |
-| `chops.choose` (`POST /tools/chops_choose`) | **[contrato]** | manual override | sends `{candidate_id: "csNNN/candN", chop_id, mode: "manual", adjust?: {start_beats, length_beats}}`; `adjust` only when non-zero. Validated against `schemas/tools/chops.choose.params.schema.json` (minus `project`). **[supuesto]** the tool itself appends the `chop_choice` feedback event in manual mode (decisions WP0-20), so the UI does **not** append it too. |
-| `versions.diff` | **[contrato]**, wired but unused | client method exists | the UI shows `meta.diff` (vs the parent) directly. |
-
-**Contradiction to resolve (not the UI's to fix):** `docs/contracts.md`
-(R5) says `ChopCandidate.id` is the *global* `csNNN/candN`; the pydantic
-model and `schemas/chop-candidates.schema.json` say *local* `candN`
-(pattern `^cand\d+$`), and the fixture uses local ids. The UI accepts both
-and always sends the global id to `chops.choose`.
-
-## Files (`GET /files/<project-relative path>`, Range)
-
-| Path | Status | Notes |
+| Tool | Used for | Fields read |
 |---|---|---|
-| `renders/vNNN/meta.json` | **[contrato]** (under `renders/`) | Needs `version, parent, created_at, request, summary, diff, duration_s, sample_rate, bpm, range_bars, mix, tracks[{id, kind, stem, lanes[{id, stem}]}]`. `duration_s` missing → computed from `range_bars` and `bpm`. 404 → the version is not listed (not playable). |
-| `renders/vNNN/metrics.json` | **[contrato]** | 404 → "sin métricas". Uses `loudness.*`, `spectral.mix`, `low_end_masking.*`, `alignment.max_abs_offset_ms`, `tonal.*`, `clicks.count`, `style_similarity?`, `alarms[{code, severity, message, track?, at_s?}]`. Alarm `message` is shown as-is: **[pedido]** WP6, write it in Spanish (the UI adds a Spanish title per `code`). `at_s` makes an alarm clickable (jump). |
-| `renders/vNNN/mix.wav`, `stems/<track>.wav`, `stems/<track>.<lane>.wav` | **[contrato]** R7 | Fetched whole (decoded audio is needed). 24-bit PCM mix and 32-bit float stems both decode natively in Chromium (verified); a built-in WAV decoder is the fallback. |
-| `cache/previews/<src>/<set>/<cand>.wav` | **[contrato]** | chop previews (looped audition + mini waveform). |
-| `cache/analysis/<src>.json` | **[pedido]** | NOT in the `/files` whitelist (only `renders/` and `cache/previews/`), and `source.analyze` is a long-running *compute* tool, so the UI cannot read a source's sections/downbeats to draw "where the candidate sits in the source". Please either whitelist `cache/analysis/` for read, or include analyses in `/summary` (below). Without it the UI draws the candidates on a bare timeline. |
-| Caching headers | **[pedido, opcional]** | `ETag`/`Last-Modified` + `Cache-Control: no-cache` let the browser revalidate instead of re-downloading WAVs. Renders never change once written (except a re-render of the same version), so long caching is fine. |
+| `versions.list` | fallback when `/project` is missing | `versions[].{version, parent, created_at, summary}` |
+| `project.open` | title/versions fallback | `project_path`, `versions` |
+| `song.get` | fallback; normally the song comes in `/project` | `song.meta.title`, `song.chops` |
+| `feedback.read` / `feedback.append` | ratings, timestamped comments, A/B choices (`ts` sent, aware UTC) | `events` |
+| `chops.list` / `chops.choose` | candidate sets, manual override (the tool logs `chop_choice` itself) | `sets[]`; candidate ids are global `csNNN/candN` everywhere (model, schema, fixture, ingest, API, UI) |
+| `versions.diff` | **the versions panel** shows its Spanish musical description (`changes`, `musical_summary`) and the ears delta (`metrics_delta`) when a row is expanded | `changes`, `musical_summary`, `metrics_delta` |
 
-## Jobs and live events
+## Live events (`WS /events`)
 
-| What | Status | Notes |
-|---|---|---|
-| `WS /events` → `WsEvent{type, ts, data}` | **[contrato]** | URL derived from the base (`ws://` / `wss://`). Unknown types ignored. Reconnects with backoff (0.8 s → 10 s) and **re-reads everything** after a reconnect, since events may have been missed. |
-| `job.updated` → `data` = `Job{id, tool, status, progress, message, result}` | **[contrato]** | Shown with progress (`progress: null` = indeterminate bar). `done` hides after 5 s; `failed` stays with `result.errors[0].message`. **[pedido]** on connect, re-send the current state of running jobs (the mock does), so a page opened mid-separation shows it. |
-| `version.created` → `data` = `{version, meta}` | **[contrato]** | If `meta` is missing the UI fetches `renders/<v>/meta.json`. **[supuesto]** emitted after `meta.json` exists; `metrics.json` may come later (the UI tolerates a 404 and shows "sin métricas"). **[pedido]** a `metrics` update event (or a second `version.created`) when `metrics.json` lands later, so the Oídos panel refreshes without a reload. |
-| `feedback.appended` → `data` = the event line | **[contrato]** | Also accepts `{event: ...}`. De-duplicated against the UI's own optimistic writes by content. |
-| `candidates.created` → `data` = `{set_id, source_id}` | **[contrato]** | The UI re-reads `chops.list`. |
-| `song.changed` → `{}` | **[contrato]** | The UI re-reads the title. |
-| `GET /jobs/<id>` | **[contrato]**, not used | The UI never starts long-running jobs; it only displays them from the websocket. |
+| Event | Real behaviour |
+|---|---|
+| `job.updated` → `Job` | **Resolved:** a websocket that connects is first sent the state of every queued/running job, so a page opened mid-separation shows it |
+| `version.created` → `{version, meta, metrics}` | **Resolved:** emitted when `meta.json` is valid and **re-emitted (upsert) when `metrics.json` lands** or a version is re-rendered; the UI updates meta/metrics of a known version in place (the Oídos panel refreshes without a reload) |
+| `feedback.appended` → the event | real; de-duplicated against optimistic writes |
+| `candidates.created` → `{set_id, source_id}` | real; the UI re-reads `chops.list` |
+| `song.changed` → `{}` | real |
 
-## Optional accelerators (asked of WP7; the UI works without them)
+Events come from the server **watching the project folder**, so renders
+triggered by a CLI or MCP process in another terminal appear live
+(verified by `e2e-real`: a `muestra render` subprocess shows up in the page).
 
-Both are read through `client.ts`; a 404 is remembered and never retried.
+## Metrics (`metrics.json`, WP6 ears)
 
-### `GET /summary` **[pedido]**
-
-One round-trip at boot instead of 2 + 2×N requests. Assumed shape
-(`ProjectSummary` in `src/api/types.ts`), every field optional:
-
-```json
-{
-  "project_path": "...", "title": "fixture-loop", "has_song": true,
-  "versions": [{"version": "v001", "parent": null, "created_at": "...", "summary": "..."}],
-  "metas":    {"v001": {"...RenderMeta": "..."}},
-  "metrics":  {"v001": {"...Metrics": "..."}, "v002": null},
-  "analyses": {"src1": {"...Analysis": "..."}}
-}
-```
-
-### `GET /peaks/<project-relative wav>?buckets=N` **[pedido]**
-
-Lets the waveform appear before the audio is decoded (big renders, slow
-phones). Shape: `{"peaks": [[[min, max], ...], ...], "duration_s": 32.0}` —
-one array per channel, `N` buckets, values in −1..1. Only for paths the
-`/files` whitelist allows. Without it the UI computes peaks from the decoded mix.
+Alarm `message`, `fix` and `metrics.summary` are written by ears in
+Spanish. Alarms with `at_s` are drawn on the waveform and are clickable.
 
 ## Not needed from the API
 
-- Mute/solo/volume, loudness matching, A/B and blind mode are pure client
-  side (stems are played directly). Nothing is re-rendered.
+- Mute/solo/volume, loudness matching, A/B and blind mode are client side
+  (stems play directly). Nothing is re-rendered.
 - The "pendiente de leer por el agente" badge is derived: an event is
-  pending until a version with a later `created_at` exists. **[pedido,
-  opcional]** if WP9 wants an explicit read marker, a per-project
-  "last read cursor" (`feedback.read` already returns `next_cursor`) exposed
-  to the UI would make this exact.
+  pending until a version with a later `created_at` exists.

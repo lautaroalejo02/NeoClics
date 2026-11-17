@@ -1,6 +1,6 @@
 # Muestra local server
 
-From the source checkout, install once with `uv sync --extra server`, then:
+From the source checkout, install once with `uv sync`, then:
 
 ```sh
 uv run muestra serve --project /absolute/path/to/my-song --open
@@ -144,5 +144,5 @@ the cache keys include modification time and file size. Peaks are audio amplitud
 
 On Windows, this package was built against FastAPI 0.163.1, uvicorn 0.54.0, official MCP
 Python SDK 2.3.0, portalocker 4.4.2 and Python 3.12. The CLI uses the standard-library
-argparse framework. Dependency ranges live only in the `server` extra; the integrator owns
+argparse framework. Since WP11 its dependencies are in the base install (`uv sync`); the integrator owns
 `uv.lock`. macOS uses the same Python code and portalocker backend but has not been run here.

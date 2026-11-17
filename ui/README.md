@@ -18,14 +18,14 @@ npm run dev:all        # mock API on :8777 + Vite on http://localhost:5173
 ```
 
 Or in two terminals: `npm run mock` and `npm run dev`. Vite proxies `/tools`,
-`/files`, `/jobs`, `/events`, `/summary` and `/peaks` to `MUESTRA_API`
+`/files`, `/jobs`, `/events`, `/project` and `/waveform` to `MUESTRA_API`
 (default `http://localhost:8777`), so dev is same-origin like production.
 
 Against the real API instead of the mock:
 
 ```sh
-muestra serve --project path/to/project        # WP7, e.g. on :8000
-MUESTRA_API=http://localhost:8000 npm run dev
+muestra serve --project path/to/project        # prints its URL, default :8765
+MUESTRA_API=http://localhost:8765 npm run dev
 ```
 
 ## Scripts
@@ -40,6 +40,7 @@ MUESTRA_API=http://localhost:8000 npm run dev
 | `npm test` | unit + engine + component tests (Vitest, jsdom). Component tests spawn the mock server on a free port. |
 | `npm run build` | typecheck + production build to `ui/dist` |
 | `npm run test:e2e` | build, then Playwright (headless Chromium, desktop + phone) against the mock serving `ui/dist` |
+| `npm run test:e2e:real` | build, then Playwright against the REAL muestra-api serving `ui/dist` for a real project built by `tests/integration/e2e_server.py` (needs `uv` on PATH or `MUESTRA_UV`): play, A/B, mute, a comment reaching `feedback.jsonl`, a CLI render showing up live |
 | `npm run e2e:install` | download Playwright's Chromium once (`npx playwright install chromium`) |
 
 ## How it is served in production
@@ -83,11 +84,11 @@ against a **copy** of `fixtures/example-project` (written to
   `chops_list|choose`, and `render`/`source_separate` as jobs.
   `feedback.append` and `chops.choose` **validate against `schemas/`** (ajv)
   and reject what the real API would reject.
-- `GET /files/...` with HTTP Range, restricted to `renders/` and `cache/previews/`.
+- `GET /files/...` with HTTP Range, audio only, restricted to `renders/` and `cache/previews/` (like muestra-api).
 - `GET /jobs/<id>`, `WS /events` (`job.updated`, `version.created`,
   `feedback.appended`, `candidates.created`).
-- Optional accelerators `GET /summary` and `GET /peaks/...` (`MOCK_ACCEL=0`
-  turns them off to exercise the contract-only path).
+- `GET /project` and `GET /waveform?path=&points=` in muestra-api's real shapes
+  (`MOCK_ACCEL=0` turns them off to exercise the tools-only fallback).
 
 At startup it derives a meaningful history from the single fixture render:
 v001 is extended to 8 bars (the fixture render is 1 bar) with a synthesized
@@ -105,7 +106,7 @@ and "the agent" renders a new version after 25 s, to show live updates.
 |---|---|---|
 | `PORT` | 8777 | `0` = any free port (printed) |
 | `MOCK_DEMO` | 1 | demo jobs |
-| `MOCK_ACCEL` | 1 | `/summary` and `/peaks` |
+| `MOCK_ACCEL` | 1 | `/project` and `/waveform` |
 | `MOCK_BARS` | 8 | render length |
 | `MOCK_PROJECT_DIR` | `ui/mock/.project` | where the copy lives |
 | `MOCK_RENDER_MS` | 6000 | simulated render time |

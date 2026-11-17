@@ -27,9 +27,16 @@ Muestra never calls a language model. Your existing agent supplies the musical r
    useful for a structural draft; use the default true before rendering. Preview the selected
    chop/track or mix, then render with a short musical summary, request and agent identity.
    Render creates a version, git commit/tag, mix, aligned stems, metadata and metrics.
-7. Inspect render metrics: clipping/true peak, loudness, low-end masking, grid alignment,
-   tonal coherence and clicks. These are alarms, not proof that music sounds good. Never
-   claim to have heard the result. Tell the human what changed and where to listen.
+7. Read the render's `metrics_summary` (headline + the worst alarms, each with a song.yaml
+   fix); the full report is `renders/vNNN/metrics.json` (ears_analyze / versions_get) and
+   covers clipping/true peak, loudness, low-end masking + sidechain, grid alignment, tonal
+   coherence + detune and clicks. These are alarms, not proof that music sounds good. Never
+   claim to have heard the result. Tell the human what changed and where to listen. If the
+   render hint says a track's reproducibility is unverified (a non-curated plugin preset),
+   prefer the curated aliases from plugins_list. A sample `grid_offset` alarm on a busy live
+   record is unreliable (docs/ears.md); trust drum/instrument timing.
+   If the chop's source tempo is about double the project tempo (old records often track
+   at 200-260 BPM), use `warp.mode: stretch`: resample would drop it an octave.
 8. Let the human compare versions at the same playback position, mute/solo stems, rate and
    comment with timestamps. Read new feedback, make a focused edit, validate and render
    again. Use versions_diff/get/list to explain the musical changes; versions_restore can
