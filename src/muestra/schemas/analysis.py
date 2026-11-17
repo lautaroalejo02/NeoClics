@@ -10,12 +10,27 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import AwareDatetime, Field, model_validator
 from pydantic_core import PydanticCustomError
 
 from ._base import ContractModel, IdStr, RelPath
 
-__all__ = ["Analysis", "KeyEstimate", "Section", "Stems"]
+__all__ = [
+    "TEMPO_FACTORS",
+    "Analysis",
+    "GridAlternative",
+    "GridCorrection",
+    "GridStep",
+    "KeyEstimate",
+    "RawGrid",
+    "Section",
+    "Stems",
+]
+
+#: allowed beat-grid tempo factors relative to the raw tracker output
+#: (0.5 = keep every 2nd tracked beat, 2 = add a beat between each pair).
+TEMPO_FACTORS = (0.5, 1.0, 2.0)
+TempoFactor = Literal[0.5, 1.0, 2.0]
 
 
 class KeyEstimate(ContractModel):
@@ -67,6 +82,80 @@ class Stems(ContractModel):
         return self
 
 
+class RawGrid(ContractModel):
+    """The beat tracker's own output, kept so grid corrections are reversible."""
+
+    bpm_global: float = Field(gt=0.0, lt=400.0)
+    tempo_variable: bool = False
+    beats_s: list[float] = Field(min_length=1)
+    downbeats_s: list[float] = Field(min_length=1)
+
+
+class GridAlternative(ContractModel):
+    """Another plausible reading of the grid, as ready-to-pass source.regrid params."""
+
+    tempo_factor: TempoFactor
+    beat_phase: Literal[0, 1] = 0
+    downbeat_shift_beats: int = 0
+    bpm: float = Field(gt=0.0, description="Global tempo of this reading.")
+    label: str = Field(description="Short Spanish description for the human.")
+
+
+class GridStep(ContractModel):
+    """One applied correction (history; the newest is the current one)."""
+
+    at: AwareDatetime
+    origin: Literal["auto", "manual", "reset"]
+    tempo_factor: TempoFactor
+    beat_phase: Literal[0, 1] = 0
+    downbeat_shift_beats: int = 0
+    beats_per_bar: int = 4
+
+
+class GridCorrection(ContractModel):
+    """How the effective grid (``beats_s``/``downbeats_s``) derives from the tracker.
+
+    All parameters are ABSOLUTE, relative to ``raw`` (the tracker output):
+    applying the same correction twice is a no-op, and
+    ``tempo_factor: 1, downbeat_shift_beats: 0`` gives back the raw grid.
+    """
+
+    origin: Literal["tracker", "auto", "manual"] = Field(
+        description="tracker = raw grid as tracked; auto = source.analyze picked the tempo "
+        "octave inside tempo_range_bpm; manual = source.regrid."
+    )
+    tempo_factor: TempoFactor = 1.0
+    beat_phase: Literal[0, 1] = Field(
+        default=0,
+        description="With tempo_factor 0.5: which of every two tracked beats is kept "
+        "(0 = the 1st, 3rd, ... tracked beat).",
+    )
+    downbeat_shift_beats: int = Field(
+        default=0,
+        ge=-16,
+        le=16,
+        description="Corrected beats the downbeat (the 'one') is moved from where the "
+        "tracker put it; +1 = one beat later.",
+    )
+    beats_per_bar: int = Field(default=4, ge=2, le=12)
+    tempo_range_bpm: tuple[float, float] = (70.0, 160.0)
+    raw: RawGrid
+    tempo_confidence: float = Field(
+        ge=0.0,
+        le=1.0,
+        description="How sure the tempo octave is (heuristic, not a probability).",
+    )
+    bar_phase_confidence: float = Field(
+        ge=0.0, le=1.0, description="How sure the downbeat position is (heuristic)."
+    )
+    ask_human: bool = Field(
+        description="True when the agent should have the human confirm the grid by ear."
+    )
+    reason: str = Field(description="Spanish: what was read, what was applied and why.")
+    alternatives: list[GridAlternative] = Field(default_factory=list)
+    history: list[GridStep] = Field(default_factory=list)
+
+
 class Analysis(ContractModel):
     schema_version: Literal[0] = 0
     source_id: IdStr
@@ -82,6 +171,12 @@ class Analysis(ContractModel):
     loudness_lufs: float | None = None
     stems: Stems | None = None
     separation_model: str | None = None
+    grid: GridCorrection | None = Field(
+        default=None,
+        description="Beat-grid correction over the tracker output (WP12). beats_s, "
+        "downbeats_s and bpm_global are always the EFFECTIVE grid; absent = the "
+        "tracker's grid as-is (analyses written before WP12).",
+    )
 
     @model_validator(mode="after")
     def _grid_within_duration(self) -> Analysis:

@@ -71,6 +71,8 @@ _ANALYSIS_ADAPTER = TypeAdapter(Analysis)
 #: duplicate keys (DuplicateKeyError).
 _YAML = YAML(typ="rt")
 _YAML.preserve_quotes = True
+# Never re-wrap long flow-style lines (lanes with library:// URIs) on round-trip edits.
+_YAML.width = 4096
 
 _DUP_KEY_RE = re.compile(r'duplicate key "([^"]+)"')
 

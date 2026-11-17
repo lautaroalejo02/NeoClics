@@ -55,6 +55,7 @@ WsEventType = Literal[
     "candidates.created",
     "feedback.appended",
     "song.changed",
+    "grid.changed",
 ]
 
 
@@ -64,7 +65,9 @@ class WsEvent(ContractModel):
     ``data`` is type-specific: e.g. a Job for ``job.updated``, a
     ``{version, meta}`` pair for ``version.created``, a
     ``{set_id, source_id}`` pair for ``candidates.created``, the event
-    line for ``feedback.appended``, ``{}`` for ``song.changed``.
+    line for ``feedback.appended``, ``{}`` for ``song.changed``,
+    ``{source_id}`` for ``grid.changed`` (WP12: source.regrid rewrote the
+    analysis or source.preview_grid wrote click previews).
     """
 
     type: WsEventType

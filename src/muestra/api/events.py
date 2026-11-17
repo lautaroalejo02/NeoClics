@@ -41,6 +41,11 @@ def _stamp(path: Path):
         return None
 
 
+def _live_set(path: Path) -> bool:
+    """A candidate set file (not its fingerprint sidecar)."""
+    return not path.name.endswith(".meta.json")
+
+
 class ProjectWatcher:
     """Portable polling avoids platform-specific recursive watcher semantics on Windows.
 
@@ -62,7 +67,13 @@ class ProjectWatcher:
             self.root / "song.yaml",
             *(self.root / "renders").glob("v*/meta.json"),
             *(self.root / "renders").glob("v*/metrics.json"),
-            *(self.root / "cache/chops").glob("*/*.json"),
+            *(p for p in (self.root / "cache/chops").glob("*/*.json") if _live_set(p)),
+            *(
+                p
+                for p in (self.root / "cache/analysis").glob("*.json")
+                if not p.name.endswith(".meta.json")
+            ),
+            *(self.root / "cache/previews").glob("*/grid/index.json"),
         ]
 
     def initialize(self):
@@ -110,6 +121,13 @@ class ProjectWatcher:
                         {"version": meta["version"], "meta": meta, "metrics": metrics},
                     )
                 )
+            elif relative.startswith("cache/analysis/") or relative.endswith("/grid/index.json"):
+                # source.regrid / source.preview_grid (WP12): the grid or its
+                # click previews changed; stale candidate sets were retired.
+                source_id = (
+                    path.stem if relative.startswith("cache/analysis/") else path.parent.parent.name
+                )
+                events.append(("grid.changed", {"source_id": source_id}))
             elif relative.startswith("cache/chops/"):
                 candidate = read_model(path, ChopCandidateSet)
                 if candidate is None:

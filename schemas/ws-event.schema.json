@@ -1,6 +1,6 @@
 {
   "additionalProperties": false,
-  "description": "One websocket message on /events.\n\n``data`` is type-specific: e.g. a Job for ``job.updated``, a\n``{version, meta}`` pair for ``version.created``, a\n``{set_id, source_id}`` pair for ``candidates.created``, the event\nline for ``feedback.appended``, ``{}`` for ``song.changed``.",
+  "description": "One websocket message on /events.\n\n``data`` is type-specific: e.g. a Job for ``job.updated``, a\n``{version, meta}`` pair for ``version.created``, a\n``{set_id, source_id}`` pair for ``candidates.created``, the event\nline for ``feedback.appended``, ``{}`` for ``song.changed``,\n``{source_id}`` for ``grid.changed`` (WP12: source.regrid rewrote the\nanalysis or source.preview_grid wrote click previews).",
   "properties": {
     "data": {
       "additionalProperties": true,
@@ -18,7 +18,8 @@
         "version.created",
         "candidates.created",
         "feedback.appended",
-        "song.changed"
+        "song.changed",
+        "grid.changed"
       ],
       "title": "Type",
       "type": "string"

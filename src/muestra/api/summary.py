@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from pydantic import BaseModel, ValidationError
@@ -69,6 +70,8 @@ def project_summary(runtime: Runtime) -> dict:
         )
     versions.sort(key=lambda item: int(item["version"][1:]), reverse=True)
     for path in sorted((root / "cache/chops").glob("*/*.json")):
+        if path.name.endswith(".meta.json"):  # fingerprint sidecar, not a set
+            continue
         candidate = read_model(path, ChopCandidateSet)
         if candidate:
             candidates.append(candidate)
@@ -86,6 +89,12 @@ def project_summary(runtime: Runtime) -> dict:
         analysis = read_model(path, Analysis)
         if analysis is not None:
             analyses[analysis["source_id"]] = analysis
+    grid_previews = {}
+    for path in sorted((root / "cache/previews").glob("*/grid/index.json")):
+        try:
+            grid_previews[path.parent.parent.name] = json.loads(path.read_text("utf-8"))
+        except (OSError, ValueError):
+            continue
     return {
         "project_path": str(root),
         "config": project.config.model_dump(mode="json"),
@@ -95,6 +104,8 @@ def project_summary(runtime: Runtime) -> dict:
         # cache/analysis/<src>.json (sections, downbeats) for the chop panel;
         # /files stays audio-only.
         "analyses": analyses,
+        # source.preview_grid click previews per source (WP12): the Chops tab plays them.
+        "grid_previews": grid_previews,
         "feedback": feedback_aggregate(events),
         "feedback_cursor": (feedback.data or {}).get("next_cursor", 0),
         "issues": [
