@@ -1117,10 +1117,12 @@ name = "muestra"
 version = "0.0.0"
 source = { editable = "." }
 dependencies = [
+    { name = "mido" },
     { name = "numpy", version = "2.4.6", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
     { name = "numpy", version = "2.5.5", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pedalboard" },
     { name = "pydantic" },
+    { name = "pyloudnorm" },
     { name = "pyyaml" },
     { name = "ruamel-yaml" },
     { name = "scipy", version = "1.17.1", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version < '3.12'" },
@@ -1155,11 +1157,13 @@ requires-dist = [
     { name = "audioread", marker = "extra == 'ingest'", specifier = ">=3.0,<4" },
     { name = "beat-this", marker = "extra == 'ingest'", specifier = ">=1.1.0,<2" },
     { name = "demucs-infer", marker = "extra == 'ingest'", specifier = ">=4.4.0,<5" },
+    { name = "mido", specifier = ">=1.3.3" },
     { name = "mido", marker = "extra == 'render'", specifier = ">=1.3.3" },
     { name = "numpy", specifier = ">=2.1" },
     { name = "pedalboard", specifier = ">=0.9.14" },
     { name = "psutil", marker = "extra == 'ingest'", specifier = ">=7.2,<8" },
     { name = "pydantic", specifier = ">=2.10,<3" },
+    { name = "pyloudnorm", specifier = ">=0.2.0,<0.3" },
     { name = "pyloudnorm", marker = "extra == 'ingest'", specifier = ">=0.2.0,<0.3" },
     { name = "pyloudnorm", marker = "extra == 'render'", specifier = ">=0.1.1" },
     { name = "pyyaml", specifier = ">=6.0.2" },
