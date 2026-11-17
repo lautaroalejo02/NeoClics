@@ -65,6 +65,7 @@ _TOOL_PACKAGES = (
     "ingest",
     "render",
     "library",
+    "plugins",
     "versions",
     "feedback",
     "ears",

@@ -1,0 +1,47 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "names": {
+      "anyOf": [
+        {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Plugin names/aliases/paths; null scans all.",
+      "title": "Names"
+    },
+    "parameters": {
+      "description": "Native params to inspect in detail (can be expensive).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Parameters",
+      "type": "array"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "timeout_s": {
+      "default": 120,
+      "exclusiveMinimum": 0,
+      "maximum": 600,
+      "title": "Timeout S",
+      "type": "number"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "PluginsScanParams",
+  "type": "object"
+}
