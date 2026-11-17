@@ -1,7 +1,10 @@
 # WP19 ingest evaluation - 2026-11-17
 
-Status: in progress. CPU-only Windows 11; no listening claims, paid services,
-commercial recordings, or LLM inference. Audio stays outside this repository.
+CPU-only Windows 11; no listening claims, paid services, commercial recording
+downloads, or LLM inference. Audio stays outside this repository.
+**The final consolidated tables at the end supersede the historical checkpoints
+below**, including their pending statements. Final validation/control runs are
+still running at this checkpoint.
 
 ## Material and provenance
 
@@ -185,3 +188,195 @@ Potential training overlap between these common MIR tracks and pretrained
 models has **not** been audited. These are not demonstrated held-out model
 test tracks. Relative in-corpus comparisons and CPU costs must not be sold
 as generalisation to the owner's recordings.
+
+## Final consolidated corpus
+
+23 recordings / **1,308.75 seconds**, each 13-125 seconds. Source for EVERY
+row: MDB Drums, revision and attribution above. EVERY row: **CC-BY-NC-SA 4.0**,
+published beat-position annotations (position 1 = downbeat), released stems.
+No row has key/section/phrase labels. `S+` means the -25 dB reference-sum gate
+passes, `S-` fails: these are reference-validity labels, NOT separator quality.
+The Beatles/Hendrix/etc titles are Music Delta style demos, not those artists'
+commercial recordings. These short studio demonstrations do not establish
+behaviour on full-length tape-era Argentine rock or city pop.
+
+| Music Delta track | Source | Licence | Why chosen | Reference |
+|---|---|---|---|---|
+| 80s Rock | MDB Drums | CC-BY-NC-SA 4.0 | Closest 80s full-band rock/vocal demo | B/D, S- |
+| Beatles | MDB Drums | CC-BY-NC-SA 4.0 | Melodic full-band pop/vocals | B/D, S- |
+| Bebop Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Genuinely fast annotated pulse | B/D, S+ |
+| Britpop | MDB Drums | CC-BY-NC-SA 4.0 | Full-band pop/vocals | B/D, S+ |
+| Cool Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Lighter drums / half-time ambiguity | B/D, S- |
+| Country 1 | MDB Drums | CC-BY-NC-SA 4.0 | Acoustic/electric contrast | B/D, S+ |
+| Disco | MDB Drums | CC-BY-NC-SA 4.0 | Dance groove/vocals, principal bleed test | B/D, S+ |
+| Free Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Non-square rhythm stress control | B/D, S- |
+| Funk Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Electric bass/piano/funk texture | B/D, S+ |
+| Fusion Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Closest instrumental fusion control | B/D, S+ |
+| Gospel | MDB Drums | CC-BY-NC-SA 4.0 | Fast pulse/vocals, half-tempo failure | B/D, S- |
+| Grunge | MDB Drums | CC-BY-NC-SA 4.0 | Dense distortion/vocals | B/D, S+ |
+| Hendrix | MDB Drums | CC-BY-NC-SA 4.0 | Guitar-led rock/vocals | B/D, S- |
+| Latin Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Syncopation / extra bar detections | B/D, S- |
+| Modal Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Tonal ambiguity / extra downbeats | B/D, S+ |
+| Punk | MDB Drums | CC-BY-NC-SA 4.0 | 150 BPM faster-rock control | B/D, S+ |
+| Reggae | MDB Drums | CC-BY-NC-SA 4.0 | Offbeat emphasis/vocals | B/D, S+ |
+| Rock | MDB Drums | CC-BY-NC-SA 4.0 | Short full-band/boundary stress | B/D, S- |
+| Rockabilly | MDB Drums | CC-BY-NC-SA 4.0 | Rock/acoustic rhythmic contrast | B/D, S- |
+| Shadows | MDB Drums | CC-BY-NC-SA 4.0 | Instrumental guitar band | B/D, S- |
+| Speed Metal | MDB Drums | CC-BY-NC-SA 4.0 | Dense subdivisions / parity failure | B/D, S- |
+| Swing Jazz | MDB Drums | CC-BY-NC-SA 4.0 | Swing rather than straight dance | B/D, S- |
+| Zeppelin | MDB Drums | CC-BY-NC-SA 4.0 | Heavy rock / meter instability | B/D, S- |
+
+## Final consolidated grid results
+
+Before/after are the SAME 23 mixes. Macro per-track means; CML/AML use
+mir_eval 0.8.2, standard 17.5% relative phase/period tolerances, no initial
+five-second trim. Severe phase flag: beat F70 >= .9 and downbeat F70 < .5.
+Its zero count does NOT mean partially wrong bar maps are correct.
+
+| Metric | Before | After |
+|---|---:|---:|
+| Successful tracks | 23/23 | 23/23 |
+| Tempo mean absolute percentage error | 5.354267% | 5.354267% |
+| Tempo within 4% | 21/23 | 21/23 |
+| Half / double / 3:2 / 2:3 errors | 2 / 0 / 0 / 0 | 2 / 0 / 0 / 0 |
+| Beat F70 | .899166 | .941285 |
+| Beat precision / recall | .917902 / .895842 | .960022 / .937961 |
+| Beat CMLc / CMLt | .768589 / .815240 | .811388 / .858039 |
+| Beat AMLc / AMLt | .871099 / .934185 | .871758 / .934844 |
+| Downbeat F70 | .851565 | .895043 |
+| Downbeat precision / recall | .822569 / .905033 | .866048 / .948511 |
+| Downbeat CMLc / CMLt | .730171 / .782776 | .732728 / .785333 |
+| Downbeat AMLc / AMLt | .772384 / .842009 | .774941 / .844566 |
+| Marked reliable track time | .736613 | .731276 |
+| Actually correct complete-bar time | .664177 | .703733 |
+| False-reliable track time | .072436 | .043409 |
+| False-reliable conditional on marked time | .167930 | .120311 |
+| Reliable precision conditional on marked time | .832070 | .879689 |
+| Severe beats-right/bar-phase-wrong flag | 0/23 | 0/23 |
+| Key accuracy / relative / parallel / fifth | unmeasured | unmeasured |
+| source.analyze wall-time total | 192.10 s | 275.75 s |
+
+Before timing contains one cached first track; after uses `--fresh` for all 23.
+Concurrent workloads differ: **not a controlled speed comparison**. The range
+policy still misses genuinely fast Bebop Jazz/Gospel (about 222 -> 111 BPM).
+All observed F70 and false-reliable improvements are the single Speed Metal
+parity correction; the other 22 tracks' event scores are unchanged. The pulse
+filter does not change this already-pulsed corpus, though it rejects generated
+silence/sustained-tone intros. Its benefit on real drumless intros is unverified.
+Phase-confidence capping changes no timings; it makes unverified phase explicit.
+
+### Matched input comparisons
+
+Use only the SAME **ten reconstruction-valid tracks** for the primary oracle
+comparison; individual drum alignment in the other 13 is not established.
+
+| Input | Beat F70 | Downbeat F70 | Tempo MAPE | False-reliable track time |
+|---|---:|---:|---:|---:|
+| Mix | .965086 | .941506 | 5.925926% | .192818% |
+| Reference drums | .962717 | .902300 | 5.925926% | 8.883367% |
+| 50:50 reference drums + mix | .963986 | .934578 | 5.925926% | .194620% |
+
+All-23 `drums-final` and `fusion-final` reports are exploratory because of the
+invalid sums. The actual estimated-htdemucs three-track/20-second paired
+cohort above scores 1.0 beat/downbeat F70 in all modes. Neither experiment
+justifies replacing mix-first. The harmonic-key comparison is also restricted
+to these ten valid tracks: 8/10 agreement, not accuracy. Product key estimation
+is unchanged; calibration and real-key correctness remain unmeasured.
+
+## Final separation tables and recommendation
+
+SDR = sample-aligned energy ratio, NOT filtered BSS Eval. SI-SDR is in raw JSON.
+RSS includes model loading AND reference-scoring buffers: not app-only memory.
+240 s repeats Disco's excerpt, not four minutes of unique performance.
+
+| Material | Model | Audio s | Separation s | Peak MiB | Drums SDR | Bass SDR | Vocals SDR | Other SDR |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Disco | htdemucs | 20 | 40.69 | 1273 | 14.44 | 14.38 | 13.44 | 8.34 |
+| Disco | htdemucs_ft | 20 | 113.29 | 1849 | 15.04 | 14.83 | 14.01 | 8.91 |
+| Disco | mel-roformer+htdemucs | 20 | 450.57 | 2785 | 15.22 | 14.79 | 17.18 | 9.47 |
+| Disco repeated | htdemucs | 240 | 402.63 | 2977 | 14.17 | 14.16 | 14.32 | 8.02 |
+| Disco repeated | htdemucs_ft | 240 | 1490.48 | 3309 | 14.78 | 14.61 | 14.80 | 8.53 |
+| Four-minute RoFormer | not run | - | unmeasured | unmeasured | - | - | - | - |
+
+Wrong-source simultaneous projection **into other**, percent of estimated
+other energy (correlated-source attribution proxy, not identifiable audible bleed):
+
+| Audio | Model | Vocals | Bass | Drums |
+|---|---|---:|---:|---:|
+| Disco 20 s | htdemucs | .11295% | .02744% | .08574% |
+| Disco 20 s | htdemucs_ft | .09251% | .02520% | .07608% |
+| Disco 20 s | mel-roformer+htdemucs | .01307% | .02203% | .09794% |
+| Disco 240 s | htdemucs | .09587% | .02463% | .08129% |
+| Disco 240 s | htdemucs_ft | .09851% | .02249% | .07934% |
+
+Keep htdemucs default. Fine-tuned is an explicit slower quality override
+(~3.7x CPU for four minutes, roughly .5 dB better SDR), NOT a reliable vocal
+bleed cure: the four-minute vocal projection slightly increases. RoFormer is
+a provisional vocal-cleanup option, not a default: Disco 20 s gives ~8.6x
+less vocal projection and +3.74 dB vocal SDR, but more drum projection and
+~11x CPU. Do not extrapolate its four-minute time or peak RAM. Existing
+`model` overrides already implement these tiers; no new config/schema alias.
+Additional Funk Jazz/Britpop 20-second controls are still running.
+
+## Final chop results
+
+1,216 reference-grid 8/16-beat loops. Spearman .201231 -> **.870479**;
+top-three proxy .499486 -> **.726128**; all-loop mean .435608 unchanged.
+This is a development-set, alternate-horizon seam/join proxy, NOT held-out
+perceptual validation or phrase-start truth.
+
+| Metadata genre | Spearman before | After |
+|---|---:|---:|
+| Jazz | .177546 | .844657 |
+| Musical Theatre | .491835 | .874062 |
+| Pop | .190888 | .903932 |
+| Rock | .153782 | .873771 |
+| Singer/Songwriter | .386395 | .922883 |
+
+Real `source.find_chops` on inferred grids proposes **112** 8/16-beat loops:
+**107/112** true downbeat starts, **105/112** both true downbeat endpoints,
+**103/112** correct annotated beat count, **100/112** passing all three.
+Remaining failures: Free Jazz, Gospel, Latin Jazz, Rock. Bebop Jazz and Modal
+Jazz yield no default candidates. These are measured remaining risks, not a
+claim that every proposal loops. Harmonic return cannot distinguish a true
+phrase start from a cyclic rotation; no unlabelled phrase heuristic shipped.
+
+## Owner workflow, validation and handoff gaps
+
+One-line owner command, no annotations required (replace the songs folder):
+
+```powershell
+uv run --with mir-eval python -m muestra.ingest.evaluation "C:/path/to/your/songs" --report "$HOME/Documents/MuestraLibrary/_test-audio/eval/own-songs.md"
+```
+
+It runs real tools in separate audit projects, writes per-track/aggregate
+Markdown and JSON after each track, reports confidence/alternatives/reliability
+and click paths, and does NOT invent accuracy. JSON for new runs freezes
+raw/effective grids. Default clicks cover the first 20 s; use full-file maps
+and `source.preview_grid(window_s=[start,end])` for later musical windows.
+`--fresh` reruns models; cache presence is explicit. Manifest, model comparison,
+separation and composite-source commands are in docs/ingest.md. `--analysis-report
+after.json` adds real proposal correctness to `chop_evaluation`.
+
+Runtime: Python 3.12.16; numpy 2.5.5; scipy 1.18.1; torch 2.15.0;
+beat-this 1.1.0 (final0 CPU, no DBN); mir_eval .8.2; demucs-infer 4.4.0;
+audio-separator .48.0. No new product dependency or schema change.
+
+Validation checkpoint: first whole suite **844 passed, 10 skipped**, 1070.19 s
+(before the last five added tests); current ingest **76 passed, 3 skipped**,
+57.62 s; opt-in real-track test **1 passed** (three tracks), 78.28 s, two
+upstream Torch autocast warnings. Ruff check passes, format check reports
+**249 files already formatted**. Final whole-suite rerun/clean-tree verification
+is in progress; final counts and disk usage will be appended.
+
+Needed outside ingest: optional typed tool/UI source selector for instrumental
+and no-drums sources (CLI plus existing contracts already works), and agent/UI
+handling that actually honours `grid.ask_human` before treating bar phase as
+truth. No UI, render, song, API, project, ears, skill or schema files changed.
+
+Unverified: target artists/full-length tape-era songs; genuine slow tempo and
+real drumless intros/metre changes; general octave correction; section/phrase
+boundaries; real key accuracy/calibration; four-minute RoFormer/app-only RAM;
+held-out model generalisation; subjective separation/loop quality. Restricted
+full MUSDB18/MedleyDB access was not requested (official links above). **No audio
+was heard here; all conclusions are measurements or limited recommendations.**
