@@ -237,8 +237,9 @@ def _sidechains(ctx: RenderContext, alarms: list[Alarm]) -> list[SidechainCheck]
                         value=check.measured_dip_db,
                         threshold=th.duck_min_db,
                         unit="dB",
-                        fix=f"revisá `key_track`/`key_lane` de `{depth_path[:-6]}` (¿el key "
-                        "track tiene golpes en este rango?) o subí `depth` a 0.7.",
+                        fix=f"revisá `key_track`/`key_lane` de `{depth_path.rsplit('.', 1)[0]}`"
+                        " "
+                        "(¿el key track tiene golpes en este rango?) o subí `depth` a 0.7.",
                     )
                 )
             elif check.measured_dip_db < th.duck_fraction * min(exp, 20.0):

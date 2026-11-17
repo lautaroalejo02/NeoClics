@@ -66,7 +66,7 @@ def _guard(ctx: RenderContext, name: str, fn: Callable, fallback):
     """Run one optional metric; a failure is reported, never fatal."""
     try:
         return fn(ctx)
-    except (ValueError, IndexError, FloatingPointError, ZeroDivisionError) as e:
+    except Exception as e:  # noqa: BLE001 - one broken metric must not fail the render
         ctx.skipped.append(f"{name}: error interno ({type(e).__name__}: {e})")
         return fallback, []
 

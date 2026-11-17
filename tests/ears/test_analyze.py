@@ -291,3 +291,15 @@ def test_performance_16_bars_four_tracks(tmp_path):
     print(f"\nears: 16 bars, 4 tracks + 3 lanes @ 48 kHz analysed in {elapsed:.2f} s")
     assert len(m.technical.tracks) == 4
     assert elapsed < 12.0
+
+
+def test_a_failing_metric_is_reported_not_fatal(fixture_copy, monkeypatch):
+    from muestra.ears import core
+
+    def boom(ctx):
+        raise KeyError("bug")
+
+    monkeypatch.setattr(core, "measure_clicks", boom)
+    m = analyze(fixture_copy, "v001")
+    assert m.clicks.count == 0
+    assert any(s.startswith("clicks: error interno (KeyError") for s in m.skipped)

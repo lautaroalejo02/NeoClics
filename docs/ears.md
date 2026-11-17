@@ -332,8 +332,8 @@ Unknown keys are errors.
 
 ## Performance
 
-16 bars at 120 BPM, 4 tracks + 3 drum lanes, 48 kHz: ~1.6 s per
-analysis on the Windows dev laptop (warm, median of 4 runs, other agents
+16 bars at 120 BPM, 4 tracks + 3 drum lanes, 48 kHz: ~1.3-1.6 s per
+analysis on the Windows dev laptop (warm, median 1.31 s of 5 runs, other agents
 running); ~0.4 s of it is reading the wavs. Under pytest on a loaded
 CPU it measured up to ~4 s; the test only asserts < 12 s. Costs scale
 linearly with length x tracks. All audio is processed as float32;
