@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "cache": {
+      "default": true,
+      "description": "Also clear render-cache entries the newest render didn't use.",
+      "title": "Cache",
+      "type": "boolean"
+    },
+    "dry_run": {
+      "default": true,
+      "description": "Only report; set false to delete.",
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "keep_latest": {
+      "default": 5,
+      "description": "Newest versions to keep.",
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Keep Latest",
+      "type": "integer"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "VersionsPruneParams",
+  "type": "object"
+}

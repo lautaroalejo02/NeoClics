@@ -2316,6 +2316,13 @@
           "title": "Rerenderable",
           "type": "boolean"
         },
+        "size_bytes": {
+          "default": 0,
+          "description": "Disk used by renders/<v>/ (WP13).",
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
         "summary": {
           "anyOf": [
             {

@@ -5,6 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import os
 import uuid
 from pathlib import Path
 
@@ -35,9 +36,11 @@ def file_hash(path: Path) -> str:
 
 
 def cache_read(project: Project, kind: str, key: str) -> np.ndarray | None:
+    path = project.cache_dir / "render" / kind / f"{key}.npy"
     try:
-        a = np.load(project.cache_dir / "render" / kind / f"{key}.npy", allow_pickle=False)
+        a = np.load(path, allow_pickle=False)
         if a.ndim == 2 and a.shape[1] == 2 and a.dtype == np.float32 and np.isfinite(a).all():
+            os.utime(path)  # used: versions.prune's cache GC keeps it (WP13)
             return a
     except (OSError, ValueError, EOFError):
         pass  # Interrupted/corrupt caches are disposable.

@@ -731,3 +731,10 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
 9. **Feedback appends lock across processes** (`cache/locks/feedback-append.lock`,
    separate from the transports' `feedback.lock` so an in-process tool call holding
    that one can still append); readers ignore an unterminated last line.
+10. **`versions.prune` + cache GC; stem format unchanged.** Pruning deletes
+    whole `renders/vNNN/` folders (history keeps the version; re-render is
+    bit-exact); "unread feedback" = feedback newer than the newest version.
+    Stems stay 32-bit float for now: 24-bit PCM with a stored headroom gain or
+    FLAC would cut ~25–60 % but the UI decodes and sums stems itself, so the
+    format change needs UI work (and drum-lane stems, half of each render, are
+    only read by ears: they could move to the cache). Not done here.

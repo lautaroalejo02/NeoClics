@@ -271,6 +271,33 @@ with staging.stage(project) as stage:          # renders/.staging/<token>/ + its
         stage.publish_new(renders/<version>)    # one rename
 ```
 
+## Disk use and `versions.prune` (WP13)
+
+A 30 s render is ~95–140 MB (measured on skill-check v018, 30.4 s at 48 kHz:
+mix 8.8 MB, five track stems 58 MB, six drum-lane stems 70 MB; stems are
+32-bit float). `versions.list` gives each record `size_bytes` and a top-level
+`disk {renders_bytes, cache_render_bytes, previews_bytes, stems_bytes,
+total_bytes, hint}`; the `hint` appears above 1 GB of renders + caches and
+suggests `versions.prune`. `GET /project` carries the same `disk`.
+
+`versions.prune(dry_run=true, keep_latest=5, cache=true)` deletes whole
+`renders/vNNN/` folders; commits and tags stay, so the version is still
+listed (`rerenderable`, `size_bytes: 0`) and `render version=vNNN`
+regenerates it **bit-exact** (tested: prune → re-render → identical
+`mix.wav` bytes). Kept, with reasons in the result: the newest
+`keep_latest`; liked (latest rating); **unread feedback** = any event naming
+the version (rating, comment, chop choice, either side of an A/B) with a
+timestamp after the newest version's creation (the agent hasn't answered it
+with a new version yet; Muestra can't know which `feedback.read` was the
+agent's); both sides of the last 10 A/B choices; the base (parent of the
+next render); versions that can't be re-rendered bit-exactly (no tag, or
+plugin presets outside the curated aliases/SFZ). Cache GC: `cache/render`
+entries not used by the newest render (cache hits now touch their file),
+interrupted `*.tmp`, and all but the newest 5 loose previews / draft
+renders. Never touched: `sources/`, `cache/stems/`, `cache/analysis/`,
+`cache/chops/`, candidate previews. On a copy of skill-check (18 versions,
+2.0 GB): the dry run proposed 12 versions + 36 cache files = 1.3 GB.
+
 ## Atomic versions
 
 (WP13.) A version the human can see always has its audio. The `render` tool

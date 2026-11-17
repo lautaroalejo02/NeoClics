@@ -1,5 +1,53 @@
 {
   "$defs": {
+    "DiskUsage": {
+      "additionalProperties": false,
+      "description": "Disk used by derived data (WP13).",
+      "properties": {
+        "cache_render_bytes": {
+          "default": 0,
+          "description": "cache/render (disposable).",
+          "title": "Cache Render Bytes",
+          "type": "integer"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hint"
+        },
+        "previews_bytes": {
+          "default": 0,
+          "description": "cache/previews + cache/drafts.",
+          "title": "Previews Bytes",
+          "type": "integer"
+        },
+        "renders_bytes": {
+          "default": 0,
+          "title": "Renders Bytes",
+          "type": "integer"
+        },
+        "stems_bytes": {
+          "default": 0,
+          "description": "cache/stems (needed to re-render).",
+          "title": "Stems Bytes",
+          "type": "integer"
+        },
+        "total_bytes": {
+          "default": 0,
+          "title": "Total Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "DiskUsage",
+      "type": "object"
+    },
     "VersionFeedback": {
       "additionalProperties": false,
       "description": "What the listener said about a version (from feedback.jsonl).",
@@ -189,6 +237,13 @@
           "title": "Rerenderable",
           "type": "boolean"
         },
+        "size_bytes": {
+          "default": 0,
+          "description": "Disk used by renders/<v>/ (WP13).",
+          "minimum": 0,
+          "title": "Size Bytes",
+          "type": "integer"
+        },
         "summary": {
           "anyOf": [
             {
@@ -238,6 +293,18 @@
       "default": null,
       "description": "Parent the next render will record (see VersionInfo.is_base).",
       "title": "Base"
+    },
+    "disk": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiskUsage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Bytes used by renders/ and caches (WP13); hint suggests prune."
     },
     "files": {
       "items": {

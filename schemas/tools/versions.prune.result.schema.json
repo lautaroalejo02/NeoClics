@@ -1,0 +1,156 @@
+{
+  "$defs": {
+    "DiskUsage": {
+      "additionalProperties": false,
+      "description": "Disk used by derived data (WP13).",
+      "properties": {
+        "cache_render_bytes": {
+          "default": 0,
+          "description": "cache/render (disposable).",
+          "title": "Cache Render Bytes",
+          "type": "integer"
+        },
+        "hint": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Hint"
+        },
+        "previews_bytes": {
+          "default": 0,
+          "description": "cache/previews + cache/drafts.",
+          "title": "Previews Bytes",
+          "type": "integer"
+        },
+        "renders_bytes": {
+          "default": 0,
+          "title": "Renders Bytes",
+          "type": "integer"
+        },
+        "stems_bytes": {
+          "default": 0,
+          "description": "cache/stems (needed to re-render).",
+          "title": "Stems Bytes",
+          "type": "integer"
+        },
+        "total_bytes": {
+          "default": 0,
+          "title": "Total Bytes",
+          "type": "integer"
+        }
+      },
+      "title": "DiskUsage",
+      "type": "object"
+    },
+    "PruneEntry": {
+      "additionalProperties": false,
+      "properties": {
+        "bytes": {
+          "default": 0,
+          "title": "Bytes",
+          "type": "integer"
+        },
+        "reasons": {
+          "description": "Why it is kept.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
+        "version": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "PruneEntry",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "cache_files": {
+      "default": 0,
+      "description": "Cache/preview files removed (or would be).",
+      "title": "Cache Files",
+      "type": "integer"
+    },
+    "cache_freed_bytes": {
+      "default": 0,
+      "title": "Cache Freed Bytes",
+      "type": "integer"
+    },
+    "disk": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DiskUsage"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "dry_run": {
+      "title": "Dry Run",
+      "type": "boolean"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "freed_bytes": {
+      "default": 0,
+      "description": "Version folders (actual or would-be).",
+      "title": "Freed Bytes",
+      "type": "integer"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "keep": {
+      "description": "Kept, with reasons.",
+      "items": {
+        "$ref": "#/$defs/PruneEntry"
+      },
+      "title": "Keep",
+      "type": "array"
+    },
+    "remove": {
+      "description": "renders/ folders removed (or that would be).",
+      "items": {
+        "$ref": "#/$defs/PruneEntry"
+      },
+      "title": "Remove",
+      "type": "array"
+    }
+  },
+  "required": [
+    "dry_run"
+  ],
+  "title": "VersionsPruneResult",
+  "type": "object"
+}

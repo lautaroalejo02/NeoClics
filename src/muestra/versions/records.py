@@ -33,6 +33,7 @@ from .core import (
     version_tags,
 )
 from .models import VersionFeedback, VersionInfo
+from .prune import dir_size
 
 if TYPE_CHECKING:
     from ..project.core import Project
@@ -167,6 +168,7 @@ def _info(
         has_meta=meta is not None,
         has_metrics=(rdir / "metrics.json").is_file(),
         has_stems=bool(stems_on_disk(project, version)),
+        size_bytes=dir_size(rdir),
         warnings=warnings,
     )
 
