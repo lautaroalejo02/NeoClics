@@ -136,3 +136,157 @@ and of deviations from it. Each entry says what was decided and why.
   superset.
 - `project.open` reports `sources`/`versions`/`has_song`; spec doesn't
   specify a return shape — chosen as the natural "what's here" summary.
+
+## 2026-11-17 — WP0.1: orchestrator contract-review rulings (R1–R20)
+
+Each entry is one ruling; where it supersedes an earlier WP0 decision it
+says so.
+
+1. **R1 — git-backed versions (supersedes WP0-16's implicit "renders/ is
+   truth" assumption).** A project is its own git repo; `project.create`
+   runs `git init`. `.gitignore` covers `renders/`, `cache/`, `.venv/`,
+   `__pycache__` — git versions `song.yaml`, `midi/`, `muestra.toml`,
+   `feedback.jsonl`, `docs/` only. One version = one commit + annotated
+   tag `vNNN`, commit subject `vNNN: <summary>` with trailers
+   `Muestra-Request:`/`Muestra-Agent:`/`Muestra-Parent:`; commits made by
+   Muestra fall back to `Muestra <muestra@localhost>` only when no user
+   identity is configured (per-commit `-c`, never mutating config).
+   `renders/vNNN/song.yaml` is a byte-for-byte snapshot and the source of
+   truth for ears/diff/restore (`git show vNNN:song.yaml` fallback).
+   `RenderParams` gains `request|summary|agent|version` (re-render an
+   existing version). Typed stubs: `versions.core.record_version`,
+   `song_at`/`song_at_raw`, `next_version_id`; `ears.core.analyze`;
+   `render.core.render_song`. The `render` tool orchestrates:
+   validate → allocate id → record_version → render audio → meta.json
+   → ears.analyze → metrics.json.
+2. **R2 — ids never reused.** `next_version_id` = max over git tags,
+   `renders/` dirs and versions mentioned in `feedback.jsonl`, +1.
+   `next_set_id` follows the same max+1 rule over `cache/chops/`. Gaps
+   are never filled.
+3. **R3 — warp semantics (supersedes WP0-4).** `resample` rate =
+   `project_bpm / local_bpm` only — the chop always fills its grid slot;
+   the tempo pitch shift is the vinyl effect. `pitch_semitones` is an
+   additional **length-preserving** shift in both modes (after
+   beat-wise stretch in `stretch`). The fixture chop with
+   `pitch_semitones: 1` now lands exactly on the grid.
+4. **R4 — seams + MIDI.** MIDI ticks/ppq are project beats at
+   `meta.bpm`; tick 0 = bar 1 beat 1; file tempo/meter events ignored.
+   Instrument tracks take exactly one of `midi: <path>` or inline
+   `notes`. Stubs: `plugins.core.render_instrument` (float32
+   (n_frames,2)), `build_plugin_fx` (pedalboard-compatible),
+   `resolve_plugin`; `render.core.render_chop` (shared by previews:
+   project tempo when a song exists, else source tempo);
+   `library.core.lookup`/`resolve` (implemented for real).
+   `muestra.toml` gains `[plugins]` (`search_dirs`, per-OS `aliases`)
+   and `[library].roots`; the index `.muestra-index.json` lives inside
+   each root. Samples with a known `bpm` may warp like chops; warping a
+   BPM-less sample is a validation error.
+5. **R5 — chop starts + ids.** `Chop.start_offset_beats` (default 0)
+   counts along `beats_s` from the downbeat; negative/fractional
+   interpolate. `ChopsChooseParams.chop_id` names the chop written into
+   `song.yaml`. Candidate ids are the global `csNNN/candN` everywhere —
+   `ChopCandidate.id` itself carries the global form (supersedes
+   WP0-16's local `candN`).
+6. **R6 — timestamps + robust reads.** Every contract timestamp is
+   `AwareDatetime`; naive input is a validation error with a hint.
+   `feedback.read` never crashes on a bad line: malformed JSON/invalid
+   events are skipped and reported (`{path, line, message, hint}`).
+   Cursor paging: `read(since?, cursor?)` returns `next_cursor` (line
+   count); `since` is `ts >= since`.
+7. **R7 — render output format.** `mix.wav` stereo 24-bit PCM at
+   `sample_rate`, post-master. Stems stereo float32, post track
+   fx/fader/pan, pre master, frame-aligned with the mix; muted tracks
+   get silent stems; pattern tracks also write per-lane
+   `stems/<track>.<lane>.wav` (pre track fx). Master order: master fx in
+   order → loudness gain toward `target_lufs` → true-peak safety
+   limiter. Render is exactly `range_bars` = `[start, end)` (end
+   exclusive, `start < end ≤ length_bars+1`), tails cut with 5 ms
+   fade-out. `clip:` preview index is 0-based. `RenderMeta` gains
+   `sample_rate`, `bpm`, `key`, `length_bars`, `range_bars`, `mix`,
+   `tracks[{id,kind,stem,lanes[{id,stem}]}]`. Fixture `renders/v001/`
+   regenerated to match (2-bar render, ~2.4 MB).
+8. **R8 — sidechain.** Event-triggered when the key track has events:
+   `gain = 1 - depth * env`, env jumps to 1 per trigger with
+   `attack_ms` (default 1) ramp and `release_ms` decay; `key_lane`
+   restricts triggers to one drum lane (validated). Clip-track keys fall
+   back to an audio envelope follower. Sidechain cycles are validation
+   errors.
+9. **R9 — merge-safety.** pyproject groups are multi-line arrays
+   separated by a comment naming the owning WP; shared audio deps moved
+   to base (numpy 2.5.5, scipy 1.18.1, soundfile 0.14.0, pedalboard
+   0.9.26, ruamel.yaml 0.19.1 — verified `uv sync` + import on Windows).
+   Tool registration is decentralised (`TOOLS` per subpackage; registry
+   collects from a fixed subpackage list; test asserts superset).
+   `CONTRIBUTING-AGENTS.md` states the ownership rules.
+10. **R10 — diff paths are ID-based**, the automation grammar:
+    `chops.c1.warp.pitch_semitones`, `tracks.<id>.fx.<fxid>.<param>`,
+    `tracks.drums.pattern.lanes.kick.steps`, `meta.bpm`; clips use
+    `tracks.<id>.clips[<i>]`, id-less fx use `fx[<i>]`. Documented on
+    `RenderMeta.diff`.
+11. **R11 — registry + API model.** `ToolSpec` gains `mcp_name`,
+    `readonly`, `long_running`, `cli` (render/preview are top-level CLI).
+    New tools: `feedback.append` (implemented), `chops.list`,
+    `versions.get` (stubs). API: one project per server process
+    (`muestra serve --project <path>`); `POST /tools/<mcp_name>` (+GET
+    for readonly); `/files/<path>` Range-served under `renders/` and
+    `cache/previews/`; `long_running` tools return `{job_id}` and
+    `GET /jobs/<id>` returns the `Job` model; `/events` websocket emits
+    `WsEvent{type, ts, data}` (`job.updated`, `version.created`,
+    `candidates.created`, `feedback.appended`, `song.changed`) produced
+    by watching the project folder. Models in `schemas/api.py`; the
+    server itself is WP7.
+12. **R12 — automation.** `ContractModel` sets `allow_inf_nan=False`
+    globally. Automated values are range-checked against the target
+    field's own bounds; duplicate targets rejected; plugin params
+    addressable via `.params.<name>`; automation replaces the static
+    value (first/last value held outside the point range). ge/le bounds
+    added to fx params that lacked them (cutoff 10..22000, depth 0..1,
+    ratio ≥1, etc.).
+13. **R13 — swing (supersedes WP0-9).** `delay = swing * step / 3`
+    applied to odd (off) steps; `swing` in [0,1], 1 = full triplet
+    swing. WP0-9's `swing * half` description was equivalent at swing=⅔
+    but the ruling's formula is now normative.
+14. **R14 — canonical keys (supersedes WP0-11).** Canonical form `F#`
+    (major) / `F#m` (minor); `a` means A minor; uppercase `M` suffix =
+    MAJOR. Shared `muestra.music.parse_key(str) -> (pitch_class, mode)`
+    for WP4/WP6, plus `parse_note` for MIDI note names.
+15. **R15 — round-trip edits.** All programmatic song.yaml edits go
+    through `project.edit_song_document` (ruamel round-trip): comments,
+    ordering and omitted defaults survive. `versions.restore` copies the
+    snapshot byte-for-byte.
+16. **R16 — duplicate YAML keys** are a `duplicate_key` issue with path
+    and hint, never silently dropped (ruamel `DuplicateKeyError` mapped
+    into an Issue).
+17. **R17 — placeholder messages.** `PydanticCustomError` templates
+    can't use `!r`; all custom error messages rewritten. A test scans
+    every issue message from invalid fixtures for `{`/`!r`.
+18. **R18 — portable paths.** `RelPath` rejects `:`, `..`, empty
+    segments, absolute paths, trailing dots/spaces and Windows reserved
+    names; ids reject the same reserved names. `check_files` compares
+    each path component's exact case against directory listings.
+19. **R19 — chop start.** `start_s` is the `beats_s` entry nearest the
+    downbeat (one grid). `stretch` maps each source beat onto the
+    project grid (beat-wise); `resample` uses one rate for the whole
+        chop. Documented in contracts.md.
+20. **R20 — track windows.** Pattern and instrument tracks (and clips
+    tracks uniformly) gain `at_bar` (default 1) / `until_bar`
+    (exclusive, default `length_bars+1`): "drums enter at bar 5" is one
+    field.
+
+### Flags for the orchestrator
+
+- **R13 vs WP0-9**: WP0 documented `swing * half` a step as "triplet
+  swing"; the ruling's `swing * step / 3` is now implemented — at
+  swing=1 a step lands at the second triplet position, which matches the
+  ruling's intent.
+- **R20 scope**: the ruling names pattern and instrument tracks; the
+  fields were put on all track kinds uniformly (clips included) for a
+  single code path — superset, harmless.
+- **R7 vs file size**: the v001 render fixture was kept at a 2-bar
+  length with synthesized stems (~2.4 MB committed audio, under the
+  ~4 MB budget); no shortening of the song itself was needed.
+- **R1 scaffold commit**: `project.create` makes an initial "scaffold"
+  commit so `record_version` always has a HEAD; versions start at v001.
+- **R11 events**: `schemas/api.py` defines the models only; the
+  file-watching producer is WP7's API server (no WP-owned module exists
+  for it yet).
