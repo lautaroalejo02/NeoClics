@@ -119,7 +119,8 @@ def test_summary_is_compact(tmp_path):
     generate(CorpusSpec(sr=24000, bars=8, defects=defects), root)
     m = analyze(open_project(root), "v001")
     lines = m.summary.splitlines()
-    assert len(lines) <= MAX_ALARM_LINES + 2
+    # +3: headline, "(+N más)", skipped — plus the always-on balance line (WP18)
+    assert len(lines) <= MAX_ALARM_LINES + 3
     assert len(m.summary) < 2000
     assert lines[0].startswith("v001:") and "LUFS" in lines[0]
     assert any(line.startswith("- PROBLEMA") for line in lines)

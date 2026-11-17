@@ -8,6 +8,8 @@ metrics.json.
 
 from __future__ import annotations
 
+import math
+
 from ..schemas.metrics import Alarm, AlarmRef, BalanceReport, Metrics, MetricsDelta
 from .alarms import SEVERITY_RANK, sort_alarms
 from .balance import _ROLE
@@ -72,22 +74,29 @@ def _key(a: Alarm | AlarmRef) -> tuple[str, str | None]:
 
 
 def _anchor(role: str, report: BalanceReport) -> tuple[str, float] | None:
-    """The role a given role's balance is read against, and its level.
+    """(Spanish label, level) the role's balance is read against.
 
-    kick/drums are read against the loudest melodic role (the sample or
-    other sustained content); everything else against the drums — the
-    genre's anchor. Falls back to each version's loudest role.
+    kick/drums are read against the loudest melodic role; everything
+    else against the kit (kick + drums pooled) — the genre's anchor.
+    Falls back to the loudest role. Returns the label so notes read
+    "respecto de la batería" even when kick and rest-of-drums trade
+    places between versions.
     """
     lv = {r: rb.level_db for r, rb in report.roles.items()}
     if role in ("kick", "drums"):
         ref = max((r for r in ("sample", "other") if r in lv), key=lambda r: lv[r], default=None)
-        ref = ref or report.loudest
+        if ref is not None:
+            return _ROLE[ref], lv[ref]
     else:
-        ref = max((r for r in ("kick", "drums") if r in lv), key=lambda r: lv[r], default=None)
-        ref = ref or report.loudest
-    if ref is None or ref == role:
+        kit = [lv[r] for r in ("kick", "drums") if r in lv]
+        if kit:
+            return "la batería", -0.691 + 10.0 * math.log10(
+                sum(10.0 ** ((x + 0.691) / 10.0) for x in kit)
+            )
+    ref = report.loudest
+    if ref is None or ref == role or ref not in lv:
         return None
-    return ref, lv[ref]
+    return _ROLE[ref], lv[ref]
 
 
 def _balance_notes(a: Metrics, b: Metrics, d: MetricsDelta) -> list[str]:
@@ -99,14 +108,13 @@ def _balance_notes(a: Metrics, b: Metrics, d: MetricsDelta) -> list[str]:
     for role in sorted(set(la) & set(lb), key=lambda r: order.get(r, 99)):
         d.balance_delta_db[role] = round(lb[role].level_db - la[role].level_db, 1)
         pa, pb = _anchor(role, a.balance), _anchor(role, b.balance)
-        if pa is None or pb is None:
+        if pa is None or pb is None or pa[0] != pb[0]:
             continue
         gap = (lb[role].level_db - pb[1]) - (la[role].level_db - pa[1])
         if abs(gap) < 2.0:
             continue
-        ref = _ROLE[pa[0]] if pa[0] == pb[0] else "el elemento más fuerte"
         verb = "subió" if gap > 0 else "bajó"
-        notes.append(f"{_ROLE[role]} {verb} {abs(gap):.0f} dB respecto de {ref}")
+        notes.append(f"{_ROLE[role]} {verb} {abs(gap):.0f} dB respecto de {pa[0]}")
     return notes
 
 

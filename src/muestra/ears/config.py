@@ -114,7 +114,8 @@ class Thresholds:
     balance_sample_back_db: float = 12.0  # sample this far under the kick: warn
     balance_buried_db: float = 16.0  # core role this far under the loudest role: error
     balance_dominant_db: float = 14.0  # loudest role this far over the runner-up: warn
-    balance_front_db: float = 10.0  # bass over the kick / rest-of-drums over the melodic body: warn
+    balance_front_db: float = 10.0  # bass this far over the kick: warn
+    balance_drums_front_db: float = 14.0  # rest-of-drums this far over the sample: warn
 
 
 def slope_profile(

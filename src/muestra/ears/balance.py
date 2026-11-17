@@ -64,6 +64,14 @@ _ROLE = {
     "sample": "el sample",
     "other": "los otros instrumentos",
 }
+#: role -> "debajo/encima <role>" phrasing (del/de la/de los)
+_BENEATH = {
+    "kick": "del bombo",
+    "drums": "del resto de la batería",
+    "bass": "del bajo",
+    "sample": "del sample",
+    "other": "de los otros instrumentos",
+}
 #: roles that carry the genre (can be "buried" or "too far back")
 _RHYTHM = ("kick", "drums", "bass")
 #: roles the rhythm section is compared against (the melodic body)
@@ -301,8 +309,8 @@ def measure_balance(ctx: RenderContext) -> tuple[BalanceReport | None, list[Alar
                 tl,
                 "balance_buried",
                 "error",
-                f"{_ROLE[role].capitalize()} queda {gap:.0f} dB por debajo de "
-                f"{_ROLE[loudest]}: no se va a escuchar.",
+                f"{_ROLE[role].capitalize()} queda {gap:.0f} dB por debajo "
+                f"{_BENEATH[loudest]}: no se va a escuchar.",
                 track=tr,
                 value=-gap,
                 threshold=-th.balance_buried_db,
@@ -335,8 +343,8 @@ def measure_balance(ctx: RenderContext) -> tuple[BalanceReport | None, list[Alar
                     tl,
                     f"balance_{role}_back",
                     "warn",
-                    f"{_ROLE[role].capitalize()} queda {gap:.0f} dB por debajo de "
-                    f"{_ROLE[melodic_role]}: {_BACK_MSG[role]}.",
+                    f"{_ROLE[role].capitalize()} queda {gap:.0f} dB por debajo "
+                    f"{_BENEATH[melodic_role]}: {_BACK_MSG[role]}.",
                     track=tr,
                     value=-gap,
                     threshold=-th.balance_back_db,
@@ -388,19 +396,19 @@ def measure_balance(ctx: RenderContext) -> tuple[BalanceReport | None, list[Alar
                     + f" o {_role_fix(ctx, 'kick', reps['kick'], math.ceil(over * 0.5))}.",
                 )
             )
-    if "drums" in levels and melodic_level is not None and "drums" not in buried_roles:
-        over = levels["drums"] - melodic_level
-        if over >= th.balance_front_db:
+    if "drums" in levels and "sample" in levels and "drums" not in buried_roles:
+        over = levels["drums"] - levels["sample"]
+        if over >= th.balance_drums_front_db:
             alarms.append(
                 make_alarm(
                     tl,
                     "balance_drums_front",
                     "warn",
-                    f"El resto de la batería queda {over:.0f} dB por encima de "
-                    f"{_ROLE[melodic_role]}: tapa el tema.",
+                    f"El resto de la batería queda {over:.0f} dB por encima "
+                    "del sample: tapa el tema.",
                     track=reps["drums"][0],
                     value=over,
-                    threshold=th.balance_front_db,
+                    threshold=th.balance_drums_front_db,
                     unit="dB",
                     fix=_role_fix(ctx, "drums", reps["drums"], -math.ceil(over * 0.5)) + ".",
                 )
