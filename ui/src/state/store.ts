@@ -498,9 +498,17 @@ export class Store {
     this.connectWs();
   }
 
+  /** Extra live-event listener (the arrangement editor). */
+  onEvent: ((e: { type: string; data: Record<string, unknown> }) => void) | null = null;
+
   onWsMessage(raw: unknown): void {
     const e = MuestraClient.parseWsEvent(raw);
     if (!e) return;
+    try {
+      this.onEvent?.(e as unknown as { type: string; data: Record<string, unknown> });
+    } catch {
+      /* the editor must never break the listening room */
+    }
     switch (e.type) {
       case "job.updated": {
         const job = e.data as unknown as Job;
