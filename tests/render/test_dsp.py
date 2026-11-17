@@ -8,7 +8,7 @@ from muestra.plugins import core as plugins
 from muestra.render.automation import Automation, pan_gain
 from muestra.render.core import arrange, beat_frame, read_notes
 from muestra.render.dsp import BLOCK, apply_fx, limiter_latency, master
-from muestra.schemas.song import Song
+from muestra.schemas.song import LimiterFx, Song
 
 
 def simple_song(fx=(), automation=(), bars=2):
@@ -323,3 +323,57 @@ def test_midi_ignores_tempo_and_uses_ppq(project, monkeypatch):
     arrange(project, song, 22050, 10000)
     assert seen[0][1] == 133
     assert seen[0][0][0].beat == 1.5
+
+
+def _drums_like(sr, seconds=8, seed=5):
+    """Peaky material (decaying hits on a quiet bed): one-shot gain toward the
+    target followed by the safety limiter lands well below the target."""
+    rng = np.random.default_rng(seed)
+    n = sr * seconds
+    x = 0.05 * rng.normal(size=n)
+    for start in range(0, n, sr // 4):
+        k = np.arange(min(sr // 8, n - start))
+        x[start : start + len(k)] += 0.3 * rng.normal(size=len(k)) * np.exp(-k / (sr * 0.01))
+    return np.column_stack([x, x]).astype(np.float32)
+
+
+def test_master_iterates_to_reach_target_lufs(project):
+    """WP13 finding 6: gain -> limit -> measure is iterated."""
+    import pyloudnorm as pyln
+
+    from muestra.render.dsp import _integrated, _limit
+
+    sr = 22050
+    audio = _drums_like(sr)
+    song = simple_song()
+    song.master.target_lufs = -12
+    auto = Automation(song, sr)
+    # the old single pass misses by more than the tolerance on this material
+    once = _limit(
+        audio * np.float32(10 ** ((-12 - _integrated(audio, sr)) / 20)),
+        sr,
+        auto,
+        "__safety",
+        LimiterFx(ceiling_db=-1),
+    )
+    assert _integrated(once, sr) < -12.5
+    report = {}
+    result = master(audio.copy(), song, sr, auto, project, {}, {}, report)
+    assert pyln.Meter(sr).integrated_loudness(result) == pytest.approx(-12, abs=0.35)
+    assert report["passes"] >= 2 and not report["too_hot"]
+    assert report["limiter_lu"] <= 3.2
+    assert np.max(np.abs(resample_poly(result, 4, 1, axis=0))) <= 10 ** (-1 / 20) + 1e-5
+
+
+def test_master_stops_when_the_target_is_too_hot(project):
+    from muestra.render.tools import loudness_hint
+
+    sr = 22050
+    song = simple_song()
+    song.master.target_lufs = -4
+    report = {}
+    master(_drums_like(sr), song, sr, Automation(song, sr), project, {}, {}, report)
+    assert report["too_hot"] and report["limiter_lu"] < 4  # bounded: not crushed
+    assert report["integrated_lufs"] < -8 and report["passes"] <= 4
+    hint = loudness_hint(report)
+    assert "too hot" in hint and "target_lufs" in hint and "LU off" in hint

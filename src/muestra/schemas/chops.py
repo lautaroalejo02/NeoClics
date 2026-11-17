@@ -61,6 +61,12 @@ class ChopQuery(ContractModel):
     stem: StemName | None = None
     length_beats: float | None = Field(default=None, gt=0.0)
     n: int = Field(default=3, ge=1)
+    window_s: tuple[float, float] | None = Field(
+        default=None, description="Only loops inside [start_s, end_s] of the source (WP13)."
+    )
+    at_s: float | None = Field(
+        default=None, ge=0.0, description="Exact spot: the downbeat nearest this time first."
+    )
 
 
 class CandidateScore(ContractModel):
@@ -88,6 +94,11 @@ class ChopCandidate(ContractModel):
         description="Project-relative path to the rendered preview audio.",
     )
     score: CandidateScore | None = None
+    bar: int | None = Field(
+        default=None, ge=1, description="Bar of the record (= start_downbeat, 1-based)."
+    )
+    start_mmss: str | None = Field(default=None, description="start_s as 'm:ss.s'.")
+    length_s: float | None = Field(default=None, gt=0.0, description="end_s - start_s.")
 
 
 class AgentPick(ContractModel):
@@ -104,6 +115,10 @@ class ChosenRecord(ContractModel):
     mode: Literal["auto", "manual"]
     adjust: ChopAdjust = Field(default_factory=ChopAdjust)
     at: AwareDatetime
+    chop_id: IdStr | None = Field(
+        default=None,
+        description="The song.yaml chop id actually written (WP13: may be a new id).",
+    )
 
 
 class ChopCandidateSet(ContractModel):

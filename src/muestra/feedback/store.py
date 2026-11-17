@@ -15,6 +15,7 @@ timestamp ties.
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
@@ -91,13 +92,41 @@ def utcnow() -> datetime:
     return datetime.now(UTC)
 
 
+#: cross-process append lock (WP13). Separate from the transports'
+#: ``cache/locks/feedback.lock`` (held around whole tool calls), so a tool
+#: call holding that one can still append in-process.
+APPEND_LOCK = "cache/locks/feedback-append.lock"
+
+
 def append_event(project: Project, event: FeedbackEvent) -> Path:
-    """Validate and append one event line to feedback.jsonl (creates the file)."""
+    """Validate and append one event line to feedback.jsonl (creates the file).
+
+    Atomic across processes on Windows and macOS (WP13): an OS lock
+    (portalocker) around one ``os.write`` of the whole line on an
+    ``O_APPEND`` descriptor; a file whose last line lacks its newline (a hand
+    edit) gets one first, so two events are never glued together."""
+    import portalocker
+
     line = json.dumps(EVENT_ADAPTER.dump_python(event, mode="json"), ensure_ascii=False)
+    data = (line + "\n").encode("utf-8")
     path = project.feedback_path
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as f:
-        f.write(line + "\n")
+    lock = project.path(APPEND_LOCK)
+    lock.parent.mkdir(parents=True, exist_ok=True)
+    with portalocker.Lock(lock, timeout=30):
+        fd = os.open(path, os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, "O_BINARY", 0))
+        try:
+            size = os.fstat(fd).st_size
+            if size:
+                with path.open("rb") as existing:
+                    existing.seek(size - 1)
+                    if existing.read(1) != b"\n":
+                        data = b"\n" + data
+            written = 0
+            while written < len(data):
+                written += os.write(fd, data[written:])
+        finally:
+            os.close(fd)
     return path
 
 
@@ -127,7 +156,12 @@ def read_events(
     page = ReadPage()
     if not path.is_file():
         return page
-    lines = path.read_text(encoding="utf-8", errors="replace").splitlines()
+    # Only complete lines (ending in "\n") count: a line being written right
+    # now by another process is read next time, never skipped (WP13). Split
+    # on "\n" only: str.splitlines would also split inside a comment text
+    # containing U+2028 and drift the cursor.
+    data = path.read_bytes()
+    lines = data[: data.rfind(b"\n") + 1].decode("utf-8", errors="replace").split("\n")[:-1]
     if cursor:
         lines = lines[cursor:]
     start_line = (cursor or 0) + 1

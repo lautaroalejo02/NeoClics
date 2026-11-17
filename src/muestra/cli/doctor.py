@@ -8,12 +8,10 @@ carries the one command or action that fixes it.
 
 from __future__ import annotations
 
-import glob
 import importlib.util
 import os
 import shutil
 import socket
-import sys
 from pathlib import Path
 
 from ..project.core import open_project
@@ -46,22 +44,9 @@ def _sync_hint(extra: str | None = None) -> str:
 
 def _ffmpeg_candidates() -> list[str]:
     """Known install locations, to tell 'not installed' from 'not on PATH yet'."""
-    home = Path.home()
-    patterns = []
-    if sys.platform == "win32":
-        local = os.environ.get("LOCALAPPDATA", str(home / "AppData/Local"))
-        patterns += [
-            f"{local}/Microsoft/WinGet/Packages/Gyan.FFmpeg*/*/bin/ffmpeg.exe",
-            f"{local}/Microsoft/WinGet/Links/ffmpeg.exe",
-            str(home / "scoop/shims/ffmpeg.exe"),
-            "C:/ProgramData/chocolatey/bin/ffmpeg.exe",
-        ]
-    else:
-        patterns += ["/opt/homebrew/bin/ffmpeg", "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg"]
-    found: list[str] = []
-    for pattern in patterns:
-        found += [str(Path(p)) for p in sorted(glob.glob(pattern))]
-    return found
+    from ..media import known_ffmpeg_locations
+
+    return known_ffmpeg_locations()
 
 
 def _model_files() -> dict[str, tuple[list[Path], str]]:
@@ -107,7 +92,10 @@ def doctor(project: Path | None, port: int = 8765) -> dict:
         "Install git: Windows `winget install Git.Git`; macOS `xcode-select --install`. "
         "Then open a new terminal.",
     )
-    ffmpeg = os.environ.get("MUESTRA_FFMPEG") or shutil.which("ffmpeg")
+    from ..media import find_ffmpeg
+
+    # The same resolver decoding uses; install locations are reported below.
+    ffmpeg = find_ffmpeg(known_locations=False)
     try:
         import soundfile as sf
 

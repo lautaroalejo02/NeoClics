@@ -100,6 +100,30 @@ use approximately E1–G3. SFZ round-robin cycles start at a position selected b
 `song.meta.seed`. A local `[plugins]` alias with the same name overrides a
 curated alias, allowing a project to pin its own installed SFZ or plugin.
 
+### Level-matched aliases (WP13)
+
+"Try another bass" used to change the level by up to 15 LU for the same
+notes. Every curated alias now gets a constant output trim
+(`plugins.presets.CURATED_TRIM_DB`, applied after rendering, only with its
+default patch) so it measures `ALIAS_REFERENCE_LUFS` = **−24 LUFS** on its
+reference phrase (48 kHz, 120 BPM, velocity 100; basses: A1 C2 D2 E2 quarter
+notes ×16; rhodes/brass/pad: C4-E4-G4 half-note chords ×8):
+
+| alias | before (LUFS / RMS dBFS) | trim | after (LUFS / RMS / peak) |
+|---|---|---|---|
+| finger-bass | −34.3 / −36.6 | +10.3 dB | −24.0 / −26.3 / −7.5 |
+| slap-bass | −19.2 / −20.6 | −4.8 dB | −24.0 / −25.4 / −14.3 |
+| synth-bass | −31.7 / −32.2 | +7.7 dB | −24.0 / −24.5 / −1.3 |
+| rhodes | −15.2 / −17.6 | −8.8 dB | −24.0 / −26.4 / −13.9 |
+| brass-stab | −21.8 / −25.1 | −2.2 dB | −24.0 / −27.3 / −9.0 |
+| pad | −23.5 / −25.6 | −0.5 dB | −24.0 / −26.1 / −11.9 |
+
+The trim is one float multiply, so renders stay bit-exact across runs
+(re-checked: two renders of each alias identical). Songs written before this
+change hear their curated instruments at the new level (re-check `gain_db`).
+`tests/plugins/test_alias_levels.py` re-measures every alias (±1 LU; skipped
+where Surge XT / the SFZ samples are absent).
+
 ## Adding plugins, samples and effects
 
 Aliases and search directories use the existing `muestra.toml` contract:

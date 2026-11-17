@@ -20,6 +20,24 @@ CURATED = {
     "pad": ("surge-xt", "Pads/MKS-70 Warm Pad", "Factory Roland-style warm pad."),
 }
 
+#: WP13: per-alias output trim (dB) so every curated alias sits at
+#: ALIAS_REFERENCE_LUFS on its reference phrase ("try another bass" no longer
+#: jumps up to 15 dB). Measured 2026-11-17 at 48 kHz, 120 BPM, velocity 100:
+#: basses = A1 C2 D2 E2 quarter notes (0.9 beat) x 16; keys/pads/brass = C4-E4-G4
+#: half-note chords x 8 (tests/plugins/test_alias_levels.py re-measures). Raw
+#: LUFS before trim: finger-bass -34.3, slap-bass -19.2, synth-bass -31.7,
+#: rhodes -15.2, brass-stab -21.8, pad -23.5. Applied only with the default
+#: patch (a custom preset has its own level). A constant gain: deterministic.
+ALIAS_REFERENCE_LUFS = -24.0
+CURATED_TRIM_DB = {
+    "finger-bass": 10.3,
+    "slap-bass": -4.8,
+    "synth-bass": 7.7,
+    "rhodes": -8.8,
+    "brass-stab": -2.2,
+    "pad": -0.5,
+}
+
 CURATED_PARAMS = {
     alias: {"global_volume": -18 if alias == "synth-bass" else -9}
     for alias, (backend, _, _) in CURATED.items()

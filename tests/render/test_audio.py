@@ -11,7 +11,15 @@ from scipy.signal import resample_poly
 from muestra.errors import MuestraError
 from muestra.project import load_analysis, save_analysis
 from muestra.render.audio import decode
-from muestra.render.core import arrange, beat_frame, render_audio, render_chop, render_song
+from muestra.render.core import (
+    arrange,
+    beat_frame,
+    chop_audio,
+    render_audio,
+    render_chop,
+    render_song,
+    xfade_frames,
+)
 from muestra.schemas.song import Song
 
 
@@ -142,10 +150,10 @@ def test_indexed_sample_warp(project, mode):
     song = Song.model_validate(
         {"meta": {"title": "warp", "bpm": 150, "key": "Am", "length_bars": 1}, "tracks": []}
     )
-    audio, length = clip_audio(project, song, clip, 22050)
-    assert length == 1 and len(audio) == 8820
-    assert np.max(np.abs(audio)) > 0.01
-    assert np.max(np.abs(audio[[0, -1]])) < 1e-7
+    audio, length, xf = clip_audio(project, song, clip, 22050)
+    # WP13: unfaded grid slot + a crossfade tail; edge fades happen on placement.
+    assert length == 1 and xf == 110 and len(audio) == 8820 + xf
+    assert np.max(np.abs(audio[:8820])) > 0.01
 
 
 def test_repeat_positions_do_not_accumulate_rounding(project, song):
@@ -160,10 +168,12 @@ def test_repeat_positions_do_not_accumulate_rounding(project, song):
     song.automation = []
     sr = 22050
     raw, _, _ = arrange(project, song, sr, beat_frame(64, song.meta.bpm, sr))
-    piece = render_chop(project, song.chops[0], sr, song.meta.bpm)
+    piece = chop_audio(project, song.chops[0], sr, song.meta.bpm)
+    xf = xfade_frames(sr, song.chops[0].fade_ms)
     for r in range(180):
         start = beat_frame(r * 0.333, song.meta.bpm, sr)
-        assert np.array_equal(raw["sample"][start : start + 20], piece[:20])
+        # past the seam crossfade, each repeat is the chop, sample-accurately placed
+        assert np.array_equal(raw["sample"][start + xf : start + xf + 20], piece[xf : xf + 20])
         if r:
             local = raw["sample"][start - 100 : start + 100]
             jump = np.max(np.abs(np.diff(local, axis=0)))
@@ -195,8 +205,10 @@ def test_full_export_stems_range_and_determinism(project, song, fake_instrument)
     print("fixture_pcm_sha256", hashlib.sha256((first / "mix.wav").read_bytes()).hexdigest())
     # Tolerance permits platform-specific floating-point math in R3 while
     # catching mix/gain/routing regressions against the fixture arrangement.
-    assert float(np.sqrt(np.mean(full**2))) == pytest.approx(0.2474482954, abs=2e-4)
-    assert float(np.max(np.abs(full))) == pytest.approx(0.8844353557, abs=2e-4)
+    # WP13: seams crossfade instead of dipping to silence, and the +1 st chop on
+    # "other" no longer uses formant mode (was 0.2474482954 / 0.8844353557).
+    assert float(np.sqrt(np.mean(full**2))) == pytest.approx(0.2494166046, abs=2e-4)
+    assert float(np.max(np.abs(full))) == pytest.approx(0.8611111641, abs=2e-4)
     exported_sum = sum(sf.read(first / f"stems/{key}.wav", dtype="float32")[0] for key in tracks)
     assert np.allclose(exported_sum, premaster, atol=2e-7)
     assert np.isfinite(full).all()
@@ -255,3 +267,26 @@ def test_invalid_range(project, song, bars):
     with pytest.raises(MuestraError) as exc:
         render_song(project, song, "v100", bars)
     assert exc.value.issues[0].path == "range_bars"
+
+
+def test_formant_preservation_defaults_to_vocals_only(project, song):
+    """WP13 finding 11: measured, formant mode colours instruments and drums
+    (round-trip envelope error 0.5-1.9 dB vs 0.3-0.6 dB off); vocals keep it."""
+    from muestra.schemas.song import preserve_formants
+
+    chop = song.chops[0].model_copy(deep=True)
+    chop.warp.pitch_semitones = 2
+    assert not preserve_formants(chop.warp, "other") and preserve_formants(chop.warp, "vocals")
+    default = render_chop(project, chop, 22050, 120)
+    off = chop.model_copy(deep=True)
+    off.warp.formants = False
+    on = chop.model_copy(deep=True)
+    on.warp.formants = True
+    assert np.array_equal(default, render_chop(project, off, 22050, 120))
+    assert not np.array_equal(default, render_chop(project, on, 22050, 120))
+    vocal = chop.model_copy(update={"stem": "vocals"}, deep=True)
+    vocal_on = vocal.model_copy(deep=True)
+    vocal_on.warp.formants = True
+    assert np.array_equal(
+        render_chop(project, vocal, 22050, 120), render_chop(project, vocal_on, 22050, 120)
+    )

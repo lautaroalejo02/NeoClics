@@ -19,7 +19,9 @@ Two validation levels, deliberately separable:
   ``cache/analysis/<source_id>.json`` grid (``start_downbeat`` bounds,
   downbeat-on-beat match, ``start_offset_beats`` and chop end inside
   the analyzed beats), and sample clips that ask for a ``warp`` must
-  have a known BPM in a library index.
+  have a known BPM in a library index;
+* plugin-aware (``check_plugins``, default = ``check_files``): instrument
+  and plugin-fx aliases/presets resolve on this machine (WP13).
 
 ``load_analysis``/``save_analysis`` and ``load_song``/``dump_song`` are
 also used by later WPs that write these files.
@@ -538,10 +540,80 @@ def _check_sample_warps(project: Project, song: Song) -> list[Issue]:
     return issues
 
 
-def validate_song(project: Project, *, check_files: bool = True) -> list[Issue]:
+def available_instruments(project: Project) -> list[str]:
+    """Instrument aliases that resolve on this machine (curated + muestra.toml)."""
+    from ..plugins.core import instrument_spec
+    from ..plugins.presets import CURATED
+    from ..schemas.song import Instrument
+
+    names = [*CURATED, *(a for a in project.config.plugins.aliases if a not in CURATED)]
+    out = []
+    for name in names:
+        try:
+            instrument_spec(project, Instrument(plugin=name))
+        except MuestraError:
+            continue
+        out.append(name)
+    return out
+
+
+def _check_plugins(project: Project, song: Song) -> list[Issue]:
+    """Instrument/plugin-fx aliases and presets resolve on this machine (WP13).
+
+    Paths are id-based (``tracks.bass.instrument.plugin``); the hint lists
+    the valid aliases inline so the agent never needs ``plugins.list``.
+    """
+    from ..plugins.core import instrument_spec
+    from ..plugins.discovery import resolve_plugin
+    from ..plugins.presets import resolve_preset
+
+    issues: list[Issue] = []
+    available: list[str] | None = None
+
+    def aliases() -> str:
+        nonlocal available
+        if available is None:
+            available = available_instruments(project)
+        listed = ", ".join(available) or "(none: install Surge XT / the SFZ instruments)"
+        return f"Use one of the instruments available here: {listed} (or sfz + a .sfz preset)."
+
+    def report(error: MuestraError, base: str) -> None:
+        for issue in error.issues:
+            field = "preset" if issue.code.startswith("preset") else "plugin"
+            hint = issue.hint or ""
+            if field == "plugin":
+                hint = aliases()
+            issues.append(issue.model_copy(update={"path": f"{base}.{field}", "hint": hint}))
+
+    for track in song.tracks:
+        if track.instrument is not None:
+            try:
+                instrument_spec(project, track.instrument)
+            except MuestraError as e:
+                report(e, f"tracks.{track.id}.instrument")
+        for i, fx in enumerate(track.fx):
+            if fx.type != "plugin":
+                continue
+            base = f"tracks.{track.id}.fx.{fx.id or f'[{i}]'}"
+            try:
+                path = resolve_plugin(project, fx.plugin)
+                if fx.preset:
+                    resolve_preset(project, fx.preset, surge="surge" in path.name.casefold())
+            except MuestraError as e:
+                for issue in e.issues:
+                    field = "preset" if issue.code.startswith("preset") else "plugin"
+                    issues.append(issue.model_copy(update={"path": f"{base}.{field}"}))
+    return issues
+
+
+def validate_song(
+    project: Project, *, check_files: bool = True, check_plugins: bool | None = None
+) -> list[Issue]:
     """All issues for the project's song.yaml. Never raises for invalid songs.
 
     Returns the parse issues alone when the file can't be parsed at all.
+    ``check_plugins`` (default: same as ``check_files``) also checks that
+    instrument and plugin-fx aliases/presets resolve on this machine.
     """
     try:
         song = load_song(project)
@@ -552,4 +624,6 @@ def validate_song(project: Project, *, check_files: bool = True) -> list[Issue]:
         issues += _check_files_exist(project, song)
         issues += _check_chops_vs_analysis(project, song)
         issues += _check_sample_warps(project, song)
+    if check_files if check_plugins is None else check_plugins:
+        issues += _check_plugins(project, song)
     return issues

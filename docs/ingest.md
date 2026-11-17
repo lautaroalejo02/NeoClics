@@ -40,6 +40,17 @@ callables are deliberately absent from the JSON tool parameter contracts.
 
 ## Imports and caches
 
+**ffmpeg (WP13).** One resolver for import, analysis, chop previews and
+render decoding (`muestra.media`, also used by `muestra doctor`): explicit
+override → `MUESTRA_FFMPEG` → `ffmpeg` on PATH → the usual install
+locations (winget `Gyan.FFmpeg`, scoop, chocolatey, Homebrew), so an ffmpeg
+installed after the terminal started is still found. A WAV/FLAC/AIFF/OGG/MP3
+that soundfile cannot read is `decode_error` "the file is damaged or is not
+audio" (ffmpeg is tried when present, never blamed when absent); a format
+that needs ffmpeg (m4a/aac) without it is `ffmpeg_missing` naming the file.
+Before, render decoding called a bare `ffmpeg` and ignored `MUESTRA_FFMPEG`,
+so an m4a imported fine and then failed at chop-finding time.
+
 WAV/FLAC/MP3/M4A originals are copied byte-for-byte to safe generated names
 under `sources/`, never transcoded in place. Soundfile decodes first, with
 ffmpeg as a fallback. Empty, nonfinite or multichannel audio is rejected.
@@ -340,13 +351,37 @@ activates the fallback: a native-speed raw stereo excerpt with 5 ms edge
 fades, repeated twice and exported at 24-bit PCM. The fallback is recorded
 in score reasons; real renderer errors are not hidden.
 
+**Finding by time (WP13).** Section labels are novelty-based and can span
+minutes (an "intro" of 0–108 s on a real 4-minute record), so
+`source.find_chops` also takes `window_s: [a, b]` (every candidate lies
+inside it, 0.25 s slack; combines with `section`) and `at_s` (seconds or
+`"m:ss"`): candidate 1 starts on the downbeat nearest that time (best
+scoring of the requested/default lengths there; the grid-regularity and
+section filters are skipped for this exact request), then the other
+lengths at that start, then neighbouring bars. Every candidate carries
+`bar` (= `start_downbeat`, bar of the record), `start_s`, `start_mmss`
+(`"0:15.2"`) and `length_s`; the result adds `downbeats_s`, the record's
+bar map (bar i starts at `downbeats_s[i-1]`). Measured on demo-e2e
+(4-minute record, 16 beats): `section: intro` → 1:10.0, 1:02.3, 0:15.3;
+`window_s: [0, 30]` → 0:15.3, 0:18.2, 0:06.7; `at_s: "0:15"` → 0:15.3,
+0:14.3, 0:16.3 (1.7–3.5 s per call).
+
 find_chops records a recommended pick but does not implicitly edit the
 arrangement. chops.choose writes the requested chop ID using the shared
 round-trip helper, preserving comments and existing warp/fade settings.
 Start and length adjustments are deltas along the real grid; invalid
 bounds or a resulting song validation failure abort the edit. Manual
-choices append chop_choice feedback; auto choices do not. Both update the
-set's chosen record. chops.list reads the persisted sets.
+choices append chop_choice feedback **first** (WP13: before anything can
+fail, so the agent always learns what the human picked); auto choices do
+not. When the chosen length differs from the existing chop's, every clip
+using it keeps its span: `repeat` is rescaled (8 × 4 beats → 4 × 8 beats,
+reported in `repeat_changes`); when some clip's span is not a whole number
+of new lengths, the choice is written as a NEW chop (`c1-2`, …), the old
+chop and the arrangement stay untouched, and `agent_todo` says exactly
+what to wire in. `message` is a Spanish sentence for the human (the UI
+shows it); errors raised to the UI are Spanish too. Both modes update the
+set's chosen record (`chosen.chop_id` = the id actually written).
+chops.list reads the persisted sets.
 
 ## Owner-run benchmarks and verification
 

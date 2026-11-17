@@ -13,7 +13,7 @@ project. Start another HTTP process to listen to a different project.
 
 `/` serves `ui/dist` when built, including SPA navigation. Without a build, `/` explains how
 to build it. Unknown API paths and missing assets return 404. `--host 0.0.0.0` explicitly
-enables LAN access, prints the no-authentication warning, and explains the phone URL.
+enables LAN access and prints the phone URL **with its access token** (WP13, see below).
 
 ## API reference
 
@@ -119,8 +119,29 @@ the cache keys include modification time and file size. Peaks are audio amplitud
 
 ## Security and concurrency
 
-- Localhost binding by default, no accounts, authentication, telemetry or LLM calls.
-- LAN access is explicitly opt-in and grants project-edit access to anyone who can connect.
+- Localhost binding by default, no accounts, telemetry or LLM calls. A loopback bind only
+  answers requests whose `Host` is `127.0.0.1`, `localhost` or `::1` (blocks DNS
+  rebinding: a web page whose name resolves to 127.0.0.1 sends a matching Origin and Host).
+- **LAN mode (WP13).** A non-loopback `--host` (e.g. `0.0.0.0`) generates a random token
+  (`secrets.token_urlsafe(16)`, new at every start) and prints
+  `http://<LAN-IP>:<port>/?token=<token>`. Clients **not on this computer**:
+  - must present the token: `?token=` on any request (the response then sets an
+    HttpOnly, SameSite=Strict cookie `muestra_token`, so the UI's own requests, audio and
+    websocket work unchanged), or the `X-Muestra-Token` header, or that cookie. Without
+    it: `401` (`unauthorized` envelope; a short Spanish page for browser navigation);
+    the `/events` websocket closes with 1008;
+  - may only call **read-only tools plus `feedback.append` and `chops.choose`** (what the
+    listening UI writes), `GET /project`, `/files`, `/waveform`, `GET /jobs/<id>` and the UI.
+    Everything else (render, restore, `source.import`, `library.index`, `plugins.scan`,
+    `DELETE /jobs/<id>`, …) is `403 local_only`. No allowed tool takes a filesystem path:
+    `project`/`project.open.path` must equal the served project (`project_locked`), and
+    `library.search.similar_to` only looks up the index.
+  - Loopback clients (the agent, the laptop's browser) need no token and keep every tool.
+  - `?token=` is stripped from GET tool query parameters (it is not a tool param).
+- `muestra mcp --transport streamable-http` refuses a non-loopback `--host` (exit 2): MCP
+  exposes every tool with no authentication, and agents run on this computer.
+- Before WP13, LAN access granted project-edit access (and arbitrary local file reads via
+  `source.import`, index writes via `library.index`) to anyone who could connect.
 - CORS allows only the Vite development origins `http://localhost:5173` and
   `http://127.0.0.1:5173`. HTTP and websocket requests carrying other cross-site Origins
   are rejected; the listening UI's own origin is accepted.
@@ -134,9 +155,15 @@ the cache keys include modification time and file size. Peaks are audio amplitud
 - All CLI/MCP/HTTP feedback reads and appends take the same OS-backed
   `cache/locks/feedback.lock` through portalocker, including on Windows. `chops.choose` also
   participates because it can record a manual choice. This protects whole
-  Unicode JSONL records and cursor reads across these transports. Direct callers of the
-  feedback package or arbitrary external writers do not participate in that lock; writers
-  should append complete newline-terminated events and use the tools when possible.
+  Unicode JSONL records and cursor reads across these transports. **WP13:** `append_event`
+  itself is now atomic across processes too (an OS lock on
+  `cache/locks/feedback-append.lock` around a single `os.write` of the whole line on an
+  `O_APPEND` descriptor), so direct callers are safe; readers only count lines that end in
+  `
+` (a line being written is read next time, not skipped) and split on `
+` only.
+  Measured with the auditor's script (two processes × 400 appends, Windows): 782 lines
+  before, 800 after.
 - Unexpected tool exceptions return a generic `internal_error` and log a traceback privately
   to `cache/logs/muestra.log` in the acted-on project. An unavailable project cannot provide
   a project log. `NotImplementedError` becomes a clean `not_implemented` on every surface.

@@ -13,6 +13,7 @@ from ..schemas.analysis import Analysis
 from ..schemas.chops import ChopCandidateSet
 from ..schemas.metrics import Metrics
 from ..schemas.render_meta import RenderMeta
+from ..versions.prune import disk_usage
 from .core import Runtime
 
 
@@ -114,4 +115,6 @@ def project_summary(runtime: Runtime) -> dict:
             *[i.model_dump() for i in feedback.errors],
         ],
         "feedback_skipped": (feedback.data or {}).get("skipped", []),
+        # WP13: bytes used by renders/ and caches (+ a hint to run versions.prune).
+        "disk": disk_usage(project),
     }

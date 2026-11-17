@@ -127,7 +127,9 @@ def test_list_marks_versions_whose_renders_were_deleted_as_rerenderable(three):
 
 def test_list_of_a_project_without_versions(project):
     data = ok(project, "versions.list")
+    disk = data.pop("disk")  # WP13: disk usage, all zero here
     assert data == {"files": [], "versions": [], "roots": [], "base": None}
+    assert disk["renders_bytes"] == 0 and disk["hint"] is None
 
 
 def test_list_shows_a_render_folder_that_has_no_tag(project):

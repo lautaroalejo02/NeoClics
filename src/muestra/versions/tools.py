@@ -22,14 +22,19 @@ from .diff import song_diff
 from .metrics_delta import compare_metrics, ears_delta, load_metrics
 from .models import (
     DiffItem,
+    DiskUsage,
+    PruneEntry,
     RenderMetaOut,
     VersionFeedback,
     VersionInfo,
     VersionsDiffResult,
     VersionsGetResult,
     VersionsListResult,
+    VersionsPruneResult,
     VersionsRestoreResult,
 )
+from .prune import cache_plan, dir_size, disk_usage, gc_cache, prune_versions
+from .prune import plan as prune_plan
 from .records import build_record, build_records, load_meta, stems_on_disk
 
 __all__ = [
@@ -60,7 +65,9 @@ def versions_list(p: VersionsListParams) -> VersionsListResult:
     (history is a tree), render/re-render status and feedback."""
     project = open_project(p.project)
     records, roots, base = build_records(project)
-    return VersionsListResult(versions=records, roots=roots, base=base)
+    return VersionsListResult(
+        versions=records, roots=roots, base=base, disk=DiskUsage(**disk_usage(project))
+    )
 
 
 class VersionsGetParams(ProjectScoped):
@@ -190,6 +197,47 @@ def versions_restore(p: VersionsRestoreParams) -> VersionsRestoreResult:
     )
 
 
+class VersionsPruneParams(ProjectScoped):
+    dry_run: bool = Field(default=True, description="Only report; set false to delete.")
+    keep_latest: int = Field(default=5, ge=0, le=1000, description="Newest versions to keep.")
+    cache: bool = Field(
+        default=True, description="Also clear render-cache entries the newest render didn't use."
+    )
+
+
+def versions_prune(p: VersionsPruneParams) -> VersionsPruneResult:
+    """Free disk: delete renders/vNNN audio of old versions (they stay in history and
+    re-render bit-exact with render version=vNNN) and stale render caches. Dry run by
+    default. Keeps liked, newest, unread-feedback, recent A/B and base versions."""
+    project = open_project(p.project)
+    kept, removable = prune_plan(project, p.keep_latest)
+    sizes = {v: dir_size(project.renders_dir / v) for v in [*kept, *removable]}
+    cache_files = cache_plan(project) if p.cache else []
+    cache_bytes = sum(f.stat().st_size for f in cache_files if f.exists())
+    freed = sum(sizes[v] for v in removable)
+    if not p.dry_run:
+        freed = prune_versions(project, removable)
+        cache_bytes = gc_cache(project, cache_files)
+    mb = (freed + cache_bytes) / 1e6
+    hint = (
+        f"Dry run: would free {mb:.0f} MB ({len(removable)} versions + {len(cache_files)} cache "
+        "files). Call again with dry_run=false to delete."
+        if p.dry_run
+        else f"Freed {mb:.0f} MB. Removed versions stay listed; re-render one with "
+        "render version=<vNNN>."
+    )
+    return VersionsPruneResult(
+        dry_run=p.dry_run,
+        remove=[PruneEntry(version=v, bytes=sizes[v]) for v in removable],
+        keep=[PruneEntry(version=v, bytes=sizes[v], reasons=r) for v, r in sorted(kept.items())],
+        freed_bytes=freed,
+        cache_files=len(cache_files),
+        cache_freed_bytes=cache_bytes,
+        disk=DiskUsage(**disk_usage(project)),
+        hint=hint,
+    )
+
+
 #: tools exported by this subpackage (collected by muestra.registry).
 TOOLS = [
     (
@@ -219,5 +267,12 @@ TOOLS = [
         VersionsRestoreParams,
         VersionsRestoreResult,
         {"cli": ("versions", "restore")},
+    ),
+    (
+        "versions.prune",
+        versions_prune,
+        VersionsPruneParams,
+        VersionsPruneResult,
+        {"cli": ("versions", "prune")},
     ),
 ]

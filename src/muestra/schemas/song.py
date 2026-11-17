@@ -162,6 +162,16 @@ class Warp(ContractModel):
 
     mode: Literal["resample", "stretch"] = "resample"
     pitch_semitones: float = Field(default=0.0, ge=-24.0, le=24.0)
+    formants: bool | None = Field(
+        default=None,
+        description="Preserve formants when pitch_semitones != 0. Default: on for "
+        "stem: vocals only (measured: it colours instruments and drums).",
+    )
+
+
+def preserve_formants(warp: Warp, stem: str | None) -> bool:
+    """WP13 default: formant preservation for vocals only (docs/render.md)."""
+    return warp.formants if warp.formants is not None else stem == "vocals"
 
 
 class Chop(ContractModel):
@@ -184,7 +194,13 @@ class Chop(ContractModel):
     )
     length_beats: float = Field(gt=0, le=128)
     warp: Warp = Field(default_factory=Warp)
-    fade_ms: float = Field(default=5.0, ge=0.0, le=1000.0)
+    fade_ms: float = Field(
+        default=5.0,
+        ge=0.0,
+        le=1000.0,
+        description="Seam crossfade (ms) between back-to-back repeats; fade to/from "
+        "silence only at the first start and last end of a run. 0 = hard cuts.",
+    )
 
 
 # ---------------------------------------------------------------------------

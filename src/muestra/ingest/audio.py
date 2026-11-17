@@ -3,61 +3,38 @@
 from __future__ import annotations
 
 import io
-import os
-import shutil
-import subprocess
 from pathlib import Path
 
 import numpy as np
 import soundfile as sf
 
 from ..errors import MuestraError
+from ..media import decode_failure, require_ffmpeg, run_ffmpeg
 
 
 def ffmpeg_path(override: str | None = None) -> str:
-    executable = override or os.environ.get("MUESTRA_FFMPEG") or shutil.which("ffmpeg")
-    if executable:
-        return str(executable)
-    raise MuestraError.one(
-        "file_not_found",
-        "ffmpeg was not found.",
-        path="ffmpeg",
-        hint="Install ffmpeg (winget install Gyan.FFmpeg / brew install ffmpeg), restart your "
-        "terminal, or set MUESTRA_FFMPEG to its executable path.",
-    )
+    """The shared resolver (muestra.media): override, MUESTRA_FFMPEG, PATH,
+    usual install locations."""
+    return require_ffmpeg(override)
 
 
 def decode(path: Path, *, ffmpeg: str | None = None) -> tuple[np.ndarray, int]:
     """Return finite float32 (frames, channels), preserving native sample rate."""
     try:
         audio, sr = sf.read(path, dtype="float32", always_2d=True)
-    except (sf.SoundFileError, OSError):
-        try:
-            result = subprocess.run(
-                [
-                    ffmpeg_path(ffmpeg),
-                    "-v",
-                    "error",
-                    "-nostdin",
-                    "-i",
-                    str(path),
-                    "-f",
-                    "wav",
-                    "-acodec",
-                    "pcm_f32le",
-                    "pipe:1",
-                ],
-                capture_output=True,
-                check=True,
-            )
-            audio, sr = sf.read(io.BytesIO(result.stdout), dtype="float32", always_2d=True)
-        except (subprocess.CalledProcessError, OSError, sf.SoundFileError) as exc:
+    except (sf.SoundFileError, OSError) as native:
+        if not Path(path).is_file():
             raise MuestraError.one(
-                "decode_error",
-                f"Cannot decode {path.name}: {exc}",
-                path=str(path),
-                hint="Check that this is a valid wav/flac/mp3/m4a file and ffmpeg runs.",
-            ) from exc
+                "file_not_found", f"{path} does not exist.", path=str(path)
+            ) from native
+        # Damaged native files say so; ffmpeg is only blamed when it's needed.
+        data = run_ffmpeg(
+            Path(path), ["-f", "wav", "-acodec", "pcm_f32le", "pipe:1"], ffmpeg, native
+        )
+        try:
+            audio, sr = sf.read(io.BytesIO(data), dtype="float32", always_2d=True)
+        except (sf.SoundFileError, RuntimeError) as exc:
+            raise decode_failure(Path(path), exc) from exc
     if not len(audio) or audio.shape[1] not in (1, 2) or not np.isfinite(audio).all():
         raise MuestraError.one(
             "invalid_audio",

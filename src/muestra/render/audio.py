@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-import subprocess
+import os
 import uuid
 from pathlib import Path
 
@@ -16,11 +16,12 @@ import soundfile as sf
 from scipy.signal import resample, resample_poly
 
 from ..errors import MuestraError
+from ..media import run_ffmpeg
 from ..project.core import Project
 
 # Bump whenever decoding/warping or its quality settings change.
 CACHE_ABI = (
-    f"render-3-pb{pedalboard.__version__}-numpy{np.__version__}"
+    f"render-5-pb{pedalboard.__version__}-numpy{np.__version__}"
     f"-scipy{scipy.__version__}-sndfile{sf.__libsndfile_version__}"
 )
 
@@ -35,9 +36,11 @@ def file_hash(path: Path) -> str:
 
 
 def cache_read(project: Project, kind: str, key: str) -> np.ndarray | None:
+    path = project.cache_dir / "render" / kind / f"{key}.npy"
     try:
-        a = np.load(project.cache_dir / "render" / kind / f"{key}.npy", allow_pickle=False)
+        a = np.load(path, allow_pickle=False)
         if a.ndim == 2 and a.shape[1] == 2 and a.dtype == np.float32 and np.isfinite(a).all():
+            os.utime(path)  # used: versions.prune's cache GC keeps it (WP13)
             return a
     except (OSError, ValueError, EOFError):
         pass  # Interrupted/corrupt caches are disposable.
@@ -64,36 +67,16 @@ def decode(project: Project, path: Path, sample_rate: int) -> tuple[np.ndarray, 
         return cached, content
     try:
         audio, native_rate = sf.read(path, dtype="float32", always_2d=True)
-    except (RuntimeError, sf.LibsndfileError):
-        try:
-            proc = subprocess.run(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-i",
-                    str(path),
-                    "-f",
-                    "f32le",
-                    "-ac",
-                    "2",
-                    "-ar",
-                    str(sample_rate),
-                    "pipe:1",
-                ],
-                capture_output=True,
-                check=True,
-            )
-            audio = np.frombuffer(proc.stdout, dtype="<f4").reshape(-1, 2).copy()
-            native_rate = sample_rate
-        except (OSError, subprocess.CalledProcessError) as exc:
-            raise MuestraError.one(
-                "audio_decode",
-                f"Cannot decode {path.name}: {exc}",
-                path=str(path),
-                value=str(path),
-                hint="Use a valid WAV/FLAC or install ffmpeg for other formats.",
-            ) from exc
+    except (RuntimeError, sf.LibsndfileError) as native:
+        # WP13: the shared resolver (MUESTRA_FFMPEG, PATH, install locations);
+        # a damaged WAV is "cannot decode", never "ffmpeg missing".
+        data = run_ffmpeg(
+            path,
+            ["-f", "f32le", "-ac", "2", "-ar", str(sample_rate), "pipe:1"],
+            native_error=native,
+        )
+        audio = np.frombuffer(data[: len(data) // 8 * 8], dtype="<f4").reshape(-1, 2).copy()
+        native_rate = sample_rate
     if audio.shape[1] == 1:
         audio = np.repeat(audio, 2, axis=1)
     elif audio.shape[1] != 2:
@@ -152,7 +135,9 @@ def vinyl(audio: np.ndarray, frames: int) -> np.ndarray:
     return resample(audio, frames, axis=0).astype(np.float32)
 
 
-def stretch(audio: np.ndarray, sample_rate: int, frames: int, pitch: float = 0) -> np.ndarray:
+def stretch(
+    audio: np.ndarray, sample_rate: int, frames: int, pitch: float = 0, formants: bool = False
+) -> np.ndarray:
     if not len(audio) or frames < 1:
         return np.zeros((frames, 2), np.float32)
     if frames == len(audio) and pitch == 0:
@@ -168,6 +153,6 @@ def stretch(audio: np.ndarray, sample_rate: int, frames: int, pitch: float = 0) 
         retain_phase_continuity=True,
         use_long_fft_window=None,
         use_time_domain_smoothing=False,
-        preserve_formants=True,
+        preserve_formants=formants,
     )
     return fit(result.T, frames)

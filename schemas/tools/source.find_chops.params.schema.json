@@ -1,6 +1,22 @@
 {
   "additionalProperties": false,
   "properties": {
+    "at_s": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Exact spot ('el riff del 0:15'): seconds or 'm:ss'. Candidate 1 starts on the downbeat nearest it; set length_beats too.",
+      "title": "At S"
+    },
     "length_beats": {
       "anyOf": [
         {
@@ -66,6 +82,29 @@
       "default": null,
       "description": "Stem to chop (default: 'other').",
       "title": "Stem"
+    },
+    "window_s": {
+      "anyOf": [
+        {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "type": "array"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only loops lying inside [start_s, end_s] of the record, e.g. [0, 30] for 'the riff at the start'. Combines with section.",
+      "title": "Window S"
     }
   },
   "required": [

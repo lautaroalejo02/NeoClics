@@ -740,3 +740,75 @@ that field)**; schemas regenerated (`uv run python -m muestra.schemas.export`).
    libyaml (YAML 1.2 core scalars, duplicate keys rejected, any error falls
    back to ruamel for the message); ruamel round-trip edits keep long flow
    lines (`width` 4096); `git rev-parse` answers are cached per `.git` identity.
+
+## 2026-11-17 — WP13: audit fixes (backend)
+
+1. **Atomic versions.** `render` renders audio into `renders/.staging/<token>/`
+   first and only then allocates the id, commits, tags, writes `meta.json`
+   and renames the folder to `renders/vNNN` (under
+   `renders/.staging/version.lock`). Any failure rolls back commit + tag;
+   killed renders are rolled back by `staging.recover` at the next render
+   and at `muestra serve` start (rule in docs/versions.md "Atomic
+   versions"). A rolled-back id may be reused (no audio of it ever
+   existed); published ids never are. Error hints end with "No version was
+   created"; unexpected exceptions are `render_failed`. Why: the auditor's
+   `plugin: funky-bass` left a tagged ghost v00N with no audio that became
+   the next render's parent.
+2. **`song.validate` checks instruments** (`check_plugins`, default =
+   `check_files`): id-based paths `tracks.<id>.instrument.plugin|preset`,
+   hint lists the available aliases inline (never "run plugins.list").
+3. **Manual chop choice is never lost.** `chops.choose` writes the
+   `chop_choice` event first (spec 3 step 4). A length change keeps each
+   clip's span by rescaling `repeat`; when that is not a whole number the
+   choice becomes a new chop `<id>-N` and the result's `agent_todo` says
+   what to wire in (rewriting the arrangement for the human was judged
+   riskier than one explicit agent step). Messages for the human are
+   Spanish.
+4. **Seams crossfade; a full render is a loop.** Each chop/sample
+   placement carries a tail of the record past its end; contiguous
+   placements are joined by an equal-power crossfade starting at the
+   boundary (so the grid position and the downbeat stay where they were,
+   with the same `fade_ms` fade-in the old code had), fades to silence only
+   at run edges. `fade_ms` now means crossfade length. A full render's end
+   is not faded; wrapping clip tracks crossfade into bar 1 and get their
+   effects warmed 100 ms past the end. Why: the old per-repeat fade to zero
+   measured −30 to −88 dB dips at every repeat (an audible hiccup every 1–2
+   bars) and the UI loops renders. `CACHE_ABI` bumped (`render-4`).
+5. **Chops by time.** `source.find_chops` gains `window_s` and `at_s`
+   ("m:ss" accepted); candidates carry `bar`, `start_mmss`, `length_s`;
+   the result carries the record's `downbeats_s` bar map. `at_s` skips the
+   grid-regularity and section filters: the human asked for that spot.
+6. **LAN mode needs a token and is listen-only.** A non-loopback bind
+   prints a per-start random token in the phone URL; non-loopback clients
+   need it (query once → HttpOnly cookie, or `X-Muestra-Token`) and may
+   only use read-only tools + `feedback.append` + `chops.choose`;
+   loopback clients are unchanged. A loopback bind checks the Host header
+   (DNS rebinding). The UI needs no change (same-origin cookie). Why: any
+   LAN client could render, restore, import any local file and write index
+   files anywhere.
+7. **Loudness is iterated, bounded by a limiter budget.** ≤ 4 passes,
+   0.3 LU tolerance, ≤ 3 LU removed by the safety limiter (beyond that the
+   mix is being crushed: stop and say so in the render hint rather than
+   hit the number). `render_audio`/`render_song` take an optional `report`
+   dict (additive) that `master()` fills.
+8. **One ffmpeg resolver** (`muestra.media`): override, `MUESTRA_FFMPEG`,
+   PATH, known install locations; `decode_error` vs `ffmpeg_missing` vs
+   `ffmpeg_unusable`. Render's `audio_decode` code became `decode_error`.
+9. **Feedback appends lock across processes** (`cache/locks/feedback-append.lock`,
+   separate from the transports' `feedback.lock` so an in-process tool call holding
+   that one can still append); readers ignore an unterminated last line.
+10. **`versions.prune` + cache GC; stem format unchanged.** Pruning deletes
+    whole `renders/vNNN/` folders (history keeps the version; re-render is
+    bit-exact); "unread feedback" = feedback newer than the newest version.
+    Stems stay 32-bit float for now: 24-bit PCM with a stored headroom gain or
+    FLAC would cut ~25–60 % but the UI decodes and sums stems itself, so the
+    format change needs UI work (and drum-lane stems, half of each render, are
+    only read by ears: they could move to the cache). Not done here.
+11. **Curated aliases are level-matched** to −24 LUFS on a reference phrase by
+    a per-alias trim (default patch only). Existing songs using them change
+    level once (finger-bass +10.3 dB, rhodes −8.8 dB, …).
+12. **Formant preservation only for vocals by default** (`warp.formants`
+    overrides). Measured: it keeps the long-term envelope but adds 0.5–1.9 dB
+    of non-reversible colouring on instruments/drums (0.3–0.6 dB without).
+    `CACHE_ABI` → `render-5`. Pitch-shifted non-vocal chops in existing songs
+    sound slightly different after this change.

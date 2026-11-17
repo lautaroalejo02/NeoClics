@@ -51,6 +51,7 @@
       "properties": {
         "fade_ms": {
           "default": 5.0,
+          "description": "Seam crossfade (ms) between back-to-back repeats; fade to/from silence only at the first start and last end of a run. 0 = hard cuts.",
           "maximum": 1000.0,
           "minimum": 0.0,
           "title": "Fade Ms",
@@ -1480,6 +1481,19 @@
       "additionalProperties": false,
       "description": "How source audio conforms to the project tempo.\n\n* ``resample``: the playback rate is set by tempo ONLY,\n  ``project_bpm / source_local_bpm``, so the chop always fills its\n  grid slot exactly; the tempo-induced pitch change IS the vinyl\n  effect. A single rate is used for the whole chop.\n* ``stretch``: pitch-preserving time-stretch to the grid (Rubber\n  Band; each source beat is mapped onto the project grid, beat-wise).\n\nIn both modes ``pitch_semitones`` is an additional LENGTH-PRESERVING\npitch shift (high-quality shifter), applied after the warp \u2014 it never\nchanges the chop's grid span.",
       "properties": {
+        "formants": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Preserve formants when pitch_semitones != 0. Default: on for stem: vocals only (measured: it colours instruments and drums).",
+          "title": "Formants"
+        },
         "mode": {
           "default": "resample",
           "enum": [

@@ -22,7 +22,8 @@ def test_example_song_parses_and_validates(example_project):
     song = load_song(example_project)
     assert song.meta.bpm == 120
     assert song.chops[0].id == "c1"
-    assert validate_song(example_project, check_files=True) == []
+    # The fixture names a Surge XT path that is machine-specific (WP13 plugin check).
+    assert validate_song(example_project, check_files=True, check_plugins=False) == []
 
 
 def test_round_trip(example_project):

@@ -17,9 +17,9 @@ from collections.abc import Callable
 from pathlib import Path
 from typing import Literal
 
-from pydantic import Field
+from pydantic import Field, field_validator
 
-from ..schemas._base import CandidateIdStr, IdStr, RelPath
+from ..schemas._base import CandidateIdStr, ContractModel, IdStr, RelPath
 from ..schemas.chops import ChopAdjust, ChopCandidateSet
 from ..schemas.song import Chop, StemName
 from ..toolbase import ProjectScoped, ToolOutput
@@ -182,6 +182,38 @@ class SourceFindChopsParams(ProjectScoped):
         default=None, gt=0, description="Loop length in beats (default: compare 1/2/4/8 bars)."
     )
     n: int = Field(default=3, ge=1, description="Number of candidates to propose.")
+    window_s: tuple[float, float] | None = Field(
+        default=None,
+        description="Only loops lying inside [start_s, end_s] of the record, e.g. [0, 30] "
+        "for 'the riff at the start'. Combines with section.",
+    )
+    at_s: float | str | None = Field(
+        default=None,
+        description="Exact spot ('el riff del 0:15'): seconds or 'm:ss'. Candidate 1 starts "
+        "on the downbeat nearest it; set length_beats too.",
+    )
+
+    @field_validator("at_s")
+    @classmethod
+    def _seconds(cls, v):
+        if isinstance(v, str):
+            try:
+                parts = [float(x) for x in v.strip().split(":")]
+            except ValueError as exc:
+                raise ValueError("Use seconds (15.5) or 'm:ss' ('0:15').") from exc
+            if not 1 <= len(parts) <= 3 or any(x < 0 for x in parts):
+                raise ValueError("Use seconds (15.5) or 'm:ss' ('0:15').")
+            v = sum(x * 60**i for i, x in enumerate(reversed(parts)))
+        if v is not None and v < 0:
+            raise ValueError("at_s must be >= 0.")
+        return v
+
+    @field_validator("window_s")
+    @classmethod
+    def _window(cls, v):
+        if v is not None and not 0 <= v[0] < v[1]:
+            raise ValueError("window_s is [start_s, end_s] with 0 <= start < end.")
+        return v
 
 
 class SourceFindChopsResult(ToolOutput):
@@ -190,6 +222,11 @@ class SourceFindChopsResult(ToolOutput):
     set_path: RelPath = Field(description="cache/chops/<source_id>/<set_id>.json")
     previews: list[RelPath] = Field(
         default_factory=list, description="Rendered preview audio paths."
+    )
+    downbeats_s: list[float] = Field(
+        default_factory=list,
+        description="Bar map of the record: downbeat/bar i (1-based, = start_downbeat) "
+        "starts at downbeats_s[i-1] seconds.",
     )
 
 
@@ -202,16 +239,27 @@ def source_find_chops(p: SourceFindChopsParams) -> SourceFindChopsResult:
     from .chops import find
 
     project = open_project(Path(p.project))
-    query = ChopQuery(section=p.section, stem=p.stem, length_beats=p.length_beats, n=p.n)
+    from ..project import load_analysis
+
+    query = ChopQuery(
+        section=p.section,
+        stem=p.stem,
+        length_beats=p.length_beats,
+        n=p.n,
+        window_s=p.window_s,
+        at_s=p.at_s,
+    )
     candidate_set, path = find(project, p.source_id, query)
     rel = path.relative_to(project.root).as_posix()
     previews = [c.preview for c in candidate_set.candidates if c.preview]
+    downbeats = [round(t, 3) for t in load_analysis(project, p.source_id).downbeats_s]
     return SourceFindChopsResult(
         set_id=candidate_set.set_id,
         set=candidate_set,
         set_path=rel,
         previews=previews,
         files=[rel, *previews],
+        downbeats_s=downbeats,
     )
 
 
@@ -230,10 +278,30 @@ class ChopsChooseParams(ProjectScoped):
     )
 
 
+class RepeatChange(ContractModel):
+    track: IdStr
+    clip: int = Field(description="0-based clip index on the track.")
+    old_repeat: int
+    new_repeat: int
+
+
 class ChopsChooseResult(ToolOutput):
     set_id: str
     candidate_id: CandidateIdStr
     chop: Chop = Field(description="The chop written into song.yaml.")
+    chop_id: IdStr | None = Field(
+        default=None,
+        description="Id actually written: chop_id, or a NEW id when the new length "
+        "cannot keep the clips' span (then see agent_todo).",
+    )
+    repeat_changes: list[RepeatChange] = Field(
+        default_factory=list,
+        description="Clip repeats rescaled so each clip keeps its span in beats.",
+    )
+    message: str | None = Field(default=None, description="Spanish, shown to the human.")
+    agent_todo: str | None = Field(
+        default=None, description="What the agent must still change in song.yaml, if anything."
+    )
 
 
 def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
@@ -245,12 +313,21 @@ def chops_choose(p: ChopsChooseParams) -> ChopsChooseResult:
     from .chops import choose
 
     project = open_project(Path(p.project))
-    candidate_set, chop, path = choose(project, p.candidate_id, p.chop_id, p.mode, p.adjust)
+    candidate_set, chop, path, outcome = choose(
+        project, p.candidate_id, p.chop_id, p.mode, p.adjust
+    )
     files = ["song.yaml", path.relative_to(project.root).as_posix()]
     if p.mode == "manual":
         files.append("feedback.jsonl")
     return ChopsChooseResult(
-        set_id=candidate_set.set_id, candidate_id=p.candidate_id, chop=chop, files=files
+        set_id=candidate_set.set_id,
+        candidate_id=p.candidate_id,
+        chop=chop,
+        files=files,
+        chop_id=outcome["chop_id"],
+        repeat_changes=outcome["repeat_changes"],
+        message=outcome["message"],
+        agent_todo=outcome["agent_todo"],
     )
 
 

@@ -60,7 +60,11 @@ Every problem is an `Issue`:
   `unknown_tool`, `internal_error`; versioning (WP5): `unknown_version`,
   `version_exists`, `not_git_repo`, `git_not_installed`, `repo_locked`,
   `repo_busy`, `detached_head`, `git_unsafe_repo`, `git_error`, see
-  `docs/versions.md`).
+  `docs/versions.md`); WP13: `render_failed`, `local_only`, `unauthorized`,
+  `plugin_missing`/`preset_missing` (also from `song.validate`),
+  `ffmpeg_missing` (only when a format really needs ffmpeg), `ffmpeg_unusable`,
+  `decode_error` ("the file is damaged or is not audio"; replaces render's
+  `audio_decode`)).
 - Validation **collects all issues**; never stops at the first.
 - Duplicate YAML mapping keys in `song.yaml` are a `duplicate_key` issue
   (with the key's path and a hint) — never silently dropped.
@@ -149,9 +153,18 @@ beats (beat 1 = song start); the host uses the explicit version's `bpm`.
 or optional version-history metadata are unavailable. A stub ears analyzer
 does not fail a completed audio render.
 
-**Render orchestration** (the `render` tool, WP2): validate → allocate
-version id → `record_version` (WP5) → render audio → write `meta.json`
-→ `ears.analyze` (WP6) → write `metrics.json`.
+**Render orchestration** (the `render` tool, WP2; order changed by WP13):
+validate (incl. instruments) → render audio + `song.yaml` into
+`renders/.staging/<token>/` → under `renders/.staging/version.lock`:
+allocate version id → `record_version` (WP5) → write `meta.json` → move
+the folder to `renders/vNNN` (one rename) → `ears.analyze` (WP6) → write
+`metrics.json`. **A version never exists without its audio:** any failure
+before the move undoes the commit and tag, deletes the staging folder and
+returns `ok: false` with a hint ending "No version was created (no
+commit, no tag, no renders/ folder)."; unexpected exceptions become code
+`render_failed`. Leftovers of a killed process are rolled back at the
+start of the next render and when `muestra serve` starts (rule:
+`docs/versions.md`, "Atomic versions").
 
 ## Project layout
 
@@ -238,7 +251,20 @@ input (`F#`/`Gb` kept as given, `A#`→`Bb`, `Db`→`C#`, …).
     project grid (pitch-preserving time-stretch), then the same
     length-preserving `pitch_semitones` shift.
   - `pitch_semitones` ∈ −24..24; 0 = no shift.
-- `fade_ms` (default 5): edge fades to prevent clicks.
+  - `formants` (WP13, optional bool): formant preservation for the pitch
+    shift; default (null) = on for `stem: vocals`, off otherwise (sample
+    clips: off). Measurements: `docs/render.md`.
+- `fade_ms` (default 5): **seam crossfade length** (WP13). Each placement
+  of the chop is rendered with `fade_ms` of extra source past its end (the
+  record continuing, warped at the same rate); when the next placement on
+  the same track starts on the exact frame where this one ends (the next
+  `repeat`, or another clip), that tail fades out with an equal-power
+  (sin/cos) crossfade while the next one fades in over the same length,
+  starting at the boundary — no level dip. Only the first start and the
+  last end of a contiguous run fade to/from silence (raised cosine,
+  `fade_ms`). `fade_ms: 0` = hard cuts. Sample clips use 5 ms the same way.
+  Placement stays sample-accurate; previews (`render_chop`, `preview
+  chop:<id>`) are one slot faded at both ends.
 
 ### tracks — exactly one of
 | kind | fields |
@@ -351,7 +377,10 @@ on that track's stem. Sidechain cycles are a validation error.
 ### master
 `fx` (same union), `gain_db`, `target_lufs` (optional). **Master chain
 order**: master fx in listed order → loudness gain toward `target_lufs`
-→ final true-peak safety limiter.
+→ final true-peak safety limiter. WP13: gain → limiter → measure is
+iterated to within 0.3 LU (≤ 4 passes) unless the limiter would remove
+more than 3 LU; then the render `hint` says the target is too hot for the
+material and how much the limiter takes off.
 
 ### Validation layers
 1. **Parse** (always): types, ranges, enums, uri/path shape, step chars,
@@ -367,6 +396,14 @@ order**: master fx in listed order → loudness gain toward `target_lufs`
    for each chopped source; `start_downbeat` in range; chop grid fits
    (`chop_overrun`); sample-clip warp requires a library `bpm`;
    referenced stem exists in `stems`.
+4. **`check_plugins`** (WP13; `song.validate` param, default = `check_files`):
+   every instrument alias/plugin and preset, and every plugin fx, resolves on
+   this machine. Codes `plugin_missing`, `plugin_ambiguous`, `preset_missing`,
+   `preset_ambiguous`; paths are id-based
+   (`tracks.bass.instrument.plugin`, `tracks.bass.instrument.preset`,
+   `tracks.sample.fx.<fxid|[i]>.plugin`); a plugin hint lists the aliases
+   available here inline ("Use one of the instruments available here:
+   finger-bass, slap-bass, …").
 
 ## `analysis.json` → `Analysis` (per source)
 
@@ -397,7 +434,14 @@ numbers: `docs/ingest.md` ("Grid correction").
   count as the mix, sample-aligned. A muted track still gets a silent
   stem. Pattern tracks additionally write per-lane stems
   `stems/<track_id>.<lane>.wav` (pre track fx) for the metrics.
-- Length: exactly `range_bars`; tails are cut with a 5 ms fade-out.
+- Length: exactly `range_bars`. A partial range ends with a 5 ms fade-out.
+  **A full render is a loop** (WP13; the UI plays it seamlessly): the mix
+  and stems are not faded at the song end; a clip track whose run reaches
+  the song end and starts at bar 1 wraps (its last tail crossfades into
+  bar 1; its effects are processed 100 ms past the end with automation
+  holding its last value, and that continuation is crossfaded into the
+  cold start, so an automated intro filter does not cut at the wrap);
+  every other track is faded (5 ms) at the song end as before.
 - `range_bars = [start, end)`: 1-indexed, end EXCLUSIVE, requires
   `start < end ≤ length_bars + 1`.
 - `clip:<track>:<index>` preview targets use a **0-based** clip index.
@@ -464,20 +508,40 @@ One JSON object/line, discriminated on `type`. Unknown types are errors.
 `muestra.feedback.append_event` / `read_events` return a `ReadPage`:
 `events`, `next_cursor` (line count, for resumable paging),
 `skipped: [{path, line, message, hint}]` — malformed JSON lines and
-invalid events are skipped and reported, never crash a read. `since`
+invalid events are skipped and reported, never crash a read. WP13: appends
+are atomic across processes (OS lock + one write); a final line without
+its `
+` is not read (nor counted in `next_cursor`) until it is complete,
+and an append after such a hand-edited line first adds the newline. `since`
 filters `ts >= since` and must itself be timezone-aware.
 
 ## Chop candidates (`cache/chops/<src>/<set_id>.json`) → `ChopCandidateSet`
 
 `set_id` (`csNNN`, allocated max+1), `source_id`, `created_at` (aware),
-`query{section?,stem?,length_beats?,n}`, `candidates[]`,
+`query{section?,stem?,length_beats?,n,window_s?,at_s?}`, `candidates[]`,
 `pick{candidate_id,justification}?` (the agent's `auto` pick),
-`chosen{candidate_id,mode,adjust,at}?`.
+`chosen{candidate_id,mode,adjust,at,chop_id?}?` (`chop_id`, WP13: the
+song.yaml chop actually written).
+
+`chops.choose` (WP13): a `manual` choice appends its `chop_choice` event
+before anything else can fail. Result adds `chop_id` (written id),
+`repeat_changes[{track, clip, old_repeat, new_repeat}]` (clips rescaled
+to keep their span in beats when the length changed), `message` (Spanish,
+for the human) and `agent_todo` (set when the choice had to be written
+under a NEW id `<chop_id>-N` because the new length does not divide a
+clip's span; the arrangement is then untouched).
 
 `ChopCandidate`: `id` (**global** `csNNN/candN`), `source_id`, `stem`,
 `start_downbeat`, `start_s`, `length_beats`, `end_s`, `local_bpm`,
 `preview` (project-relative path under `cache/previews/<src>/<set_id>/`),
-`score{value,reasons}`. `ChopAdjust` = `{start_beats, length_beats}`
+`score{value,reasons}`, and (WP13, optional) `bar` (= `start_downbeat`),
+`start_mmss` (`"m:ss.s"`), `length_s`. The preview is two repeats
+crossfaded at the seam and the wrap (plays as a seamless loop).
+
+`source.find_chops` params (WP13 additions): `window_s: [start_s, end_s]`
+(only candidates inside it), `at_s: float | "m:ss"` (candidate 1 = the
+downbeat nearest it). Result adds `downbeats_s` (bar i of the record
+starts at `downbeats_s[i-1]`). `ChopAdjust` = `{start_beats, length_beats}`
 deltas in beats.
 
 ## Library index → `LibraryIndex` (R4, extended by WP4)
@@ -589,6 +653,7 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version`; its result carries `metrics_summary` (compact ears text) + `metrics_path`, never the full metrics (WP11) |
 | plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py. WP12: `plugins.list` default = aliases + plugins + `preset_counts` + `categories`; presets only with `query`/`plugin`/`category` (`limit` 30, cap 100, `offset`, `matched`, `next_offset`); `detail` adds paths/parameter names |
 | `library.index/search/kits/info` | `muestra.library.tools` | WP4, real. WP12: `library.kits` takes `pattern=<name>` and returns the kit's `patterns{name: description}`. `library.index` is `long_running`; `search`/`kits`/`info` are `readonly`. New error codes: `no_library`, `library_not_indexed` (hint says to run `library.index`) |
+| `versions.prune` | `muestra.versions.tools` | WP13: dry run by default; `{dry_run, remove[{version,bytes}], keep[{version,bytes,reasons}], freed_bytes, cache_files, cache_freed_bytes, disk, hint}`; rules in `docs/versions.md` "Disk use". `versions.list` adds `disk` and per-record `size_bytes`; `GET /project` adds `disk` |
 | `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); WP12: `versions.get` returns `metrics_summary` + `metrics_path` by default, the full `metrics` and `song_yaml` only with `detail=true`; restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta` (ears notes), `metrics_compare` (ears `MetricsDelta`), `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
 | `ears.analyze`, `ears.compare` | `muestra.ears.tools` | WP6; real. analyze writes metrics.json and returns `summary` (WP12: `metrics` only with `detail=true`); compare returns a `MetricsDelta`. Seams: `muestra.ears.core.analyze/write_metrics/compare` |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

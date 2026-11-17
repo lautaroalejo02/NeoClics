@@ -289,6 +289,17 @@ stated; `tests/ears/test_detection.py` asserts them. Thresholds live in
 
 ### 6. Clicks (`clicks`)
 
+(WP13 renderer change.) Contiguous chop repeats are now joined by an
+equal-power crossfade that starts at the boundary (the previous repeat's
+tail of source fades out while the next fades in over `fade_ms`), and a
+full render's end is not faded when a clip track wraps into bar 1. The
+detector needs no change: the reference window (5 ms ending `fade_ms`
+before the edge) is the material being played either way, and the loop
+seam stays the junction end→start. Verified on a skill-check render: 0
+click events (was 1 `loop_seam_click` before the effects at the wrap were
+warmed). `fade_ms` now means the crossfade length, so the `click` fix
+("subí `fade_ms`") still applies.
+
 - **Method.** Ears knows every edge (clip instance starts/ends, note
   starts/ends, the loop seam end->start), so it only looks there, ±3
   samples. Score: the 2-sample linear-prediction error (second

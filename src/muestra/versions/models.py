@@ -13,6 +13,9 @@ from ..toolbase import ToolOutput
 
 __all__ = [
     "DiffItem",
+    "DiskUsage",
+    "PruneEntry",
+    "VersionsPruneResult",
     "RenderMetaOut",
     "VersionFeedback",
     "VersionInfo",
@@ -54,6 +57,36 @@ class VersionFeedback(ContractModel):
     ab_losses: int = Field(default=0, ge=0, description="A/B comparisons this version lost.")
 
 
+class DiskUsage(ContractModel):
+    """Disk used by derived data (WP13)."""
+
+    renders_bytes: int = 0
+    cache_render_bytes: int = Field(default=0, description="cache/render (disposable).")
+    previews_bytes: int = Field(default=0, description="cache/previews + cache/drafts.")
+    stems_bytes: int = Field(default=0, description="cache/stems (needed to re-render).")
+    total_bytes: int = 0
+    hint: str | None = None
+
+
+class PruneEntry(ContractModel):
+    version: VersionStr
+    bytes: int = 0
+    reasons: list[str] = Field(default_factory=list, description="Why it is kept.")
+
+
+class VersionsPruneResult(ToolOutput):
+    dry_run: bool
+    remove: list[PruneEntry] = Field(
+        default_factory=list, description="renders/ folders removed (or that would be)."
+    )
+    keep: list[PruneEntry] = Field(default_factory=list, description="Kept, with reasons.")
+    freed_bytes: int = Field(default=0, description="Version folders (actual or would-be).")
+    cache_files: int = Field(default=0, description="Cache/preview files removed (or would be).")
+    cache_freed_bytes: int = 0
+    disk: DiskUsage | None = None
+    hint: str | None = None
+
+
 class VersionInfo(ContractModel):
     """One coherent record per version: git + renders/ + feedback merged."""
 
@@ -88,6 +121,7 @@ class VersionInfo(ContractModel):
         default=False,
         description="The version the working copy descends from: the next render's parent.",
     )
+    size_bytes: int = Field(default=0, ge=0, description="Disk used by renders/<v>/ (WP13).")
     warnings: list[str] = Field(default_factory=list)
 
 
@@ -102,6 +136,9 @@ class VersionsListResult(ToolOutput):
     )
     base: VersionStr | None = Field(
         default=None, description="Parent the next render will record (see VersionInfo.is_base)."
+    )
+    disk: DiskUsage | None = Field(
+        default=None, description="Bytes used by renders/ and caches (WP13); hint suggests prune."
     )
 
 

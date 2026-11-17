@@ -206,10 +206,14 @@ def run_server(project=None, *, transport="stdio", host="127.0.0.1", port=8766):
 
         import uvicorn
 
-        if host not in ("127.0.0.1", "localhost", "::1"):
+        if not (host in ("localhost", "::1") or host.startswith("127.")):
+            # WP13: MCP exposes every tool (render, import any file, write indexes)
+            # and has no authentication; agents run on this computer.
             print(
-                "Warning: Muestra MCP has no authentication. Use only on a trusted network.",
+                "Muestra MCP over HTTP only listens on this computer (127.0.0.1). "
+                "To listen from a phone use: muestra serve --host 0.0.0.0",
                 file=sys.stderr,
             )
+            raise SystemExit(2)
         app = server.streamable_http_app(host=host)
         uvicorn.run(app, host=host, port=port)

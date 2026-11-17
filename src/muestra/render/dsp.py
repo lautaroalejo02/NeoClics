@@ -277,7 +277,48 @@ def apply_fx(audio, effects: list[Fx], sr, bpm, auto: Automation, prefix, projec
     return audio
 
 
-def master(audio, song, sr, auto, project, events, tracks):
+#: loudness loop (WP13): stop within this many LU of target_lufs ...
+LOUDNESS_TOLERANCE_LU = 0.3
+#: ... after at most this many limiter passes ...
+LOUDNESS_MAX_PASSES = 4
+#: ... and never push the safety limiter to remove more loudness than this.
+LIMITER_MAX_LU = 3.0
+
+
+def _integrated(audio, sr):
+    try:
+        import pyloudnorm as pyln
+    except ImportError:
+        _dependency("pyloudnorm")
+    # BS.1770 meter needs >=400 ms, pad only for measurement of short previews.
+    measured = np.pad(audio, ((0, max(0, math.ceil(sr * 0.4) - len(audio))), (0, 0)))
+    return pyln.Meter(sr).integrated_loudness(measured.astype(np.float64))
+
+
+def _peak_reduction_db(before, after, sr):
+    """Largest gain reduction over 10 ms frames (peak in vs peak out), dB."""
+    w = max(1, sr // 100)
+    n = len(before) // w * w
+    if not n:
+        return 0.0
+    a = np.abs(before[:n]).max(axis=1).reshape(-1, w).max(axis=1)
+    b = np.abs(after[:n]).max(axis=1).reshape(-1, w).max(axis=1)
+    loud = a > 1e-6
+    if not np.any(loud):
+        return 0.0
+    return float(np.max(20 * np.log10(a[loud] / np.maximum(b[loud], 1e-12))))
+
+
+def master(audio, song, sr, auto, project, events, tracks, report=None):
+    """Master fx -> master gain -> loudness toward target_lufs -> safety limiter.
+
+    WP13: gain -> limit -> measure is iterated (secant steps) until the
+    limited result is within LOUDNESS_TOLERANCE_LU of the target, for at most
+    LOUDNESS_MAX_PASSES limiter passes, and never past the point where the
+    limiter removes LIMITER_MAX_LU of loudness (the target is then too hot for
+    the material; ``report`` says so). ``report`` (a dict) receives
+    ``target_lufs, integrated_lufs, limiter_lu, limiter_peak_db, passes, too_hot``.
+    """
     from ..schemas.song import LimiterFx
 
     audio = apply_fx(
@@ -285,19 +326,66 @@ def master(audio, song, sr, auto, project, events, tracks):
     )
     gain = auto.value("master.gain_db", np.arange(len(audio)), song.master.gain_db)
     audio *= np.expand_dims(np.power(10, np.asarray(gain) / 20), -1)
-    if song.master.target_lufs is not None and np.max(np.abs(audio)) > 1e-9:
-        try:
-            import pyloudnorm as pyln
-        except ImportError:
-            _dependency("pyloudnorm")
-        # BS.1770 meter needs >=400 ms, pad only for measurement of short previews.
-        measured = np.pad(audio, ((0, max(0, math.ceil(sr * 0.4) - len(audio))), (0, 0)))
-        loudness = pyln.Meter(sr).integrated_loudness(measured.astype(np.float64))
-        if np.isfinite(loudness):
-            audio *= 10 ** (min(60, song.master.target_lufs - loudness) / 20)
     ceilings = [fx.ceiling_db for fx in song.master.fx if fx.type == "limiter"]
     ceiling = min(ceilings, default=-1.0)
-    audio = _limit(audio, sr, auto, "__safety", LimiterFx(ceiling_db=ceiling))
+    safety = LimiterFx(ceiling_db=ceiling)
+    target = song.master.target_lufs
+    loudness = (
+        _integrated(audio, sr)
+        if target is not None and np.max(np.abs(audio)) > 1e-9
+        else float("nan")
+    )
+    if not np.isfinite(loudness):
+        audio = _limit(audio, sr, auto, "__safety", safety)
+    else:
+        g = min(60.0, target - loudness)
+        tried = []  # (gain_db, limited loudness, loudness lost to the limiter, audio, gained)
+        too_hot, corrections = False, 0
+        while len(tried) < LOUDNESS_MAX_PASSES:
+            gained = audio * np.float32(10 ** (g / 20))
+            limited = _limit(gained, sr, auto, "__safety", safety)
+            out = _integrated(limited, sr)
+            lost = loudness + g - out
+            tried.append((g, out, lost, limited, gained))
+            error = target - out
+            if not np.isfinite(out) or abs(error) <= LOUDNESS_TOLERANCE_LU:
+                break
+            if error > 0 and lost >= LIMITER_MAX_LU:
+                too_hot = True
+                below = [t for t in tried if t[2] < LIMITER_MAX_LU]
+                if lost > LIMITER_MAX_LU + 0.2 and corrections < 2:
+                    corrections += 1
+                    if below:  # land on the cap between the last pass under it and this one
+                        g0, _, lost0, *_ = max(below, key=lambda t: t[0])
+                        g = g0 + (LIMITER_MAX_LU - lost0) / (lost - lost0) * (g - g0)
+                    else:  # heavily limited: each dB less gain is ~1 LU less limiting
+                        g -= lost - LIMITER_MAX_LU
+                    continue
+                break
+            if len(tried) >= 2 and abs(tried[-1][0] - tried[-2][0]) > 1e-6:
+                slope = (tried[-1][1] - tried[-2][1]) / (tried[-1][0] - tried[-2][0])
+            else:
+                slope = 1.0
+            step = error / float(np.clip(slope, 0.2, 1.5))
+            if error > 0:
+                # don't step past the limiter cap: lost grows ~ (1 - slope) per dB
+                headroom = (LIMITER_MAX_LU - lost) / max(1 - float(np.clip(slope, 0, 0.95)), 0.05)
+                step = min(step, max(headroom, 0.05))
+            g = min(60.0, g + step)
+        usable = [t for t in tried if t[2] <= LIMITER_MAX_LU + 0.2] or [
+            min(tried, key=lambda t: t[2])
+        ]
+        g, out, lost, audio, gained = min(usable, key=lambda t: abs(target - t[1]))
+        too_hot = too_hot or (target - out > LOUDNESS_TOLERANCE_LU and lost >= LIMITER_MAX_LU - 0.5)
+        if report is not None:
+            report.update(
+                target_lufs=target,
+                integrated_lufs=round(float(out), 2),
+                limiter_lu=round(float(lost), 2),
+                limiter_peak_db=round(_peak_reduction_db(gained, audio, sr), 1),
+                passes=len(tried),
+                too_hot=bool(too_hot),
+            )
     # Native limiter's 4x sidechain does not strictly bound reconstruction.
     # Measure after limiting and apply a transparent corrective gain, if needed.
     peak = np.max(np.abs(resample_poly(audio.astype(np.float64), 4, 1, axis=0)))

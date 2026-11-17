@@ -66,6 +66,67 @@ mapping. Independent intervals can still colour sustained material at
 tempo discontinuities; the context/crossfade reduces seams, but listening
 is required to judge musical suitability.
 
+## Seams and the loop wrap (WP13)
+
+Chop and sample clips are rendered with a tail of extra source past their
+end (`fade_ms`, sample clips 5 ms). On a track, a placement that starts on
+the exact frame where another ends is joined by an equal-power crossfade
+that starts at the boundary: the tail fades out (cos), the next placement
+fades in (sin). Raised-cosine fades to/from silence happen only at the
+first start and the last end of a contiguous run. Resample chops are
+resampled with 20 ms of pre-roll and a tail guard, so the input fades that
+avoid circular-FFT ringing fall outside the kept audio; stretch chops add
+one more source segment at the last beat's speed.
+
+Measured with the auditor's seam metric (min 1 ms RMS within ±5 ms of the
+seam vs the local median) on a copy of `skill-check` (`other` stem,
+16-beat chop, 4 bars × 8): arranged seams went from −63/−85/−88 dB to
+−0.8/−1.3/−1.9 dB; 40 random non-seam spots of the same track measure a
+median of −6 dB on this metric (normal envelope variation). A chop looped
+by `render_chop_loop` (candidate previews): −1.4 dB (stretch) / −1.5 dB
+(resample), was −29.7 / −46.9 dB with the old faded slot. Render time is
+unchanged within this laptop's run-to-run noise (demo-e2e, warm cache:
+5.6–6.5 s new vs 4.4–7.5 s old).
+
+A full render is a loop: a clip track whose run reaches the song end and
+starts at bar 1 wraps its last tail onto bar 1, is not faded at the end,
+and its effects are processed 100 ms past the end (input wrapped to bar 1,
+automation holding its last value, sidechain triggers wrapped); that warm
+continuation is crossfaded linearly into the cold start. On skill-check
+(lowpass automated 18 kHz → 600 Hz across the wrap, chorus, sidechain) the
+`sample` stem's wrap prediction-error ratio went from 11.5 (ears
+`loop_seam_click`) to 0.9, and the mix's 1 ms dip at the wrap from −16 dB
+to −4.6 dB (bar 5/9/13 downbeats: −9.9/−5.6/−3.4 dB, the sidechain
+pump). The master chain still starts cold (not warmed); partial ranges
+still end with a 5 ms fade.
+
+## Formant preservation (WP13)
+
+`pitch_semitones` uses Rubber Band; `warp.formants` (optional, chops and warped
+sample clips) chooses formant preservation, **default on for `stem: vocals`
+only**. It only matters when `pitch_semitones != 0` (with no pitch shift the
+output is bit-identical either way). Measured on demo-e2e's separated stems
+(loudest 10 s of each; 1/3-octave envelope 100 Hz–12.7 kHz, RMS deviation
+after removing the mean level; "round trip" = shift +k then −k, which should
+return the original envelope; HF = 6–16 kHz vs 0.1–6 kHz balance):
+
+| stem | +k st | one-way env dev on / off | HF change on / off | round-trip env on / off |
+|---|---|---|---|---|
+| other | +1 / +2 / +4 | 1.2 / 1.4, 1.6 / 2.4, 3.8 / 5.0 dB | −0.2 / +0.9, +0.0 / +2.1, +0.1 / +4.3 | 0.5 / 0.4, 0.7 / 0.4, 1.9 / 0.4 |
+| bass | +1 / +2 / +4 | 2.3 / 2.4, 2.6 / 3.0, 2.8 / 2.8 | −3.0 / −3.0, −1.7 / −1.5, −0.6 / −1.3 | 0.5 / 0.3, 0.7 / 0.4, 0.9 / 0.5 |
+| drums | +1 / +2 / +4 | 0.6 / 1.0, 0.8 / 1.6, 1.9 / 3.4 | +0.1 / +1.3, +0.4 / +2.4, +0.9 / +4.6 | 0.5 / 0.4, 0.5 / 0.3, 1.3 / 0.3 |
+| vocals | +1 / +2 / +4 | 1.5 / 1.5, 2.4 / 2.4, 4.0 / 4.6 | −1.8 / −1.9, −1.3 / −0.7, −0.6 / −0.5 | 0.9 / 0.7, 1.0 / 0.6, 1.3 / 0.6 |
+
+(One-way shifts of −1/−2/−4 st on the 30–40 s excerpt showed the same one-way pattern; the round trip was measured for upward shifts only.)
+Formant mode keeps the long-term envelope (its purpose) but adds its own
+colouring that does not undo: the round trip leaves 0.5–1.9 dB of envelope
+error with it vs 0.3–0.6 dB without, worst on `other` and `drums` at ±4 st.
+Without it, instruments and drums tilt the way a transposed instrument
+naturally does (brighter up, darker down: HF ±4–5 dB at ±4 st). For vocals the
+vowel identity matters more than the small colouring, so they keep it;
+transient contrast (99th-percentile/median 10 ms RMS) moved < 0.7 dB in every
+case. Set `warp.formants: true|false` to override per chop.
+
 ## Effects, automation, and sidechain
 
 Automation is right-continuous at duplicate positions, holds endpoint
@@ -112,8 +173,21 @@ in the contract and is explicit here for mix-level predictability.
 Track inserts precede fader/pan. Muted stems are silent. The pre-master mix
 is the sum of track stems. Master inserts run in listed order, followed by
 master gain, BS.1770 loudness gain toward `target_lufs` (pyloudnorm), then
-a true-peak safety limiter. A limiter may prevent reaching a requested
-LUFS value. Silence stays silent; previews shorter than the meter's 400 ms
+a true-peak safety limiter. **Loudness loop (WP13):** gain → safety limiter →
+BS.1770 measure is iterated (first step = the remaining error, then secant
+steps) until the limited result is within 0.3 LU of `target_lufs`, for at
+most 4 limiter passes, and never past the point where the limiter removes
+3 LU of loudness (loudness of the gained signal minus loudness after the
+limiter). When the target needs more than that, the loop stops at the cap
+and the render result's `hint` says how much the limiter takes off (LU and
+the largest 10 ms peak reduction) and that the target is too hot for the
+material. Measured (warm cache, this laptop): skill-check −1.20 → −0.16 LU
+(3 passes, limiter 2.5 LU / peaks −7.3 dB); demo-e2e −2.47 → −2.25 LU,
+reported too hot (reaching −12 would need the limiter to remove ~9 LU:
++2.5 dB of gain bought only +0.6 LU). Each extra pass costs ≈1 s per 32 s
+of audio (limiter 0.87 s + meter 0.17 s); render times stayed within
+run-to-run noise (skill-check 3.2–4.2 s vs 3.4–3.5 s, demo 5.6–5.7 s vs
+4.4–7.5 s). Silence stays silent; previews shorter than the meter's 400 ms
 block are zero-padded for measurement only.
 
 Pedalboard's `Limiter` was rejected: it automatically adds makeup gain and
@@ -140,9 +214,12 @@ normalization. All outputs end with the required 5 ms raised-cosine fade.
 This uses memory proportional to song length and is intended for loops;
 very long arrangements are not yet streamed.
 
-`render` validates before allocating/recording a version, calls WP5's
-version seams, writes audio and the byte-preserved snapshot/meta, then
-calls ears and writes metrics. An ears stub returns audio plus
+`render` validates (including instrument/plugin availability), renders the
+audio and the byte-preserved snapshot into `renders/.staging/<token>/`,
+then allocates/records the version (WP5 seams), writes meta and publishes
+the folder as `renders/vNNN` in one rename, then calls ears and writes
+metrics (WP13: a failed render leaves no version; `docs/versions.md`,
+"Atomic versions"). An ears stub returns audio plus
 `RenderResult.hint`, with no stale metrics. Optional history/diff stubs also
 produce hints; normal version recording is required. When existing metadata
 is present, re-renders preserve its request/agent. If it has been deleted,

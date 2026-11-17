@@ -9,7 +9,7 @@ import numpy as np
 from ..errors import MuestraError
 from .discovery import resolve_plugin
 from .host import PluginHost
-from .presets import CURATED, CURATED_PARAMS, instrument_root, resolve_preset
+from .presets import CURATED, CURATED_PARAMS, CURATED_TRIM_DB, instrument_root, resolve_preset
 from .sfz import render_sfz
 
 if TYPE_CHECKING:
@@ -103,6 +103,9 @@ def render_instrument(
             audio = host.render(
                 midi_events(notes, sample_rate, n_frames, bpm), sample_rate, n_frames
             )
+    if curated and instrument.preset in (None, CURATED[instrument.plugin][1]):
+        trim = CURATED_TRIM_DB.get(instrument.plugin, 0.0)
+        audio = np.asarray(audio, dtype=np.float32) * np.float32(10 ** (trim / 20))
     if audio.shape != (n_frames, 2) or not np.isfinite(audio).all():
         raise MuestraError.one(
             "plugin_audio",
