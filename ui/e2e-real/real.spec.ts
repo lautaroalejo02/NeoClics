@@ -43,6 +43,8 @@ test("real API: load, play, A/B, mute, comment reaches feedback.jsonl", async ({
   page.on("pageerror", (e) => errors.push(e.message));
   const project = await projectPath(request);
   await page.goto("/");
+  // Playwright's WebKit for Windows has no Web Audio at all: nothing to play there
+  test.skip(!(await page.evaluate(() => typeof AudioContext !== "undefined" || "webkitAudioContext" in window)), "this engine has no Web Audio");
   const latest = (await (await request.get("/project")).json()).versions[0].version as string;
   await expect(page.getByTestId("now-version")).toHaveText(latest);
   // the latest version and its A/B partner are decoded and ready
@@ -107,7 +109,7 @@ test("real API: load, play, A/B, mute, comment reaches feedback.jsonl", async ({
 });
 
 test("real API: a render from the CLI in another process shows up live", async ({ page, request }, info) => {
-  test.skip(info.project.name.startsWith("phone"), "one CLI render is enough");
+  test.skip(info.project.name !== "desktop-chromium" && info.project.name !== "desktop-firefox", "one CLI render per engine family is enough");
   const project = await projectPath(request);
   await page.goto("/");
   const before = ((await (await request.get("/project")).json()).versions as { version: string }[]).map((v) => v.version);

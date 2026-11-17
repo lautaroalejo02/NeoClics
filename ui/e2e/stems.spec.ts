@@ -54,6 +54,8 @@ test(`stem mode never clips and stays level-matched to the mix — ${flavour}`, 
   const errors: string[] = [];
   page.on("pageerror", (e) => errors.push(e.message));
   await page.goto("/");
+  // Playwright's WebKit for Windows has no Web Audio at all: nothing to play there
+  test.skip(!(await page.evaluate(() => typeof AudioContext !== "undefined" || "webkitAudioContext" in window)), "this engine has no Web Audio");
   await expect(page.getByTestId("now-version")).toHaveText("v004");
   await expect.poll(async () => page.evaluate(() => (window as unknown as { __muestra: Diag }).__muestra.engine.getSnapshot().ready), { timeout: 20_000 }).toContain("v004");
   // a fader nudge forces stem mode with every track audible (the hottest case)

@@ -20,9 +20,9 @@ let store: Store | null = null;
 const client = new MuestraClient({
   baseUrl: resolveBaseUrl(),
   token,
-  onAuthError: (status) => {
+  onAuthError: () => {
     forgetToken(); // a stale token must not be re-sent forever
-    store?.authRefused(status);
+    store?.authRefused();
   },
 });
 const engine = new AudioEngine({

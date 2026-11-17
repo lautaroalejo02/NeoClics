@@ -300,7 +300,7 @@ export class Store {
   }
 
   /** The server refused us (401/403): show the "open the link" screen. */
-  authRefused(_status: number): void {
+  authRefused(): void {
     if (this.state.boot !== "unauthorized") this.set({ boot: "unauthorized", bootError: null });
   }
 

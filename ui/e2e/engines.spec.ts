@@ -76,7 +76,7 @@ test("32-bit float WAV: when the browser refuses it, the app's own decoder gives
   const page2 = await ctx2.newPage();
   await page2.addInitScript(() => {
     const orig = BaseAudioContext.prototype.decodeAudioData;
-    BaseAudioContext.prototype.decodeAudioData = function (buf: ArrayBuffer, ...rest: never[]) {
+    BaseAudioContext.prototype.decodeAudioData = function (this: BaseAudioContext, buf: ArrayBuffer, ...rest: never[]) {
       const dv = new DataView(buf);
       const tag = dv.getUint16(20, true);
       const bits = dv.getUint16(34, true);
