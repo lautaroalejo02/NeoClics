@@ -1,0 +1,62 @@
+# Fixture song matching docs/spec.md section 7.3 (adapted to the
+# synthesized fixture audio: source src1 is 120 BPM, downbeats at
+# 0.25 s / 2.25 s / 4.25 s, so chop c1 = beats 0-8 of the source).
+schema_version: 0
+meta:
+  title: fixture-loop
+  bpm: 120
+  key: F#m
+  length_bars: 16
+  seed: 42
+  time_signature: "4/4"
+
+sources:
+  - id: src1
+    file: sources/fake-source.wav
+
+chops:
+  - id: c1
+    source: src1
+    stem: other           # drums | bass | vocals | other | mix
+    start_downbeat: 1     # 1-based index into analysis downbeats_s -> 0.25 s
+    length_beats: 8       # -> ends at beat 8 (the third downbeat, 4.25 s)
+    warp:
+      mode: resample      # vinyl style: pitch rides with tempo
+      pitch_semitones: 1  # extra +1 semitone on top of the resample
+    fade_ms: 5
+
+tracks:
+  - id: sample
+    clips:
+      # 8 beats per instance * repeat 8 = 64 beats = 16 bars exactly
+      - {chop: c1, at_bar: 1, repeat: 8}
+    fx:
+      - {id: hp, type: highpass, cutoff_hz: 150}
+      - {id: lp, type: lowpass, cutoff_hz: 18000}
+      - {id: sc, type: sidechain, key_track: drums, depth: 0.6, release_ms: 120}
+    gain_db: -2
+
+  - id: drums
+    pattern:
+      steps_per_bar: 16
+      lanes:
+        kick:  {sample: "library://kits/disco-01/kick.wav",  steps: "x...x...x...x..."}
+        clap:  {sample: "library://kits/disco-01/clap.wav",  steps: "....x.......x..."}
+        ohat:  {sample: "library://kits/disco-01/ohat.wav",  steps: "..x...x...x...x."}
+      swing: 0.0
+    fx:
+      - {id: comp, type: compressor, threshold_db: -18, ratio: 4}
+
+  - id: bass
+    instrument: {plugin: surge-xt, preset: presets/slap-bass-01.fxp}
+    midi: midi/bass.mid
+    fx: []
+
+automation:
+  - {target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, 800], [5, 18000]]}
+
+master:
+  fx:
+    - {type: compressor, threshold_db: -12, ratio: 2}
+    - {type: limiter, ceiling_db: -1.0}
+  target_lufs: -10

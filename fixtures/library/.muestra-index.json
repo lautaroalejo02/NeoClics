@@ -1,0 +1,8 @@
+{
+  "schema_version": 0,
+  "entries": [
+    {"path": "kits/disco-01/kick.wav", "bpm": null, "key": null, "type": "kick", "tags": ["disco", "one-shot"]},
+    {"path": "kits/disco-01/clap.wav", "bpm": null, "key": null, "type": "clap", "tags": ["disco", "one-shot"]},
+    {"path": "kits/disco-01/ohat.wav", "bpm": null, "key": null, "type": "hat", "tags": ["disco", "one-shot"]}
+  ]
+}

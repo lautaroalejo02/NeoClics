@@ -43,11 +43,11 @@
     }
   ],
   "pick": {
-    "candidate_id": "cand1",
+    "candidate_id": "cs001/cand1",
     "justification": "Longest full loop that starts on a downbeat inside the requested 'intro' section; the riff motif sits at the head."
   },
   "chosen": {
-    "candidate_id": "cand1",
+    "candidate_id": "cs001/cand1",
     "mode": "auto",
     "adjust": {"start_beats": 0.0, "length_beats": 0.0},
     "at": "2026-11-17T20:05:00Z"

@@ -12,7 +12,11 @@ Audio layout (must stay consistent with the fixture analysis.json):
   at t=0.25 s; downbeats on beats 0, 4, 8 (t = 0.25, 2.25, 4.25).
 * cache/stems/src1/*.wav: 1.2 s synthetic stems.
 * cache/previews/src1/cs001/cand1.wav: 1.0 s preview placeholder.
-* renders/v001/mix.wav + stems/sample.wav: 0.6 s placeholders.
+* renders/v001/: range_bars [1, 2) = 1 bar = 2.0 s.
+  mix.wav stereo 24-bit PCM; stems/<track>.wav stereo float32
+  (same frame count); stems/drums.<lane>.wav per-lane float32 stems
+  (kick/clap/ohat). Track stems include the muted-track case: bass is
+  silent here.
 * library/kits/disco-01/{kick,clap,ohat}.wav: one-shots.
 * midi/bass.mid: minimal SMF (generated as bytes, not audio).
 """
@@ -72,10 +76,54 @@ def normalize(x: np.ndarray, peak: float = 0.7) -> np.ndarray:
     return x * (peak / m) if m > 0 else x
 
 
-def write(path: Path, data: np.ndarray) -> None:
+def write(path: Path, data: np.ndarray, subtype: str = "PCM_16") -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    sf.write(path, data.astype(np.float32), SR, subtype="PCM_16")
+    sf.write(path, data.astype(np.float32), SR, subtype=subtype)
     print(f"{path.relative_to(ROOT)}  {len(data) / SR:.2f}s  {path.stat().st_size / 1024:.0f} KB")
+
+
+def stereo(x: np.ndarray) -> np.ndarray:
+    """Mono -> stereo (n, 2)."""
+    return np.column_stack([x, x]).astype(np.float32)
+
+
+def render_version(rng: np.random.Generator) -> None:
+    """renders/v001: 1 bar (bars [1,2) at 120 BPM = 2.0 s) of stereo audio.
+
+    Layout contract: mix.wav stereo 24-bit PCM post-master;
+    stems/<track>.wav stereo float32, same frame count, sample-aligned;
+    drums.<lane>.wav per-lane stems (pre track fx) for the metrics.
+    """
+    d = 2.0  # one bar at 120 BPM
+    vdir = PROJ / "renders" / "v001"
+    kit = make_kit()
+    n = int(d * SR)
+
+    def lane(name: str) -> np.ndarray:
+        one = kit[name]
+        buf = np.zeros(n)
+        step = int(BEAT_S * SR)  # 16th-ish tiling: one hit per beat for fixtures
+        for i in range(0, n - len(one), step):
+            buf[i : i + len(one)] += one
+        return buf * 0.5
+
+    kick, clap, ohat = lane("kick"), lane("clap"), lane("ohat")
+    drums = kick + clap + ohat
+    sample = sine(220.0, d) * 0.4 * env(d, 0.01, 0.05)
+    bass = np.zeros(n)  # instrument track: silent in the fixture render
+    mix = normalize(sample + drums * 0.6 + bass)
+
+    write(vdir / "mix.wav", stereo(mix), subtype="PCM_24")
+    stems = vdir / "stems"
+    write(stems / "sample.wav", stereo(sample), subtype="FLOAT")
+    write(stems / "drums.wav", stereo(drums), subtype="FLOAT")
+    write(stems / "bass.wav", stereo(bass), subtype="FLOAT")
+    write(stems / "drums.kick.wav", stereo(kick), subtype="FLOAT")
+    write(stems / "drums.clap.wav", stereo(clap), subtype="FLOAT")
+    write(stems / "drums.ohat.wav", stereo(ohat), subtype="FLOAT")
+    song_copy = vdir / "song.yaml"
+    song_copy.write_text((PROJ / "song.yaml").read_text(encoding="utf-8"), encoding="utf-8")
+    print(f"{song_copy.relative_to(ROOT)}  byte copy of song.yaml")
 
 
 def make_source(rng: np.random.Generator) -> np.ndarray:
@@ -157,14 +205,7 @@ def main() -> None:
             PROJ / "cache" / "previews" / "src1" / "cs001" / f"cand{i}.wav",
             normalize(sine(freq, 1.0) * 0.4 * env(1.0, 0.01, 0.05)),
         )
-    write(
-        PROJ / "renders" / "v001" / "mix.wav",
-        normalize(sine(330.0, 0.6) * 0.4 * env(0.6, 0.01, 0.05)),
-    )
-    write(
-        PROJ / "renders" / "v001" / "stems" / "sample.wav",
-        normalize(sine(220.0, 0.6) * 0.4 * env(0.6, 0.01, 0.05)),
-    )
+    render_version(rng)
     for name, data in make_kit().items():
         write(LIB / "kits" / "disco-01" / f"{name}.wav", normalize(data, 0.8))
     mid_path = PROJ / "midi" / "bass.mid"

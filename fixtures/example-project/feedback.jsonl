@@ -1,4 +1,4 @@
 {"ts":"2026-11-17T20:12:10Z","version":"v001","type":"rating","value":"like"}
 {"ts":"2026-11-17T20:12:40Z","version":"v001","type":"comment","at_s":12.0,"track":"drums","text":"aca el bombo se come al sample"}
 {"ts":"2026-11-17T20:13:00Z","type":"ab_choice","a":"v001","b":"v002","winner":"v001"}
-{"ts":"2026-11-17T20:14:00Z","version":"v001","type":"chop_choice","set_id":"cs001","candidate_id":"cand1"}
+{"ts":"2026-11-17T20:14:00Z","version":"v001","type":"chop_choice","candidate_id":"cs001/cand1"}

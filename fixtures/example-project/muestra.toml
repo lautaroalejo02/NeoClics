@@ -1,7 +1,13 @@
 schema_version = 0
-sample_rate = 48000
+sample_rate = 22050
 export_bit_depth = 24
-library = ["../library"]
+
+[library]
+roots = ["../library"]
+
+[plugins]
+search_dirs = []
+surge-xt = {windows = "C:/VST3/Surge XT.vst3", macos = "/Library/Audio/Plug-Ins/VST3/Surge XT.vst3"}
 
 [separation]
 backend = "audio-separator"

@@ -1,0 +1,11 @@
+schema_version: 0
+meta:
+  title: dup
+  bpm: 120
+  key: Am
+  length_bars: 4
+meta:
+  title: dup2
+  bpm: 130
+  key: Am
+  length_bars: 4
