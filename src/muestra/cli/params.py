@@ -65,8 +65,9 @@ def _flag_name(field_name: str) -> str:
 def add_tool_arguments(parser: argparse.ArgumentParser, spec: ToolSpec) -> None:
     """Add one option per params-model field (minus ``project``)."""
     for fname, finfo in spec.params.model_fields.items():
-        if fname in _RESERVED:
+        if fname == "project":
             continue
+        dest = f"param__{fname}"
         opt = _flag_name(fname)
         help_text = finfo.description or ""
         base, _optional = _unwrap_optional(finfo.annotation)
@@ -74,14 +75,14 @@ def add_tool_arguments(parser: argparse.ArgumentParser, spec: ToolSpec) -> None:
             group = parser.add_mutually_exclusive_group()
             group.add_argument(
                 opt,
-                dest=fname,
+                dest=dest,
                 action="store_true",
                 default=None,
                 help=help_text,
             )
             group.add_argument(
                 "--no-" + opt[2:],
-                dest=fname,
+                dest=dest,
                 action="store_false",
                 default=None,
                 help=f"Negate {opt}.",
@@ -89,26 +90,24 @@ def add_tool_arguments(parser: argparse.ArgumentParser, spec: ToolSpec) -> None:
         elif _is_literal(base):
             parser.add_argument(
                 opt,
-                dest=fname,
-                choices=[str(a) for a in get_args(base)],
+                dest=dest,
+                choices=[a if isinstance(a, str) else json.dumps(a) for a in get_args(base)],
                 default=None,
                 metavar="VALUE",
                 help=help_text,
             )
         elif base is int:
-            parser.add_argument(
-                opt, dest=fname, type=int, default=None, metavar="N", help=help_text
-            )
+            parser.add_argument(opt, dest=dest, type=int, default=None, metavar="N", help=help_text)
         elif base is float:
             parser.add_argument(
-                opt, dest=fname, type=float, default=None, metavar="F", help=help_text
+                opt, dest=dest, type=float, default=None, metavar="F", help=help_text
             )
         elif _is_str(base):
-            parser.add_argument(opt, dest=fname, default=None, metavar="VALUE", help=help_text)
+            parser.add_argument(opt, dest=dest, default=None, metavar="VALUE", help=help_text)
         else:
             parser.add_argument(
                 opt,
-                dest=fname,
+                dest=dest,
                 default=None,
                 metavar="JSON",
                 help=(help_text + " " if help_text else "")
@@ -124,9 +123,9 @@ def collect_params(spec: ToolSpec, ns: argparse.Namespace) -> dict[str, Any]:
     """
     params: dict[str, Any] = {}
     for fname in spec.params.model_fields:
-        if fname in _RESERVED:
+        if fname == "project":
             continue
-        value = getattr(ns, fname, None)
+        value = getattr(ns, f"param__{fname}", None)
         if value is None:
             continue
         base, _optional = _unwrap_optional(spec.params.model_fields[fname].annotation)

@@ -8,7 +8,7 @@ import math
 import os
 import threading
 from collections.abc import Callable
-from contextlib import nullcontext
+from contextlib import nullcontext, suppress
 from functools import lru_cache
 from pathlib import Path
 from typing import Any
@@ -23,6 +23,17 @@ LOG_FILE = "cache/logs/muestra.log"
 Progress = Callable[[float, str | None], None]
 
 
+def absolute_path(value: str | Path) -> Path:
+    try:
+        return Path(value).expanduser().resolve()
+    except (OSError, ValueError) as exc:
+        raise MuestraError.one(
+            "invalid_path",
+            "The project path is not a valid filesystem path.",
+            hint="Use an absolute directory path without null characters.",
+        ) from exc
+
+
 def find_project_dir(start: str | Path | None = None) -> Path | None:
     cur = Path(start or Path.cwd()).expanduser().resolve()
     if cur.is_file():
@@ -32,7 +43,7 @@ def find_project_dir(start: str | Path | None = None) -> Path | None:
 
 def resolve_project(explicit: str | Path | None = None) -> Path | None:
     selected = explicit or os.environ.get("MUESTRA_PROJECT")
-    return Path(selected).expanduser().resolve() if selected else find_project_dir()
+    return absolute_path(selected) if selected else find_project_dir()
 
 
 @lru_cache(maxsize=32)
@@ -173,7 +184,7 @@ class Runtime:
             if spec.name == "project.open":
                 supplied = params.get("path", str(self.project))
                 params["path"] = supplied
-            if isinstance(supplied, str) and Path(supplied).expanduser().resolve() != self.project:
+            if isinstance(supplied, str) and absolute_path(supplied) != self.project:
                 raise MuestraError.one(
                     "project_locked",
                     "This HTTP process is bound to another project.",
@@ -182,6 +193,25 @@ class Runtime:
         if "project" in spec.params.model_fields and "project" not in params and self.project:
             params["project"] = str(self.project)
         return params
+
+    def call_with_project(self, spec: ToolSpec, params=None, *, progress=None):
+        """Return the envelope and its project under one selection lock.
+
+        MCP requests may overlap: another project.open must not relabel a completed result.
+        The project travels as transport metadata, keeping the ToolResult contract unchanged.
+        """
+        with self._lock:
+            result = self.call(spec, params, progress=progress)
+            acted_on = self.project
+            explicit = (params or {}).get("project")
+            if spec.name == "project.open":
+                explicit = (params or {}).get("path")
+            if isinstance(explicit, str):
+                with suppress(MuestraError):
+                    acted_on = absolute_path(explicit)
+            if result.ok and spec.name in ("project.open", "project.create"):
+                acted_on = Path(result.data["project_path"])
+            return result, acted_on
 
     def call(
         self,
@@ -194,6 +224,13 @@ class Runtime:
             try:
                 prepared = self.prepare(spec, params or {})
                 spec.params.model_validate(prepared)
+                root = (
+                    absolute_path(prepared["project"]) if prepared.get("project") else self.project
+                )
+                if spec.name == "project.open" and prepared.get("path"):
+                    root = absolute_path(prepared["path"])
+                if spec.name == "project.create" and prepared.get("name"):
+                    root = absolute_path(prepared.get("dir", ".")) / prepared["name"]
             except MuestraError as exc:
                 return ToolResult(tool=spec.name, ok=False, errors=exc.issues, hint=exc.hint)
             except ValidationError as exc:
@@ -203,15 +240,6 @@ class Runtime:
                     errors=issues_from_validation_error(exc),
                     hint="Fix the listed parameters and retry.",
                 )
-            root = (
-                Path(prepared["project"]).expanduser().resolve()
-                if prepared.get("project")
-                else self.project
-            )
-            if spec.name == "project.open" and prepared.get("path"):
-                root = Path(prepared["path"]).expanduser().resolve()
-            if spec.name == "project.create" and prepared.get("name"):
-                root = Path(prepared.get("dir", ".")).expanduser().resolve() / prepared["name"]
             # All transports cooperate on the same OS-backed lock, including readers.
             lock = nullcontext()
             if (

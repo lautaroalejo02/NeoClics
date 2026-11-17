@@ -8,6 +8,7 @@ import sys
 from pathlib import Path
 
 from ..api.core import REGISTRY, Runtime, failure, resolve_project
+from ..errors import MuestraError, ToolResult
 from .params import ParamsJsonError, add_tool_arguments, collect_params, read_params_json
 
 
@@ -150,8 +151,8 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args, extras = parser.parse_known_args(argv)
     force_json = getattr(args, "json", False)
-    project = resolve_project(getattr(args, "project", None))
     try:
+        project = resolve_project(getattr(args, "project", None))
         if getattr(args, "spec", None):
             spec = args.spec
             params = read_params_json(args.params_json) if args.params_json else {}
@@ -160,7 +161,7 @@ def main(argv: list[str] | None = None) -> int:
             runtime = Runtime(project)
             result = runtime.call(spec, params)
             emit(result.model_dump(mode="json"), force_json)
-            return 0 if result.ok else 1
+            return 0 if result.ok and (result.data or {}).get("valid", True) is not False else 1
         if extras:
             raise ParamsJsonError(f"Unknown arguments: {' '.join(extras)}")
         if args.command == "tools":
@@ -198,6 +199,14 @@ def main(argv: list[str] | None = None) -> int:
 
             serve(project, host=args.host, port=args.port, open_browser=args.open_browser)
         return 0
+    except MuestraError as exc:
+        emit(
+            ToolResult(tool=args.command, ok=False, errors=exc.issues, hint=exc.hint).model_dump(
+                mode="json"
+            ),
+            force_json,
+        )
+        return 2
     except (ParamsJsonError, ValueError, OSError, ImportError) as exc:
         emit(
             failure(

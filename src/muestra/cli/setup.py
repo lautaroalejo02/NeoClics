@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import json
+import os
+import shlex
 import shutil
 import subprocess
 from pathlib import Path
@@ -27,7 +29,7 @@ def agent_setup(repo: Path, project: Path | None, write: Path | None = None) -> 
     )
     result = {
         "claude_mcp_json": claude,
-        "claude_command": subprocess.list2cmdline(
+        "claude_command": (subprocess.list2cmdline if os.name == "nt" else shlex.join)(
             [
                 "claude",
                 "mcp",

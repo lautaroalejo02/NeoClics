@@ -63,12 +63,14 @@ def create_app(
         await asyncio.to_thread(watcher.initialize)
         watching = asyncio.create_task(watcher.run())
         worker = asyncio.create_task(jobs.worker())
-        yield
-        watching.cancel()
-        with suppress(asyncio.CancelledError):
-            await watching
-        await jobs.close()
-        await worker
+        try:
+            yield
+        finally:
+            watching.cancel()
+            with suppress(asyncio.CancelledError):
+                await watching
+            await jobs.close()
+            await worker
 
     app = FastAPI(
         title="Muestra",

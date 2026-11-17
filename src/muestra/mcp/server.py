@@ -89,14 +89,11 @@ def create_server(project: str | Path | None = None) -> Server:
                         ctx.session.report_progress, normalized_progress(value), 1.0, message
                     )
 
-                result = await anyio.to_thread.run_sync(
-                    lambda: runtime.call(spec, arguments, progress=progress)
+                result, acted_on = await anyio.to_thread.run_sync(
+                    lambda: runtime.call_with_project(spec, arguments, progress=progress)
                 )
                 if result.ok and spec.name in ("project.create", "project.open"):
-                    acted_on = runtime.project
                     feedback_cursor = 0
-                elif isinstance(arguments.get("project"), str):
-                    acted_on = Path(arguments["project"]).expanduser().resolve()
         return types.CallToolResult(
             content=[types.TextContent(type="text", text=compact_result(result, acted_on))],
             structured_content=result.model_dump(mode="json"),

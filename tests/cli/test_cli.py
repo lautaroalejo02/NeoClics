@@ -76,6 +76,11 @@ def test_cli_project_workflow_flags_stdin_and_errors(tmp_path):
     assert json.loads(stub.stdout)["errors"][0]["code"] == "not_implemented"
     bad = cli("feedback", "append", "--project", root, "--params-json", "[]")
     assert bad.returncode != 0 and not json.loads(bad.stdout)["ok"]
+    with (root / "song.yaml").open("a", encoding="utf-8") as file:
+        file.write("\nunknown_field: true\n")
+    invalid_song = cli("song", "validate", "--project", root)
+    assert invalid_song.returncode == 1
+    assert not json.loads(invalid_song.stdout)["data"]["valid"]
 
 
 def test_cli_fake_tools_are_generated_and_crashes_are_private(tmp_project):

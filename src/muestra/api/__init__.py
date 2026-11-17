@@ -1,1 +1,1 @@
-"""Stub package - implemented by a later work package (see docs/spec.md section 12)."""
+"""Local HTTP API, watched events and shared registry adapters."""

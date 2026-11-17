@@ -1,1 +1,1 @@
-"""Stub package - implemented by a later work package (see docs/spec.md section 12)."""
+"""Registry-generated CLI and local agent setup helpers."""

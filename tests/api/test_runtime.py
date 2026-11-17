@@ -21,6 +21,18 @@ def test_resolution_precedence(tmp_project, tmp_path, monkeypatch):
     assert resolve_project(tmp_project.root) == tmp_project.root
 
 
+def test_explicit_project_result_context_and_invalid_paths(tmp_project, tmp_path):
+    runtime = Runtime(tmp_path)
+    result, acted_on = runtime.call_with_project(
+        REGISTRY["song.get"], {"project": str(tmp_project.root)}
+    )
+    assert result.ok and acted_on == tmp_project.root
+    assert runtime.project == tmp_path
+    invalid, acted_on = runtime.call_with_project(REGISTRY["song.get"], {"project": "bad\x00path"})
+    assert not invalid.ok and invalid.errors[0].code == "invalid_path"
+    assert acted_on == tmp_path
+
+
 def test_concurrent_process_feedback_writers_and_reader(tmp_project):
     # Large Unicode lines exceed normal pipe/buffer sizes. An agent reads while several
     # independent surfaces append; no event is truncated and cursors never lose a line.
