@@ -28,10 +28,12 @@ Que el humano tenga la UI abierta: `muestra serve --project <p> --open` en otra 
 
 ## El ciclo
 
-import → separate → analyze → find_chops (auto, explicando; respetá la elección manual) →
-armar `song.yaml` → `song.validate` → `render` → leer ears → **corregir lo obvio y
-re-renderizar antes de mostrar** → decirle al humano qué cambió y qué escuchar → leer su
-feedback → cambiar pocas cosas → repetir. Detalle y tiempos: [workflow.md](workflow.md).
+import → separate → analyze → **confirmar la grilla** (si `grid.ask_human`, el humano
+escucha `source.preview_grid`; se corrige con `source.regrid`) → find_chops (auto,
+explicando; respetá la elección manual) → armar `song.yaml` → `song.validate` → `render` →
+leer ears → **corregir lo obvio y re-renderizar antes de mostrar** → decirle al humano qué
+cambió y qué escuchar → leer su feedback → cambiar pocas cosas → repetir. Detalle y tiempos:
+[workflow.md](workflow.md).
 
 ## Reglas duras
 
@@ -42,6 +44,9 @@ feedback → cambiar pocas cosas → repetir. Detalle y tiempos: [workflow.md](w
   `sources/` ni `feedback.jsonl`. Validá siempre antes de renderizar.
 - Con `warp.mode: resample` el tempo cambia el tono: calculá `meta.bpm` antes de elegir el
   bajo ([recipes/future-funk.md](recipes/future-funk.md#tempo-y-tono)).
+- Una grilla mal leída (doble/mitad de tempo, el uno corrido) se arregla en la fuente con
+  `source.regrid`, nunca duplicando `meta.bpm` ni con patterns de 8 pasos.
+- Líneas que se repiten (bajo, acordes) van como `phrases`, no como 64 `notes`.
 - Pocos cambios por versión (1 a 3, del mismo tema) para que el A/B signifique algo.
 - `request` = lo que dijo el humano, literal. `summary` = qué cambió en castellano de
   productor, no nombres de campos.

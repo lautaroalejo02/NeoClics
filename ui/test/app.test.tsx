@@ -177,6 +177,35 @@ describe("App against the mock", () => {
     expect(await screen.findByText(/elegido: cand2 \(vos\)/)).toBeTruthy();
   });
 
+  it("chops: 'escuchar la grilla' shows the corrected grid and plays its click previews", async () => {
+    const fs = await import("node:fs");
+    const path = await import("node:path");
+    const project = path.join(mock.dir, "project");
+    const apath = path.join(project, "cache", "analysis", "src1.json");
+    const analysis = JSON.parse(fs.readFileSync(apath, "utf8"));
+    analysis.grid = {
+      origin: "auto", tempo_factor: 0.5, beat_phase: 0, downbeat_shift_beats: 0, beats_per_bar: 4,
+      tempo_range_bpm: [70, 160], raw: { bpm_global: 250, beats_s: analysis.beats_s, downbeats_s: analysis.downbeats_s },
+      tempo_confidence: 0.7, bar_phase_confidence: 0.5, ask_human: true,
+      reason: "El tracker leyó 250 BPM (contó corcheas); se tomó un beat de cada dos: 125 BPM.", alternatives: [],
+    };
+    fs.writeFileSync(apath, JSON.stringify(analysis));
+    const gdir = path.join(project, "cache", "previews", "src1", "grid");
+    fs.mkdirSync(gdir, { recursive: true });
+    const preview = { path: "cache/previews/src1/grid/mix-abc.wav", label: "grilla actual", applied: true, tempo_factor: 0.5, beat_phase: 0, downbeat_shift_beats: 0, beats_per_bar: 4, bpm: 125, start_downbeat: 1, start_s: 0, end_s: 8, bars: 4 };
+    const alt = { ...preview, path: "cache/previews/src1/grid/mix-def.wav", label: "el uno dos tiempos más tarde", applied: false, downbeat_shift_beats: 2 };
+    fs.writeFileSync(path.join(gdir, "index.json"), JSON.stringify({ source_id: "src1", created_at: "2026-11-17T00:00:00Z", bpm: 125, raw_bpm: 250, previews: [preview, alt] }));
+    const { engine, user } = await boot();
+    await user.click(screen.getByTestId("tab-chops"));
+    const panel = await screen.findByTestId("grid-src1");
+    expect(panel.textContent).toContain("el detector leyó 250");
+    expect(panel.textContent).toContain("confirmala de oído");
+    const buttons = within(panel).getAllByTestId("grid-preview");
+    expect(buttons.map((b) => b.textContent?.trim())).toEqual(["Actual", "el uno dos tiempos más tarde"]);
+    await user.click(buttons[1]);
+    expect(engine.calls).toContainEqual(["playPreview", `grid:src1:${alt.path}`]);
+  });
+
   it("oídos: alarms in Spanish, clickable to jump", async () => {
     const { engine, user } = await boot();
     await user.keyboard("2"); // v002 has positioned alarms

@@ -54,6 +54,7 @@ const WS_TYPES: ReadonlySet<string> = new Set<WsEventType>([
   "candidates.created",
   "feedback.appended",
   "song.changed",
+  "grid.changed",
 ]);
 
 /** Resolve the API base URL: `?api=` query param, then VITE_MUESTRA_API,
@@ -331,5 +332,6 @@ export function summaryFromProjectView(view: ProjectView): ProjectSummary {
     metas,
     metrics,
     analyses: view.analyses ?? {},
+    gridPreviews: view.grid_previews ?? {},
   };
 }

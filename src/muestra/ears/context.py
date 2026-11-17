@@ -135,9 +135,7 @@ class Timeline:
         raw: list[tuple[float, int, float, float]] = []  # beat0, pitch, len_beats, vel
         inline = self.song.track_notes(track)  # notes + looped phrases (WP12)
         if inline is not None:
-            raw = [
-                (n.beat - 1.0, int(n.pitch), n.length_beats, n.velocity / 127.0) for n in inline
-            ]
+            raw = [(n.beat - 1.0, int(n.pitch), n.length_beats, n.velocity / 127.0) for n in inline]
         elif track.midi is not None:
             raw = read_midi_notes(self._resolve(track.midi))
         until = track.until_bar or self.song.meta.length_bars + 1

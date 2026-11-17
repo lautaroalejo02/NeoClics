@@ -1041,9 +1041,7 @@ class _Describer:
             x, y = la.get(lane), lb.get(lane)
             if x is None:
                 pos = _rhythm_name(_hit_positions(y["steps"], spp_b)[0], spp_b)
-                out.append(
-                    f"Agregué {_lane_in(lane, np)} ({pos}, sample {_base(y['sample'])})"
-                )
+                out.append(f"Agregué {_lane_in(lane, np)} ({pos}, sample {_base(y['sample'])})")
             elif y is None:
                 out.append(f"Saqué {_lane_in(lane, np)}")
             elif not same(x, y):
@@ -1069,14 +1067,10 @@ class _Describer:
             d = _f(y.get("gain_db")) - _f(x.get("gain_db"))
             out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_in(lane, np)} {_n(abs(d))} dB")
         if not same(x.get("pan"), y.get("pan")):
-            out.append(
-                f"Paneé {_lane_in(lane, np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})"
-            )
+            out.append(f"Paneé {_lane_in(lane, np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})")
         for k in sorted((set(x) | set(y)) - {"steps", "sample", "gain_db", "pan"}):
             if not same(x.get(k), y.get(k)):
-                out.append(
-                    f"Cambié {k} de {_lane_in(lane, np)} de {_n(x.get(k))} a {_n(y.get(k))}"
-                )
+                out.append(f"Cambié {k} de {_lane_in(lane, np)} de {_n(x.get(k))} a {_n(y.get(k))}")
         return out
 
     def _instrument(self, np: str, a: dict, b: dict) -> list[str]:

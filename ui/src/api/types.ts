@@ -273,6 +273,55 @@ export interface Analysis {
   loudness_lufs: number;
   stems: Partial<Record<"drums" | "bass" | "vocals" | "other", string>>;
   separation_model: string;
+  /** WP12: how the effective grid derives from the tracker (absent = as tracked). */
+  grid?: GridCorrection | null;
+}
+
+export interface GridAlternative {
+  tempo_factor: number;
+  beat_phase: number;
+  downbeat_shift_beats: number;
+  bpm: number;
+  label: string;
+}
+
+export interface GridCorrection {
+  origin: "tracker" | "auto" | "manual";
+  tempo_factor: number;
+  beat_phase: number;
+  downbeat_shift_beats: number;
+  beats_per_bar: number;
+  tempo_range_bpm: [number, number];
+  raw: { bpm_global: number; tempo_variable?: boolean; beats_s?: number[]; downbeats_s?: number[] };
+  tempo_confidence: number;
+  bar_phase_confidence: number;
+  ask_human: boolean;
+  reason: string;
+  alternatives: GridAlternative[];
+}
+
+/** cache/previews/<src>/grid/index.json, written by source.preview_grid. */
+export interface GridPreview {
+  path: string;
+  label: string;
+  applied: boolean;
+  tempo_factor: number;
+  beat_phase: number;
+  downbeat_shift_beats: number;
+  beats_per_bar: number;
+  bpm: number;
+  start_downbeat: number;
+  start_s: number;
+  end_s: number;
+  bars: number;
+}
+
+export interface GridPreviewIndex {
+  source_id: string;
+  created_at: string;
+  bpm: number;
+  raw_bpm: number;
+  previews: GridPreview[];
 }
 
 // ---------- project.open / song.get ----------
@@ -303,6 +352,7 @@ export interface ProjectView {
   versions: { version: VersionId; meta: RenderMeta; metrics: Metrics | null; feedback?: unknown }[];
   candidate_sets?: ChopCandidateSet[];
   analyses?: Record<string, Analysis>;
+  grid_previews?: Record<string, GridPreviewIndex>;
   feedback_cursor?: number;
   issues?: unknown[];
 }
@@ -317,6 +367,7 @@ export interface ProjectSummary {
   metas?: Record<VersionId, RenderMeta>;
   metrics?: Record<VersionId, Metrics | null>;
   analyses?: Record<string, Analysis>;
+  gridPreviews?: Record<string, GridPreviewIndex>;
 }
 
 /** GET /waveform?path=&points=N (server shape). */
@@ -352,7 +403,8 @@ export type WsEventType =
   | "version.created"
   | "candidates.created"
   | "feedback.appended"
-  | "song.changed";
+  | "song.changed"
+  | "grid.changed";
 
 export interface WsEvent {
   type: WsEventType;

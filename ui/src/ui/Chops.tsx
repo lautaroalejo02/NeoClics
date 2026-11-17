@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import type { Analysis, ChopAdjust, ChopCandidate, ChopCandidateSet } from "../api/types";
+import type { Analysis, ChopAdjust, ChopCandidate, ChopCandidateSet, GridPreview } from "../api/types";
 import { computePeaks } from "../audio/signal";
 import { decodeWav } from "../audio/wav";
 import { globalCandidateId } from "../feedback/events";
@@ -37,15 +37,19 @@ export function ChopsPanel() {
   const [openSet, setOpenSet] = useState<string | null>(null);
   if (sets.length === 0) {
     return (
-      <div className="empty-small" data-testid="chops-empty">
-        Todavía no hay candidatos de chop. Cuando le pidas al agente algo como <em>«armame un loop con el riff del inicio»</em>, busca cortes alineados a los
-        downbeats, renderiza previews y los vas a ver acá para elegir otro si el suyo no te convence.
+      <div>
+        <GridPanel />
+        <div className="empty-small" data-testid="chops-empty">
+          Todavía no hay candidatos de chop. Cuando le pidas al agente algo como <em>«armame un loop con el riff del inicio»</em>, busca cortes alineados a los
+          downbeats, renderiza previews y los vas a ver acá para elegir otro si el suyo no te convence.
+        </div>
       </div>
     );
   }
   const current = openSet ?? sets[0].set_id;
   return (
     <div data-testid="chops">
+      <GridPanel />
       {sets.length > 1 && (
         <div className="chips" role="tablist" aria-label="Sets de candidatos" style={{ marginBottom: 10 }}>
           {sets.map((s) => (
@@ -61,6 +65,78 @@ export function ChopsPanel() {
           <CandidateSet key={s.set_id} set={s} />
         ))}
     </div>
+  );
+}
+
+/** "Escuchar la grilla": the source's beat grid as clicks over the record
+ *  (source.preview_grid), so the human can say if the "one" and the tempo are right. */
+export function GridPanel() {
+  const analyses = useApp((s) => s.analyses);
+  const previews = useApp((s) => s.gridPreviews);
+  const ids = [...new Set([...Object.keys(analyses), ...Object.keys(previews)])].sort();
+  const shown = ids.filter((id) => analyses[id]?.grid || previews[id]?.previews?.length);
+  if (shown.length === 0) return null;
+  return (
+    <div data-testid="grid-panel" style={{ marginBottom: 14 }}>
+      {shown.map((id) => (
+        <SourceGrid key={id} sourceId={id} />
+      ))}
+    </div>
+  );
+}
+
+function SourceGrid({ sourceId }: { sourceId: string }) {
+  const analysis = useApp((s) => s.analyses[sourceId]);
+  const index = useApp((s) => s.gridPreviews[sourceId]);
+  const grid = analysis?.grid ?? null;
+  const bpm = analysis?.bpm_global ?? index?.bpm;
+  const raw = grid?.raw?.bpm_global ?? index?.raw_bpm;
+  const corrected = !!grid && (grid.tempo_factor !== 1 || grid.downbeat_shift_beats !== 0);
+  return (
+    <div className="justif" data-testid={`grid-${sourceId}`}>
+      <span aria-hidden="true" style={{ color: grid?.ask_human ? "var(--warn)" : "var(--info)" }}>
+        <I.Info />
+      </span>
+      <div style={{ flex: 1 }}>
+        <div>
+          <strong>Grilla de {sourceId}</strong>
+          {bpm ? ` · ${Math.round(bpm * 10) / 10} BPM` : ""}
+          {corrected && raw ? ` (el detector leyó ${Math.round(raw * 10) / 10})` : ""}
+          {grid?.ask_human && (
+            <span className="tag a" style={{ marginLeft: 8 }}>
+              confirmala de oído
+            </span>
+          )}
+        </div>
+        {grid?.reason && <div className="hint">{grid.reason}</div>}
+        {index?.previews?.length ? (
+          <div className="fb-compose-row" style={{ flexWrap: "wrap", gap: 6, marginTop: 6 }}>
+            <span className="hint">Escuchar la grilla (click suave en cada negra, agudo en el uno):</span>
+            {index.previews.map((p) => (
+              <GridPreviewButton key={p.path} sourceId={sourceId} preview={p} />
+            ))}
+          </div>
+        ) : (
+          <div className="hint">Pedile al agente «haceme escuchar la grilla» para oír los clicks sobre el disco.</div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function GridPreviewButton({ sourceId, preview }: { sourceId: string; preview: GridPreview }) {
+  const store = useStore();
+  const eng = useEngine();
+  const key = `grid:${sourceId}:${preview.path}`;
+  const playing = eng.preview === key;
+  const toggle = () => {
+    if (playing) store.engine.stopPreview();
+    else void store.engine.playPreview(key, preview.path);
+  };
+  return (
+    <button type="button" className="btn small" onClick={toggle} aria-pressed={playing} title={`${preview.bpm} BPM · ${formatClock(preview.start_s)}–${formatClock(preview.end_s)}`} data-testid="grid-preview">
+      {playing ? <I.Stop size={13} /> : <I.Play size={14} />} {preview.applied ? "Actual" : preview.label}
+    </button>
   );
 }
 

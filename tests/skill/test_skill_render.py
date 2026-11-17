@@ -10,6 +10,7 @@ produce no ``error``-severity alarm (warnings are documented in the skill).
 
 from __future__ import annotations
 
+import json
 import os
 from pathlib import Path
 
@@ -67,8 +68,9 @@ def test_example_renders(project, path):
             {"project": str(project), "request": f"test {path.stem}", "agent": "pytest"},
         )
     )
-    metrics = data["metrics"]
-    assert metrics is not None, data.get("hint")
+    # render returns only metrics_summary (WP11); the full report is metrics.json
+    assert data["metrics_path"], data.get("hint")
+    metrics = json.loads((project / data["metrics_path"]).read_text(encoding="utf-8"))
     print(f"\n{path.name}: {data['meta']['render_time_s']:.1f} s\n{metrics['summary']}")
     errors = [a for a in metrics["alarms"] if a["severity"] == "error"]
     assert not errors, errors

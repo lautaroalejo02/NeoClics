@@ -36,10 +36,16 @@ texto el plan del loop.
 
 `source.analyze(source_id)` (≈ 15 s para 30 s de audio) → `cache/analysis/<src>.json` con
 `bpm_global`, `tempo_variable`, `beats_s`, `downbeats_s`, `key {tonic, mode, confidence}`,
-`sections`, `loudness_lufs`. Leé:
+`sections`, `loudness_lufs`. La respuesta trae un resumen (sin las listas de beats) y
+`grid`: qué leyó el tracker (`raw_bpm`), qué se aplicó (`bpm`, `tempo_factor`), confianza y
+`alternatives`. Leé:
 
-- `bpm_global` fuera de ~90-160 → probablemente doble o mitad de tempo (ver
-  [troubleshooting.md](troubleshooting.md#el-tracker-midio-doble-tempo)).
+- `grid.corrected` / `grid.reason`: el tracker suele contar corcheas en discos viejos (Tiger
+  Rag: 250); `source.analyze` elige la octava que cae en 70-160 BPM (`min_bpm`/`max_bpm` lo
+  cambian) y guarda la lectura cruda. **Nunca dupliques el tempo del proyecto para
+  compensar**: si la grilla está mal, se corrige la grilla (`source.regrid`).
+- `grid.ask_human: true` → antes de armar el tema, que el humano escuche la grilla
+  ([recipes/future-funk.md](recipes/future-funk.md#la-grilla-de-la-fuente-antes-que-nada)).
 - `key.confidence` < 0.4 → la tonalidad es una suposición; la confirmás después con ears.
 - `sections`: etiquetas `intro`, `section_02`... (por novedad, no "verso/estribillo").
 - Si el análisis falla por compás (4/4 no consistente), no lo fuerces: decile al humano.

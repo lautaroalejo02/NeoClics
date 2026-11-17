@@ -48,6 +48,9 @@ chops:
 - `pitch_semitones` (-24..24, decimales ok): corrimiento extra que **no** cambia la duración.
 - `local_bpm = 60·length_beats/(end_s-start_s)` depende del largo: dos chops del mismo lugar
   con distinto largo pueden tener distinto `local_bpm` (y distinto tono en resample).
+- `start_downbeat` y `length_beats` cuentan en la grilla **corregida** del análisis (la de
+  `source.analyze`/`source.regrid`). Si un chop de 8 beats dura la mitad de lo esperado, la
+  grilla está al doble: se arregla con `source.regrid`, que además reescribe estos campos.
 
 Stutter (re-disparar un pedacito):
 
@@ -134,26 +137,66 @@ Patrones útiles (16 pasos): four-on-the-floor `x...x...x...x...`; clap 2 y 4
 Para que un lane suene en otra ventana que el resto, ponelo en otro track (ej. `kick` solo
 desde el compás 1 y `drums` desde el 5): el sidechain puede apuntar a ese track.
 
-## Instrumentos y bajo con notas inline
+## Instrumentos: frases que se repiten (lo normal)
+
+Una línea de bajo de 2 compases que suena 12 compases se escribe una vez, como frase:
+
+```yaml fragment
+phrases:
+- id: bajo                     # el nombre que usan los tracks
+  length_bars: 2               # se repite cada 2 compases
+  notes:                       # beat 1 = primer tiempo DE LA FRASE
+  - {beat: 1.5, pitch: A1, length_beats: 0.4, velocity: 100}   # "y" del 1
+  - {beat: 2.5, pitch: A1, length_beats: 0.4, velocity: 92}
+  - {beat: 3.5, pitch: A2, length_beats: 0.4, velocity: 100}
+  - {beat: 4.5, pitch: A1, length_beats: 0.4, velocity: 92}
+  - {beat: 5.5, pitch: C2, length_beats: 0.4, velocity: 100}   # compás 2 de la frase
+  - {beat: 7.5, pitch: E2, length_beats: 0.9, velocity: 96}
+- id: remate
+  length_bars: 1
+  notes:
+  - {beat: 1.5, pitch: A1, length_beats: 0.4}
+  - {beat: 3, pitch: G2, length_beats: 0.25}
+  - {beat: 3.5, pitch: E2, length_beats: 0.25}
+  - {beat: 4, pitch: C2, length_beats: 0.25}
+tracks:
+- id: bass
+  at_bar: 5
+  instrument: {plugin: finger-bass}     # alias: finger-bass, slap-bass, synth-bass, rhodes, brass-stab, pad
+  phrases:
+  - {phrase: bajo, repeat: 4}                                       # compases 5-12
+  - {phrase: bajo, at_bar: 13, repeat: 1, transpose_semitones: 5}   # 13-14, una cuarta arriba
+  - {phrase: remate, at_bar: 15}                                    # sin repeat: 15 y 16 (hasta el final)
+  gain_db: 6
+```
+
+- `phrases[].notes[].beat` cuenta **dentro de la frase** (1 = su primer tiempo; tiene que ser
+  < `length_bars`·4 + 1). `pitch` número MIDI o nombre (`C4` = 60). Bajo eléctrico: E1-G3.
+- En el track: `phrase` (id), `at_bar` (default: el `at_bar` del track), `repeat` (pasadas;
+  **sin `repeat` se repite hasta el `until_bar` del track o el final**, la última cortada) y
+  `transpose_semitones` (-24..24). Una pasada que se pasa de la ventana es error.
+- Variar: otra frase en otro compás (fill, remate), una frase transpuesta para seguir un
+  cambio de acorde, o `notes` sueltas en el mismo track encima de las frases.
+- `versions.diff` lo cuenta así: "El bajo ahora repite la frase bajo de 2 compases desde el
+  compás 5"; cambiar una nota de la frase es un cambio, no 6.
+
+## Instrumentos: notas sueltas y MIDI
 
 ```yaml fragment
 tracks:
 - id: bass
   at_bar: 5
-  instrument: {plugin: finger-bass}     # alias: finger-bass, slap-bass, synth-bass, rhodes, brass-stab, pad
+  instrument: {plugin: finger-bass}
   notes:
   - {beat: 17.5, pitch: A1, length_beats: 0.4, velocity: 100}   # compás 5, "y" del 1
   - {beat: 18.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 19.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 20.5, pitch: A1, length_beats: 0.4, velocity: 92}
   gain_db: 6
 ```
 
-- `beat` es absoluto desde el inicio del tema (compás 5 = beat 17). `pitch` número MIDI o
-  nombre (`C4` = 60). Bajo eléctrico: E1-G3.
-- Las notas **no se repiten solas**: escribilas todas (generalas con un loop y pegalas) o
-  usá `midi: midi/bass.mid` (ticks = beats del proyecto; ignora tempo del archivo). Exactamente
-  uno de `notes` o `midi`.
+- En `notes`, `beat` es absoluto desde el inicio del tema (compás 5 = beat 17) y **no se
+  repite**: sirve para algo que pasa una vez. Para loops, `phrases`.
+- `midi: midi/bass.mid` (ticks = beats del proyecto; ignora tempo del archivo) va solo: no
+  se combina con `notes` ni `phrases`.
 - La ventana `at_bar`/`until_bar` silencia notas fuera de ella (no las mueve).
 - Preset de Surge directo: `instrument: {plugin: surge-xt, preset: "Basses/FM Slap", params:
   {global_volume: -12}}`. `plugins.list` lista todo (es enorme: evitalo si alcanzan los alias).

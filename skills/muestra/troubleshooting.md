@@ -19,14 +19,29 @@
 
 ## Análisis
 
-### El tracker midió doble tempo
+### La grilla está mal (doble/mitad de tempo, el uno corrido)
 
-`bpm_global` 200-260 en un tema que se siente a 100-130 (pasa con 2/4 rápidos y discos
-de los 20-30): cada beat es una corchea. Usá doble grilla
-([recipes/future-funk.md](recipes/future-funk.md#fuente-a-doble-tempo)). Al revés
-(`bpm_global` 60-75 en algo bailable): el tracker contó blancas. Mismo truco invertido:
-`meta.bpm` a la mitad y `steps_per_bar: 32` (32 caracteres = 1 compás musical). Avisale al
-humano que la grilla es rara.
+Es una propiedad del análisis, no de cada chop: se corrige **una vez** en la fuente y todo lo
+demás (chops, warp, previews, ears) la sigue. `source.analyze` ya elige la octava que cae en
+70-160 BPM (Tiger Rag: el tracker lee 250, queda en 125) y dice en `grid.reason` qué hizo.
+Si igual está mal:
+
+- "va al doble" / "los clicks corren": `source.regrid tempo_factor=0.5`; "va a la mitad":
+  `tempo_factor=2` (o `1` si ya estaba en 0.5). Los parámetros son **absolutos** respecto
+  del tracker: repetir la llamada no cambia nada; `reset=true` vuelve a la lectura cruda.
+- "el uno está corrido" / "el click agudo cae en el 3": `downbeat_shift_beats` (+1 = un
+  tiempo más tarde). Con `tempo_factor: 0.5` el uno es una apuesta 50/50: la alternativa
+  `downbeat_shift_beats: 2` viene en `grid.alternatives`.
+- "los clicks caen entre los golpes": `beat_phase` (la otra mitad de los beats).
+- Antes de aplicar, se puede escuchar sin cambiar nada: `source.preview_grid` con los mismos
+  parámetros (o `alternatives=true`).
+- `regrid` reescribe los chops de `song.yaml` de esa fuente para que corten **el mismo audio**
+  y lo informa chop por chop (`chops[].note`); los sets de candidatos viejos se archivan
+  (corré `source.find_chops` de nuevo). Si cambió el tempo, `suggested_bpm` dice qué
+  `meta.bpm` mantiene la velocidad; mejor rehacer el tema en la grilla nueva.
+
+**Nunca** dupliques `meta.bpm` ni uses `steps_per_bar: 8` + `bars: 2` para compensar una
+grilla mal leída: la grilla del proyecto tiene que ser la musical.
 
 - **El análisis falla por compás** (menos de 75 % de compases de 4 beats): 3/4, swing
   fuerte, intro sin pulso. El análisis es del archivo entero: avisá y proponé otro tema, o
@@ -56,7 +71,8 @@ humano que la grilla es rara.
 - **Render OK pero `metrics` es null**: leé `data.hint`; `ears.analyze(version)` lo reintenta.
 - **No llega al volumen objetivo**: [ears.md](ears.md#loudness_off_target).
 - **Las notas del bajo no suenan en una parte**: la ventana `at_bar`/`until_bar` del track
-  las silencia; o las notas no están escritas ahí (no se repiten solas).
+  las silencia; las `notes` sueltas no se repiten solas (para eso, `phrases`); una frase con
+  `repeat` termina después de esas pasadas.
 
 ## Métricas que se contradicen
 

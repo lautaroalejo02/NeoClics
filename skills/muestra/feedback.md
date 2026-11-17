@@ -10,11 +10,14 @@
 
 ## Ubicar un comentario
 
-`beat = at_s · bpm / 60` (desde 0); compás del proyecto = `floor(beat / 4) + 1`, tiempo =
-`beat mod 4 + 1`. En doble grilla, compás musical = `(compás + 1) / 2`. Ejemplo: 12 s a
-252.64 → beat 50.5 → compás 13, tiempo 3.5 → compás musical 7. Mirá qué suena ahí (ventanas
-`at_bar`, automatizaciones) y las alarmas con ese `bar`. Para escuchar-medir solo esa zona:
-`render(range_bars=[13, 17])` o `preview(target="track:sample", bars=4)`.
+`beat = at_s · bpm / 60` (desde 0); compás = `floor(beat / 4) + 1`, tiempo =
+`beat mod 4 + 1`. Ejemplo: 12 s a 126.32 → beat 25.3 → compás 7, tiempo 2.3. Mirá qué suena
+ahí (ventanas `at_bar`, automatizaciones) y las alarmas con ese `bar`. Para escuchar-medir
+solo esa zona: `render(range_bars=[7, 9])` o `preview(target="track:sample", bars=4)`.
+
+Si el comentario es sobre la grilla de la fuente ("el uno está corrido", "eso va al doble",
+"los clicks no caen en los golpes"), no es un cambio del tema: es `source.regrid`
+([troubleshooting.md](troubleshooting.md#la-grilla-está-mal-doblemitad-de-tempo-el-uno-corrido)).
 
 ## Principios
 
