@@ -1062,6 +1062,7 @@ class RestoreOutcome:
     changed: bool  # working files differed from the version
     files: list[str]  # project-relative files written/removed
     warnings: list[str]
+    undo_paths: list[str] = field(default_factory=lambda: [SONG_FILE])
 
 
 def _write_atomic(path: Path, data: bytes) -> None:
@@ -1155,6 +1156,9 @@ def restore_files(project: Project, version: str) -> RestoreOutcome:
     body = (
         f"muestra: restore {version}\n\nMuestra-Restored-From: {version}\nMuestra-Agent: muestra\n"
     )
+    undo_paths = [SONG_FILE]
+    if pre_restore and _git_out(root, "ls-tree", "--name-only", pre_restore, "--", "midi"):
+        undo_paths.append("midi")  # 'git restore' rejects pathspecs that match nothing
     restore_sha, _ = _commit_versioned(root, body, allow_empty=True, ref=repo.branch, ident=ident)
     assert restore_sha is not None
     return RestoreOutcome(
@@ -1167,4 +1171,5 @@ def restore_files(project: Project, version: str) -> RestoreOutcome:
         changed=changed,
         files=written,
         warnings=warnings,
+        undo_paths=undo_paths,
     )

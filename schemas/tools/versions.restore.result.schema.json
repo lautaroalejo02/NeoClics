@@ -1,6 +1,12 @@
 {
   "additionalProperties": false,
   "properties": {
+    "changed": {
+      "default": true,
+      "description": "False when song.yaml/midi already matched that version.",
+      "title": "Changed",
+      "type": "boolean"
+    },
     "files": {
       "items": {
         "type": "string"
@@ -8,17 +14,97 @@
       "title": "Files",
       "type": "array"
     },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What happened and how to undo / continue.",
+      "title": "Hint"
+    },
+    "previous_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "HEAD before the restore: your history is untouched.",
+      "title": "Previous Commit"
+    },
+    "restore_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Restore Commit"
+    },
     "restored_from": {
-      "description": "Render version id like 'v001'.",
+      "description": "The version whose content was restored.",
       "pattern": "^v\\d{3,}$",
       "title": "Restored From",
       "type": "string"
     },
+    "snapshot_commit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Commit holding your uncommitted song.yaml/midi edits, if there were any.",
+      "title": "Snapshot Commit"
+    },
+    "snapshot_source": {
+      "default": "renders",
+      "enum": [
+        "renders",
+        "git"
+      ],
+      "title": "Snapshot Source",
+      "type": "string"
+    },
+    "undo": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Command that undoes this restore.",
+      "title": "Undo"
+    },
     "version": {
-      "description": "Render version id like 'v001'.",
+      "description": "The version now in the working copy.",
       "pattern": "^v\\d{3,}$",
       "title": "Version",
       "type": "string"
+    },
+    "warnings": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Warnings",
+      "type": "array"
     }
   },
   "required": [

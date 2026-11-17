@@ -38,6 +38,14 @@
       "title": "B",
       "type": "string"
     },
+    "changes": {
+      "description": "The musical diff as separate Spanish sentences (one bullet each).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Changes",
+      "type": "array"
+    },
     "diff": {
       "description": "Changed fields; ID-based song.yaml paths (chops.c1.warp.pitch_semitones, tracks.drums.pattern.lanes.kick.steps, tracks.<id>.clips[<i>], fx[<i>] for id-less fx).",
       "items": {
@@ -53,6 +61,20 @@
       "title": "Files",
       "type": "array"
     },
+    "identical": {
+      "default": false,
+      "description": "True when the two songs have no structural difference.",
+      "title": "Identical",
+      "type": "boolean"
+    },
+    "metrics_delta": {
+      "description": "Spanish phrases on how the metrics moved; empty unless both versions have a metrics.json.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Metrics Delta",
+      "type": "array"
+    },
     "musical_summary": {
       "anyOf": [
         {
@@ -63,7 +85,7 @@
         }
       ],
       "default": null,
-      "description": "Human-readable musical diff (WP5).",
+      "description": "Human-readable musical diff in Spanish (WP5).",
       "title": "Musical Summary"
     }
   },
