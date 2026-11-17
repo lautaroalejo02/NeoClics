@@ -778,6 +778,15 @@ export class PadsStore {
     this.rec = null;
     this.metro?.stop();
     r.take.status = "done";
+    if (!r.take.events.length) {
+      // nothing played: do not leave an empty take behind
+      writeLS(LS_INFLIGHT, null);
+      if (r.take.id) await this.app.client.tool("pads_take_delete", { take_id: r.take.id }).catch(() => undefined);
+      await this.reloadTakes().catch(() => undefined);
+      this.set({ rec: this.recState() });
+      this.app.toast("No tocaste nada: no guardé la toma.", "info", undefined, 2000);
+      return null;
+    }
     if (!r.take.loop_beats) {
       const last = r.take.events.reduce((m, e) => Math.max(m, e.beat + (e.length_beats ?? 0)), 0);
       r.take.length_beats = Math.max(4, Math.ceil((last + 0.01) / BEATS_PER_BAR) * BEATS_PER_BAR);
@@ -1051,6 +1060,11 @@ export class PadsStore {
     else stored[this.state.latency.device] = ms;
     writeLS(LS_CALIB, stored);
     this.refreshLatency();
+  }
+
+  /** ctx times of the metronome/count-in clicks scheduled so far (tests). */
+  get metronomeClicks(): number[] {
+    return this.metro?.clicks ?? [];
   }
 
   /** Recording in progress (tests). */

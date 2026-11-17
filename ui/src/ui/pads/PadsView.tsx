@@ -272,6 +272,7 @@ function PadFields({ pad }: { pad: PadJson }) {
   const pads = usePadsStore();
   const editor = useEditorStore();
   const [browse, setBrowse] = useState(false);
+  const [ask, setAsk] = useState("");
   const set = (patch: Partial<PadJson>) => pads.setPad(pad.key, patch);
   const audition = (uri: string) => void editor.soundBuffer({ sample: uri }).then((b) => b && editor.engine.playOneShot(b));
   const sound = pad.note ? `notas ${pad.note.pitches.join(", ")} de ${pad.note.track}` : laneSoundLabel({ sample: pad.sample, slice: pad.slice });
@@ -318,6 +319,14 @@ function PadFields({ pad }: { pad: PadJson }) {
             ))}
           </select>
         </label>
+      </div>
+      <div className="insp-row wrap">
+        <input value={ask} onChange={(e) => setAsk(e.target.value)} placeholder="Pedile al agente algo sobre este pad" aria-label="Pedido al agente sobre el pad" className="take-ask" />
+        <button type="button" className="btn small" disabled={!ask.trim()} onClick={async () => {
+          if (await editor.askAbout(ask, { label: `pad ${pad.name}`, pad: { bank: pads.bank().id, key: pad.key, name: pad.name } })) setAsk("");
+        }}>
+          Pedile al agente
+        </button>
       </div>
     </div>
   );

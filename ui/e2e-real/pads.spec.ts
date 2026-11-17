@@ -262,7 +262,20 @@ test("pads: assign a kit, record a rhythm over the loop, commit it, render it; s
     const slicePresses = await page.evaluate((n) => (window as unknown as { __muestra: M }).__muestra.pads.presses.slice(n), n0);
     expect(slicePresses.map((p) => p.code)).toEqual(["KeyC", "KeyZ"]);
 
+    // ------------------------------------------------ from stopped: count-in with an accented metronome
+    await page.evaluate(() => { const mu = (window as unknown as { __muestra: M }).__muestra; if (mu.engine.isPlaying()) mu.engine.pause(); mu.pads.setCountIn(1); });
+    const clicks0 = await page.evaluate(() => (window as unknown as { __muestra: { pads: { metronomeClicks: number[] } } }).__muestra.pads.metronomeClicks.length);
+    await page.keyboard.press("Enter");
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __muestra: M }).__muestra.pads.state.rec.phase)).toBe("countin");
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __muestra: M }).__muestra.pads.state.rec.phase), { timeout: 10_000 }).toBe("recording");
+    const countIn = await page.evaluate((n) => (window as unknown as { __muestra: { pads: { metronomeClicks: number[] } } }).__muestra.pads.metronomeClicks.slice(n), clicks0);
+    expect(countIn.length).toBeGreaterThanOrEqual(4); // one bar of count-in (+ transport clicks)
+    for (let i = 1; i < 4; i++) expect(countIn[i] - countIn[i - 1]).toBeCloseTo(SPB, 3);
+    await page.keyboard.press("Enter"); // stop: nothing played, no take is left behind
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __muestra: M }).__muestra.pads.state.rec.phase)).toBe("idle");
+
     // ------------------------------------------------ reload mid-take: nothing lost
+    await page.evaluate(() => (window as unknown as { __muestra: M }).__muestra.editor.togglePlay());
     await page.keyboard.press("Enter");
     await expect.poll(() => page.evaluate(() => (window as unknown as { __muestra: M }).__muestra.pads.state.rec.phase)).not.toBe("idle");
     await expect.poll(() => page.evaluate(() => !!(window as unknown as { __muestra: M }).__muestra.engine.editorClock())).toBe(true);
