@@ -1,5 +1,14 @@
 # Ears: objective audio metrics (WP6)
 
+WP15: summaries list skipped checks and reasons. Instrument sidechain analysis
+reports the lack of a dry instrument reference rather than asking for a chop
+stem. `tonal.detune[].confidence` and optional alarm `confidence` expose the
+signal strength (heuristic); weak/predicted detune is informational, explicitly
+asks for listening confirmation, and has no automatic pitch fix. Possibly
+intentional fourth/fifth key readings also omit their destructive fix. Drafts
+support opt-in ears through `render(draft=true, analyze=true)` or
+`ears.analyze(version=<draft_id>)`, using the draft's own song/audio snapshot.
+
 The coding agent that edits `song.yaml` cannot hear. After every render,
 `muestra.ears` measures the audio and tells it, in terms it can act on,
 what is probably wrong. Metrics are **alarms, not ears** (spec 10): a

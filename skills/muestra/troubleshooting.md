@@ -14,7 +14,8 @@
   absoluta. Por CLI siempre `--project`.
 - **`repo_locked` / `repo_busy` / `detached_head`**: git del proyecto en un estado raro
   (otro proceso, rebase a medias). No borres `.git/index.lock` si hay un render corriendo.
-- **Separación lenta**: normal en CPU (~9 min un tema de 4 min). No la repitas: es caché.
+- **Separación lenta**: normal en CPU (4–6,5 min por tema de 3–4 min en las sesiones recientes).
+  Analizá primero el mix (~20–30 s). No repitas separación: es caché.
   `.muestra-ingest.lock` colgado después de un crash: borralo solo si no corre nada.
 
 ## Análisis
@@ -43,9 +44,10 @@ Si igual está mal:
 **Nunca** dupliques `meta.bpm` ni uses `steps_per_bar: 8` + `bars: 2` para compensar una
 grilla mal leída: la grilla del proyecto tiene que ser la musical.
 
-- **El análisis falla por compás** (menos de 75 % de compases de 4 beats): 3/4, swing
-  fuerte, intro sin pulso. El análisis es del archivo entero: avisá y proponé otro tema, o
-  que el humano recorte en WAV la parte que quiere y la importás como fuente nueva.
+- **Compás dudoso / intro libre**: el análisis ya no falla por eso. Leé `reliability.regions`;
+  `source.find_chops(window_s=[inicio,fin])` propone solo regiones fiables por defecto.
+  Para explorar otra, `allow_unreliable=true` y `source.preview_grid(window_s=[inicio,fin])`
+  con el humano. No recortes/reimportes para verificar: cambia el contexto del tracker.
 - **`tempo_variable: true`**: normal en discos sin click. Por eso cada chop tiene su
   `local_bpm`. Chops largos pueden derivar: `grid_drift` → `stretch` o chop más corto.
 - **Una sola sección**: el tema es corto o parejo. Pasá `section: null` y elegí por tiempo
@@ -65,10 +67,11 @@ grilla mal leída: la grilla del proyecto tiene que ser la musical.
 ## Render
 
 - **Tarda más de 15 s**: primera vez decodifica y warpea (después hay caché); instrumentos
-  Surge arrancan un proceso (~4 s). `range_bars` para probar una parte.
+  Surge arrancan un proceso (~4 s). `render(draft=true, range_bars=[1,5])` para probar una parte.
 - **`plugin_crashed` / `plugin_timeout`**: probá con `plugins.scan names=[...]`; usá un alias
   SFZ (`finger-bass`, `rhodes`) que no carga plugin nativo.
-- **Render OK pero `metrics` es null**: leé `data.hint`; `ears.analyze(version)` lo reintenta.
+- **Render OK pero `metrics_summary` es null**: en borradores, pedí `analyze=true` o
+  `ears.analyze(version=<draft_id>)`. En versiones leé `data.hint`; `ears.analyze(version)` reintenta.
 - **No llega al volumen objetivo**: [ears.md](ears.md#loudness_off_target).
 - **Las notas del bajo no suenan en una parte**: la ventana `at_bar`/`until_bar` del track
   las silencia; las `notes` sueltas no se repiten solas (para eso, `phrases`); una frase con

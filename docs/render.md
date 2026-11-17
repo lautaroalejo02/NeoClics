@@ -1,5 +1,14 @@
 # Audio renderer (WP2)
 
+WP15: `render(draft=true, range_bars?, analyze?)` publishes a disposable
+`renders/d-<12 hex>/` with the same renderer and snapshot, without a version,
+commit or tag. Ears defaults off for drafts and on for saved versions;
+`analyze=true` opts in immediately, or `ears.analyze(version=<draft_id>)`
+measures it later. Both drafts and ordinary previews are listed in `/project`
+for the listening UI. Render result puts `metrics_summary` first and metadata
+last. Full-song mastering is preserved for partial renders: a quiet intro
+excerpt need not itself measure the full-song target LUFS.
+
 Install with `uv sync --extra render`. The public seams are
 `muestra.render.core.render_chop` and `render_song`; the registered tools
 are `render` and `preview`. No model calls, sound generators, or substitute

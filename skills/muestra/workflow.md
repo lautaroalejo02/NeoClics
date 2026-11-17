@@ -24,18 +24,9 @@ elección manda (ver paso 4).
 `source.import(path=<ruta absoluta>)` copia el audio a `sources/` y lo agrega a `song.yaml`
 como `src1`, `src2`... Instantáneo. Mismo contenido dos veces = mismo id.
 
-## 2. Separar (lento)
+## 2. Analizar primero (barato, sin separar)
 
-`source.separate(source_id)`: HTDemucs en CPU. 30 s de audio ≈ 1 min; un tema de 4 min
-≈ 9 min la primera vez; después es caché (< 0.1 s). **Antes de llamarla, avisale al humano**:
-"Separo los stems; tarda unos minutos, te aviso". Mientras corre no lances otra separación ni
-renders del mismo proyecto. Podés, en paralelo y sin tocar el proyecto: leer la librería
-(`library.kits`, `library.search`), mirar los alias de instrumentos (abajo) y proponer en
-texto el plan del loop.
-
-## 3. Analizar
-
-`source.analyze(source_id)` (≈ 15 s para 30 s de audio) → `cache/analysis/<src>.json` con
+`source.analyze(source_id)` sobre el mix (≈20–30 s en estas sesiones) → `cache/analysis/<src>.json` con
 `bpm_global`, `tempo_variable`, `beats_s`, `downbeats_s`, `key {tonic, mode, confidence}`,
 `sections`, `loudness_lufs`. La respuesta trae un resumen (sin las listas de beats) y
 `grid`: qué leyó el tracker (`raw_bpm`), qué se aplicó (`bpm`, `tempo_factor`), confianza y
@@ -49,12 +40,32 @@ texto el plan del loop.
   ([recipes/future-funk.md](recipes/future-funk.md#la-grilla-de-la-fuente-antes-que-nada)).
 - `key.confidence` < 0.4 → la tonalidad es una suposición; la confirmás después con ears.
 - `sections`: etiquetas `intro`, `section_02`... (por novedad, no "verso/estribillo").
-- Si el análisis falla por compás (4/4 no consistente), no lo fuerces: decile al humano.
+- `analysis.reliability`: confianza global, `regions` fiables/dudosas y `hint`.
+  En el archivo también está el mapa por compás. Un compás irregular no falla el análisis.
+  Sin pulsos detectados, BPM y `grid` son null: no se inventan beats. Silencio/audio
+  ilegible sí fallan. `source.preview_grid(window_s=[40,58])` usa la grilla completa;
+  si no se detectó pulso entrega audio sin clicks y lo dice.
+
+## 3. Separar (lento, después del análisis del mix)
+
+`source.separate(source_id)`: HTDemucs en CPU. Las sesiones recientes midieron
+4–6,5 min para temas de 3–4 min; después es caché (< 0.1 s). El benchmark
+anterior de 9 min fue con carga y audio repetido; no es la estimación actual.
+Analizá el mix primero; al separar, los stems se adjuntan sin mover la grilla.
+**Antes de llamarla, avisale al humano**:
+"Separo los stems; tarda unos minutos, te aviso". Mientras corre no lances otra separación ni
+renders del mismo proyecto. Podés, en paralelo y sin tocar el proyecto: leer la librería
+(`library.kits`, `library.search`), mirar los alias de instrumentos (abajo) y proponer en
+texto el plan del loop.
 
 ## 4. Chops (modo dual)
 
 1. Fijá antes `meta.bpm` aproximado: los previews se renderizan al tempo del proyecto.
-2. `source.find_chops(source_id, section?, stem?, length_beats?, n=3)`. Sin `length_beats`
+2. `source.find_chops(source_id, at_s="0:15", length_beats=8)` resuelve "el riff del 0:15"
+   en una llamada; `window_s=[10,30]` limita una zona. Usa siempre la grilla del archivo
+   completo; no reanalices extractos importados. Por defecto solo propone regiones fiables,
+   incluso con `at_s`; `allow_unreliable=true` permite explorar otras con confirmación.
+   `source.find_chops(source_id, section?, stem?, length_beats?, n=3)`. Sin `length_beats`
    compara 1/2/4/8 compases. Para future funk empezá con `stem: other` (sin batería ni bajo
    del disco) y `length_beats` de 2 o 4 compases (8 o 16 beats de la fuente).
 3. Devuelve candidatos `csNNN/candN` (start_downbeat, local_bpm, score con razones en
@@ -82,20 +93,26 @@ Alias de instrumento listos (`plugins.list` los da, y presets de Surge por categ
 
 ## 6. Renderizar
 
-`render(request=..., summary=..., agent=<tu nombre>)`. 16 compases ≈ 4-10 s. Crea `vNNN`
+Primero probá `render(draft=true, range_bars=[1,5], analyze=true)`: aparece en
+"Borradores y previews", sin versión, commit ni tag. `analyze` es opcional (false por
+defecto en borradores); después `ears.analyze(version=<draft_id>)` mide el snapshot.
+Cuando esté listo: `render(request=..., summary=..., agent=<tu nombre>)`. 16 compases ≈ 4-10 s. Crea `vNNN`
 (commit + tag), `mix.wav`, stems, `meta.json`, `metrics.json`; la respuesta trae
 `data.metrics_summary` (leé eso primero; el detalle está en `metrics.json`, vía
-`versions.get detail=true`). `range_bars: [1, 5]` renderiza solo los compases 1-4. `version: v003` re-renderiza esa versión sin
+`versions.get detail=true`). `range_bars: [1, 5]` renderiza solo los compases 1-4;
+agregá `draft=true` para que esa prueba no cree historia. `version: v003` re-renderiza esa versión sin
 crear otra. `preview(target="track:bass", bars=4)` escucha una parte sin crear versión
-(pero sin métricas).
+(aparece en la UI, sin métricas).
 
 ## 7. Leer ears y corregir antes de mostrar
 
 Leé `metrics.summary` y [ears.md](ears.md). Corregí antes de mostrar todo lo que es un
 defecto técnico claro: `clipping`, `click`/`loop_seam_click`, `low_end_collision`,
 `sidechain_missing`, `grid_offset`/`grid_drift`/`clip_offset`, `sample_detuned` **medido**,
-`bass_sample_clash`, `track_silent`/`track_inaudible`, `lane_offset`. Re-renderizá (es
-barato) y mostrá esa versión; decile "v001 fue un borrador técnico, escuchá v002".
+`bass_sample_clash`, `track_silent`/`track_inaudible`, `lane_offset`. Usá borradores para
+las correcciones técnicas y guardá la versión cuando estén listas. No corrijas un
+indicio tonal `info` con confianza baja automáticamente: necesita confirmación de oído.
+Leé también los checks omitidos y sus motivos, que ahora aparecen en el resumen.
 Dejá para el humano lo que es gusto o donde la métrica es dudosa (avisos `spectral_*`,
 `sample_detuned` previsto, `key_mismatch` con confianza baja): mencionalos como pregunta.
 

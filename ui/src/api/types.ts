@@ -298,6 +298,7 @@ export interface Analysis {
   separation_model: string;
   /** WP12: how the effective grid derives from the tracker (absent = as tracked). */
   grid?: GridCorrection | null;
+  reliability?: { confidence: number; hint: string; regions: { start_s: number; end_s: number; reliable: boolean; reason: string }[] } | null;
 }
 
 export interface GridAlternative {
@@ -332,7 +333,7 @@ export interface GridPreview {
   beat_phase: number;
   downbeat_shift_beats: number;
   beats_per_bar: number;
-  bpm: number;
+  bpm: number | null;
   start_downbeat: number;
   start_s: number;
   end_s: number;
@@ -342,8 +343,8 @@ export interface GridPreview {
 export interface GridPreviewIndex {
   source_id: string;
   created_at: string;
-  bpm: number;
-  raw_bpm: number;
+  bpm: number | null;
+  raw_bpm: number | null;
   previews: GridPreview[];
 }
 

@@ -67,16 +67,18 @@ Spanish. Alarms with `at_s` are drawn on the waveform and are clickable.
 
 ---
 
-# WP14 additions (UI audit fixes) — assumptions for the integrator
+# WP14/WP15 additions — reconciled with the backend
 
-Everything below lives in `ui/src/api/client.ts` (+ `api/token.ts`) and is
-**defensive**: the UI works unchanged against today's server, and picks the
-new behaviour up as soon as the backend sends it. Nothing here needs a UI
-change when the backend lands, unless a shape differs from what is written.
+The transport mapping lives in `ui/src/api/client.ts` (+ `api/token.ts`).
+WP15 implements the fields/events below and verifies token links, longer
+manual choices and CLI draft playback against the real server. Optional
+readers remain tolerant of older servers.
 
 ## 1. `chops.choose` (finding 2)
 
-Backend plan: the human's choice is always recorded and the call succeeds.
+Backend: a valid manual candidate is recorded before validation. The call
+can still fail for a stale candidate, invalid adjustment or audio overrun;
+the UI confirms that the choice was recorded even in those cases.
 The UI reads, **all optional** (`ChopsChooseResult` in `types.ts`):
 
 | field | meaning | UI |
@@ -106,13 +108,13 @@ Uses `versions.list` (already real, WP5) in addition to `GET /project`:
 "Sin audio: pedile al agente que la regenere (render de vNNN)" and a copy
 button. If `versions.list` fails the UI behaves as before.
 
-## 3. Drafts and previews (finding 4) — PROPOSED shape
+## 3. Drafts and previews (finding 4) — real WP15 shape
 
 Optional fields of `GET /project` (and `/project/summary`):
 
 ```jsonc
-"drafts":   [ { "id": "d001",                       // stable key (upsert)
-                "path": "renders/_drafts/d001.wav",  // under renders/ or cache/previews/ (served by /files)
+"drafts":   [ { "id": "d-0123456789ab",             // stable key (upsert)
+                "path": "renders/d-0123456789ab/mix.wav", // served by /files
                 "created_at": "2026-11-17T10:00:00Z",
                 "label": "Probando el bajo",         // free text
                 "range_bars": [5, 9],                // [start, end) 1-indexed, if partial
@@ -145,9 +147,9 @@ A/B. The area is hidden when the server exposes nothing.
   (loopback keeps working as before). The static UI (`/`, assets) should be
   servable without the token, otherwise the page itself cannot load to read it
   from the URL.
-* Assumed: the token is accepted from the header **or** the query on
-  WebSocket; if the backend wants it as a cookie, the browser sends that
-  automatically (same origin).
+* Verified: both headers, query and cookie are accepted; WebSocket uses
+  query/cookie. `/` and `/assets/*` load without auth. LAN API/audio stay
+  authenticated and remote writes stay restricted to feedback/choice.
 
 ## 5. Alarm codes (finding 5)
 

@@ -7,6 +7,11 @@ Es un punto de partida: el gusto de Lautaro manda ([styles.md](../styles.md)).
 
 ## La grilla de la fuente (antes que nada)
 
+Analizá primero el mix, sin separar. `reliability.regions` permite elegir una
+zona estable aun si el disco tiene intro libre o compases irregulares. Usá
+`source.preview_grid(window_s=[inicio,fin])` para confirmarla con el humano;
+recién después separá si hacen falta stems. La grilla se conserva.
+
 Todo se cuelga de la grilla del análisis: dónde empieza cada chop, su `local_bpm`, el warp,
 los previews y ears. En discos viejos (tocados sin click, 2/4 rápidos, transfers de 78 rpm) el
 tracker suele contar **corcheas** (doble tempo), a veces **blancas** (mitad), o pone **el uno
@@ -254,5 +259,8 @@ antes, lo hago con stretch (pierde un poco del color de vinilo)".
 | [tiger-rag-yungbae.yaml](../examples/tiger-rag-yungbae.yaml) | Yung Bae: swing 0.2, bajo con notas de paso, chorus, break filtrado, más partes | v022, 5.2 s | -13.2 LUFS; falta sub |
 | [tiger-rag-nighttempo.yaml](../examples/tiger-rag-nighttempo.yaml) | Night Tempo: frase de 4 compases del disco entero (`mix`), `stretch`, sidechain 0.25 | v023, 8.4 s | -12.1 LUFS; oscuro arriba (es el disco de 1928), falta sub |
 
-Los tres: sin clicks, sin choques, sin problemas de grilla. Qué cambia en cada perfil y por
+Esos números son históricos (anteriores a WP15): el indicio tonal débil de Macross
+ahora es `info`, sin corrección automática, y el resumen muestra las comprobaciones
+omitidas. La validación final WP15 de los cinco YAML se registra en `docs/wp15-report.md`.
+Qué cambia en cada perfil y por
 qué: [styles.md](../styles.md).

@@ -127,8 +127,9 @@ the cache keys include modification time and file size. Peaks are audio amplitud
   `http://<LAN-IP>:<port>/?token=<token>`. Clients **not on this computer**:
   - must present the token: `?token=` on any request (the response then sets an
     HttpOnly, SameSite=Strict cookie `muestra_token`, so the UI's own requests, audio and
-    websocket work unchanged), or the `X-Muestra-Token` header, or that cookie. Without
-    it: `401` (`unauthorized` envelope; a short Spanish page for browser navigation);
+    websocket work unchanged), or `Authorization: Bearer`, `X-Muestra-Token`, or that cookie. Without
+    it: API/audio return `401` (`unauthorized`); the public UI shell shows its
+    friendly Spanish screen asking for the complete link;
     the `/events` websocket closes with 1008;
   - may only call **read-only tools plus `feedback.append` and `chops.choose`** (what the
     listening UI writes), `GET /project`, `/files`, `/waveform`, `GET /jobs/<id>` and the UI.
@@ -147,9 +148,12 @@ the cache keys include modification time and file size. Peaks are audio amplitud
   are rejected; the listening UI's own origin is accepted.
 - Audio is restricted to `renders/` and `cache/previews/`, and known audio extensions.
   Canonical path containment checks reject symlink escapes. Portable path validation rejects
-  `..`, absolute paths, drive letters, ADS colons, backslashes, empty/dot segments, Windows
+  `..`, absolute paths, drive letters, ADS colons, empty/dot segments, Windows
   reserved filenames, invalid characters and trailing dots/spaces. Sources, original stems,
   song/config/log files and arbitrary local files are not served through `/files`.
+  Backslashes are normalized to `/` before these checks. The UI shell (`/`,
+  `/assets/*`) is public so it can read `?token=` and show its Spanish auth
+  screen; API/audio endpoints and remote write restrictions still require auth.
 - Registry tools intentionally retain local filesystem capabilities (e.g. source import and
   library indexing). The file-serving restriction is not a sandbox for tool execution.
 - All CLI/MCP/HTTP feedback reads and appends take the same OS-backed
