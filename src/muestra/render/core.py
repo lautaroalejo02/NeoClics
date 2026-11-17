@@ -20,9 +20,11 @@ from ..project.core import Project
 from ..schemas._base import VersionStr
 from ..schemas.song import (
     BEATS_PER_BAR,
+    CUT_FADE_MS,
     Chop,
     Clip,
     ClipPass,
+    LaneSlice,
     MidiNote,
     Song,
     Track,
@@ -406,6 +408,104 @@ def pass_audio(project: Project, song: Song, clip: Clip, ps: ClipPass, sr: int, 
     return np.asarray(audio, np.float32), xf, fade_in, fade_out
 
 
+#: WP17 slice lanes: edge fade (ms) of a slice (it is cut out of a record).
+SLICE_FADE_MS = 2.0
+#: WP17 reversed lane sounds: fade (ms) at both ends.
+REVERSE_FADE_MS = 2.0
+
+
+def _decoded(project: Project, ref_uri: str, sr: int, decoded: dict) -> np.ndarray:
+    ref = (
+        library.resolve(project, ref_uri)
+        if ref_uri.startswith("library://")
+        else project.resolve(ref_uri)
+    )
+    if ref not in decoded:
+        decoded[ref] = decode(project, ref, sr)[0]
+    return decoded[ref]
+
+
+def slice_audio(project: Project, song: Song, sl: LaneSlice, sr: int) -> np.ndarray:
+    """A slice lane's sound (WP17): ``speed: project`` renders the slice through
+    the chop path (``chop_audio`` of the slice as a chop: warped to fill
+    ``length_beats`` project beats); ``speed: source`` is the record's own audio
+    between the slice's grid points, unwarped. Faded 2 ms at both edges."""
+    chop = sl.as_chop({c.id: c for c in song.chops})
+    if chop is None:
+        raise MuestraError.one(
+            "ref_not_found",
+            f"The slice uses unknown chop {sl.chop!r}.",
+            path="slice.chop",
+            value=sl.chop,
+            hint="Point 'chop' at an id in 'chops'.",
+        )
+    bpm = song.meta.bpm
+    if sl.speed == "project":
+        audio = fit(chop_audio(project, chop, sr, bpm, 0), beat_frame(chop.length_beats, bpm, sr))
+    else:
+        analysis = load_analysis(project, chop.source)
+        times = chop_times(
+            analysis, chop.start_downbeat, chop.length_beats, chop.start_offset_beats
+        )
+        ref = analysis.file if chop.stem == "mix" else getattr(analysis.stems, chop.stem, None)
+        if times is None or ref is None:
+            raise MuestraError.one(
+                "chop_overrun" if times is None else "ref_not_found",
+                "The slice does not fit the analyzed source"
+                if times is None
+                else "Analysis has no requested stem.",
+                path="slice",
+                value=sl.model_dump(mode="json"),
+                hint="Choose an earlier start or a shorter slice; or stem: mix.",
+            )
+        source, _ = decode(project, project.resolve(ref), sr)
+        first, last = round(times[0] * sr), round(times[1] * sr)
+        audio = fit(source[first:last], max(1, last - first))
+    return fade(audio, sr, SLICE_FADE_MS)
+
+
+def lane_sound(
+    project: Project, song: Song, lane, sample: str | None, sr: int, decoded: dict
+) -> np.ndarray:
+    """The unpanned sound one hit of a lane plays (velocity 1, lane gain 0 dB).
+
+    ``sample`` is the hit's file (``DrumHit.sample``) or None for the lane's
+    slice. A plain file lane is the decoded file with a 1 ms end fade, exactly
+    as before WP17. ``pitch_semitones`` resamples (sampler tuning: higher =
+    shorter); ``reverse`` plays it backwards with 2 ms edge fades."""
+    if sample is not None:
+        # One-shots retain their attacks; tiny fade-out only at file end.
+        audio = fade(_decoded(project, sample, sr, decoded), sr, 1, start=False)
+    else:
+        audio = slice_audio(project, song, lane.slice, sr)
+    if lane.pitch_semitones:
+        rate = 2 ** (lane.pitch_semitones / 12)
+        pad = round(0.01 * sr)
+        padded = np.concatenate(
+            [np.zeros((pad, 2), np.float32), audio, np.zeros((pad, 2), np.float32)]
+        )
+        out = vinyl(padded, max(1, round(len(padded) / rate)))
+        skip = round(pad / rate)
+        audio = fit(out[skip:], max(1, round(len(audio) / rate)))
+    if lane.reverse:
+        audio = fade(np.ascontiguousarray(audio[::-1]), sr, REVERSE_FADE_MS)
+    return np.asarray(audio, np.float32)
+
+
+def cut_sound(sound: np.ndarray, at: int, sr: int) -> np.ndarray:
+    """A hit cut ``at`` frames after its start (gate / choke, WP17): a raised-
+    cosine fade of ``CUT_FADE_MS`` starting at the cut point."""
+    n = max(1, round(sr * CUT_FADE_MS / 1000))
+    at = max(0, at)
+    if at >= len(sound):
+        return sound
+    end = min(len(sound), at + n)
+    out = sound[:end].copy()
+    ramp = (0.5 + 0.5 * np.cos(np.linspace(0, np.pi, n))).astype(np.float32)[: end - at]
+    out[at:end] *= ramp[:, None]
+    return out
+
+
 def read_notes(project: Project, track: Track, song: Song | None = None) -> list[MidiNote]:
     """Song-beat notes: inline ``notes`` + expanded ``phrases`` (needs ``song``), or MIDI."""
     if track.notes is not None or track.phrases is not None:
@@ -513,22 +613,19 @@ def arrange(project: Project, song: Song, sr: int, n_frames: int):
                 lane_audio = np.zeros_like(audio)
                 hits = []
                 for hit in by_lane[name]:
-                    key = ("lane", hit.sample, lane.gain_db, lane.pan)
+                    key = ("lane", track.id, name, hit.sample, lane.gain_db, lane.pan)
                     if key not in decoded:
-                        ref = (
-                            library.resolve(project, hit.sample)
-                            if hit.sample.startswith("library://")
-                            else project.resolve(hit.sample)
-                        )
-                        if ref not in decoded:
-                            decoded[ref] = decode(project, ref, sr)[0]
-                        # One-shots retain their attacks; tiny fade-out only at file end.
                         decoded[key] = pan_gain(
-                            fade(decoded[ref], sr, 1, start=False), lane.gain_db, lane.pan
+                            lane_sound(project, song, lane, hit.sample, sr, decoded),
+                            lane.gain_db,
+                            lane.pan,
                         )
                     frame = beat_frame(hit.beat0, bpm, sr)
                     if lo <= frame < hi:
-                        _add(lane_audio, decoded[key] * hit.velocity, frame, hi)
+                        sound = decoded[key]
+                        if hit.cut0 is not None:
+                            sound = cut_sound(sound, beat_frame(hit.cut0, bpm, sr) - frame, sr)
+                        _add(lane_audio, sound * hit.velocity, frame, hi)
                         hits.append(frame)
                 lanes[track.id, name] = lane_audio
                 lane_audio[lo:hi] = fade(lane_audio[lo:hi], sr, start=False)
