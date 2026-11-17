@@ -1,52 +1,37 @@
-# Working with Muestra
+# Muestra: guía corta para agentes
 
-Muestra is a local music studio. You edit a project's declarative song.yaml and use tools
-to prepare audio and render versions; the human listens and gives feedback in a browser.
-Muestra never calls a language model. Your existing agent supplies the musical reasoning.
+Muestra es un estudio local: vos editás `song.yaml` y llamás estas herramientas; el humano
+(Lautaro, castellano rioplatense, no usa DAWs) escucha en el browser y comenta. Muestra no
+llama a ningún LLM. **No podés oír**: tus oídos son las métricas de ears (alarmas) y su
+feedback. La skill completa (receta future funk, referencia de `song.yaml`, alarmas,
+traducción de comentarios) está en `skills/muestra/SKILL.md` del repo de Muestra.
 
-1. Open a project with project_open(path), or project_create(name, dir). The server remembers
-   that project. Use absolute paths when importing files or switching projects. Each result
-   identifies the project; confirm it before editing. Run `muestra serve --project <path>`
-   in a second terminal and give the human its printed URL.
-2. Read song_get and feedback_read before every iteration. Save next_cursor and pass it as
-   cursor on the next feedback_read, so comments with identical timestamps are not lost.
-   Feedback is the human's listening evidence. Ask about ambiguous musical intent.
-3. Import a local WAV, FLAC, MP3 or M4A with source_import. Then source_separate and
-   source_analyze once per source; reuse cached stems, beats, downbeats, key and sections.
-   Long tools may take minutes. Wait for their result/progress; do not duplicate the request.
-4. Use source_find_chops to propose three candidates from the requested section, stem and
-   length_beats. Inspect previews and scores. Normally choose one with chops_choose(mode=auto)
-   and explain why. Candidates remain visible in the UI; a human manual choice overrides
-   your preference. Read the resulting chop_choice feedback before making another change.
-5. Edit song.yaml on disk, preserving comments and unrelated changes. Use actual source/chop
-   IDs, library samples and installed plugin aliases. Song bars and beats, and start_downbeat,
-   are 1-indexed; seconds appear only in audio/analysis/feedback. range_bars=[start,end) ends
-   EXCLUSIVELY. `clip:<track>:<index>` previews use a 0-based clip index. Do not guess units:
-   _s=seconds, _ms=milliseconds, _hz=Hertz, _db=decibels, pitch_semitones=semitones.
-6. Run song_validate. Fix all issues using path, code, message and hint. check_files=false is
-   useful for a structural draft; use the default true before rendering. Preview the selected
-   chop/track or mix, then render with a short musical summary, request and agent identity.
-   Render creates a version, git commit/tag, mix, aligned stems, metadata and metrics.
-7. Read the render's `metrics_summary` (headline + the worst alarms, each with a song.yaml
-   fix); the full report is `renders/vNNN/metrics.json` (ears_analyze / versions_get) and
-   covers clipping/true peak, loudness, low-end masking + sidechain, grid alignment, tonal
-   coherence + detune and clicks. These are alarms, not proof that music sounds good. Never
-   claim to have heard the result. Tell the human what changed and where to listen. If the
-   render hint says a track's reproducibility is unverified (a non-curated plugin preset),
-   prefer the curated aliases from plugins_list. A sample `grid_offset` alarm on a busy live
-   record is unreliable (docs/ears.md); trust drum/instrument timing.
-   If the chop's source tempo is about double the project tempo (old records often track
-   at 200-260 BPM), use `warp.mode: stretch`: resample would drop it an octave.
-8. Let the human compare versions at the same playback position, mute/solo stems, rate and
-   comment with timestamps. Read new feedback, make a focused edit, validate and render
-   again. Use versions_diff/get/list to explain the musical changes; versions_restore can
-   recover a chosen song snapshot. Do not overwrite existing rendered versions accidentally.
+1. **Arranque, siempre:** `project_open` (ruta absoluta) → `feedback_read(cursor=<último
+   next_cursor>)` → `versions_list` → `versions_get(<última>)` y leé `metrics.summary` →
+   `song_get`. Recién ahí cambiás algo. La UI: `muestra serve --project <p> --open`.
+2. **Fuente:** `source_import(path)` → `source_separate` (minutos en CPU: avisale al humano
+   antes; queda en caché) → `source_analyze` (bpm, beats, downbeats, key con confianza).
+3. **Chops:** fijá `meta.bpm` primero (los previews usan ese tempo). `source_find_chops`
+   (`stem: other`, `length_beats` 8 o 16) → elegí con `chops_choose(mode=auto)` y explicá
+   por qué en términos musicales. Una elección manual del humano (`chop_choice`) manda.
+4. **Arreglo:** editá `song.yaml` conservando comentarios. Compases/beats 1-indexados,
+   `start_downbeat` 1-based, `range_bars` [inicio, fin), `clip:<track>:<i>` 0-based;
+   unidades por sufijo (`_ms`, `_hz`, `_db`, `_beats`). Instrumentos: `finger-bass`,
+   `slap-bass`, `synth-bass`, `rhodes`, `brass-stab`, `pad`. Batería: `library_kits`
+   (`disco-01`...) y `library_search` por descriptores medidos.
+5. **Tono:** con `warp.mode: resample`, semitonos = 12·log2(meta.bpm/local_bpm). Elegí
+   `meta.bpm` para caer en un semitono entero y poné el bajo en esa tonalidad.
+6. `song_validate` y arreglá cada issue (`path`, `code`, `hint`). `render(request=<lo que
+   dijo el humano>, summary=<qué cambió, en castellano de productor>, agent=<vos>)`.
+7. **Ears antes de mostrar:** corregí clipping, clicks, choques bombo/bajo, sidechain que no
+   agacha, chop fuera de grilla, bajo fuera de tono; re-renderizá. Lo dudoso (balance
+   espectral, desafinación "prevista") se pregunta. Ninguna alarma no significa que suene
+   bien.
+8. **Presentar:** qué cambiaste, qué mediste, qué tiene que escuchar y en qué segundo.
+   Nunca digas que suena bien.
+9. **Iterar:** `feedback_read`, 1-3 cambios del mismo tema por versión, `ears_compare` y
+   `versions_diff` para explicar; `versions_restore` si prefiere una anterior.
 
-For a first future-funk loop, try 16 bars, a downbeat-aligned riff, vinyl-style resample warp,
-four-on-the-floor drums, offbeat hats, a controlled bass, gentle sidechain and a filter sweep.
-Treat this as a starting palette: the human's taste and feedback take precedence.
-
-Every tool returns {tool,ok,data,files,errors,hint}. Paths in files are project-relative.
-On errors, follow the hints. `not_implemented` means this build needs the corresponding work
-package; do not simulate success. Unexpected failures have diagnostics in cache/logs/muestra.log.
-No purchases, subscriptions, automatic LLM calls or telemetry are needed.
+Todo devuelve `{tool, ok, data, files, errors, hint}`; ante `ok: false` seguí los hints;
+`not_implemented` no es un éxito. Errores inesperados: `cache/logs/muestra.log`. Nunca
+compres, suscribas ni te registres en nada.
