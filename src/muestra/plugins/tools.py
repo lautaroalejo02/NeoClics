@@ -12,11 +12,8 @@ from ..project.core import open_project
 from ..schemas._base import ContractModel
 from ..schemas.song import Instrument
 from ..toolbase import ProjectScoped, ToolOutput
-from .core import instrument_spec
 from .discovery import default_search_dirs, discover, resolve_plugin
-from .host import PluginHost
 from .presets import CURATED, instrument_root, surge_presets, vst_presets
-from .sfz import parse_sfz
 
 #: hard cap on presets returned by one plugins.list call (LLM context budget).
 MAX_PRESETS = 100
@@ -114,6 +111,9 @@ def plugins_list(params: PluginsListParams) -> PluginsListResult:
     plugin/category. Presets themselves are listed only when browsing with query,
     plugin or category (one page of at most `limit`, hard cap 100; `next_offset`
     continues)."""
+    from .core import instrument_spec
+    from .sfz import parse_sfz
+
     project = open_project(params.project)
     cached = {}
     cache = project.cache_dir / "plugins/scan.json"
@@ -232,6 +232,9 @@ def _matches(preset: PresetEntry, params: PluginsListParams) -> bool:
 
 def plugins_scan(params: PluginsScanParams) -> PluginsScanResult:
     """Probe plugins in disposable subprocesses; report crashes/timeouts with fix hints."""
+    from .host import PluginHost
+    from .sfz import parse_sfz
+
     project = open_project(params.project)
     entries = []
     names = params.names if params.names is not None else [str(p) for p in discover(project)]

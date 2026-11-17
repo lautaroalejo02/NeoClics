@@ -252,12 +252,33 @@ class _Repo:
     branch: str | None = None  # refs/heads/<name>; None when detached / not asked
 
 
+#: rev-parse answers per project root, keyed on the .git entry's identity: one
+#: versions.list used to spawn ~20 identical `git rev-parse` processes (WP12).
+_REPO_CACHE: dict[tuple[str, int, int], _Repo | None] = {}
+
+
 def _repo_info(root: Path) -> _Repo | None:
+    try:
+        st = (Path(root) / ".git").stat()
+        key: tuple[str, int, int] | None = (
+            os.path.normcase(os.path.realpath(root)),
+            st.st_mtime_ns,
+            st.st_ino,
+        )
+    except OSError:
+        key = None  # no .git here: ask git every time (it may be a parent's repo)
+    if key is not None and key in _REPO_CACHE:
+        return _REPO_CACHE[key]
     proc = _git(root, "rev-parse", "--show-toplevel", "--absolute-git-dir", check=False)
     if proc.returncode != 0:
         return None
     lines = _text(proc.stdout).splitlines()
-    return _Repo(Path(lines[0]), Path(lines[1])) if len(lines) >= 2 else None
+    info = _Repo(Path(lines[0]), Path(lines[1])) if len(lines) >= 2 else None
+    if key is not None and info is not None:
+        if len(_REPO_CACHE) > 64:
+            _REPO_CACHE.clear()
+        _REPO_CACHE[key] = info
+    return info
 
 
 def git_toplevel(root: Path) -> Path | None:

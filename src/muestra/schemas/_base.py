@@ -41,6 +41,9 @@ class ContractModel(BaseModel):
         extra="forbid",
         populate_by_name=True,
         allow_inf_nan=False,
+        # Build validators on first use, not at import: the CLI and the MCP server
+        # import ~150 models but a call touches a handful (startup time, WP12).
+        defer_build=True,
     )
 
 
@@ -262,3 +265,22 @@ FileRef = Annotated[
     AfterValidator(_check_file_ref),
     Field(description="Project-relative POSIX path or 'library://<path>' URI."),
 ]
+
+
+class LazyAdapter:
+    """A ``TypeAdapter`` built on first use (module-level adapters used to build
+    their validators at import time, on every CLI/MCP start; WP12)."""
+
+    def __init__(self, tp: object) -> None:
+        self._tp = tp
+        self._adapter = None
+
+    def _get(self):
+        if self._adapter is None:
+            from pydantic import TypeAdapter
+
+            self._adapter = TypeAdapter(self._tp)
+        return self._adapter
+
+    def __getattr__(self, name: str):
+        return getattr(self._get(), name)

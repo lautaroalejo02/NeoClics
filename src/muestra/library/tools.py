@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 from collections.abc import Callable
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import Field
 
@@ -20,11 +20,11 @@ from ..errors import MuestraError
 from ..project import open_project, save_config
 from ..schemas.library import LibraryHit
 from ..toolbase import ProjectScoped, ToolOutput
+
+if TYPE_CHECKING:
+    from .index import IndexReport
 from .core import loaded_index, root_label
 from .discovery import ENV_VAR, default_library_path
-from .index import IndexReport, index_root, summarize
-from .kits import kit_pattern, kit_reports, pattern_names
-from .search import search
 
 __all__ = [
     "TOOLS",
@@ -114,6 +114,8 @@ class LibraryIndexResult(ToolOutput):
 
 
 def _root_report(rep: IndexReport) -> RootIndexReport:
+    from .index import summarize
+
     s = summarize(rep.index)
     return RootIndexReport(
         root=str(rep.root),
@@ -147,6 +149,8 @@ def library_index(
     Per file: type, one-shot/loop, BPM, key, loudness, clipping, descriptive audio features
     (pitch, decay, brightness, ...) and derived tags; per kit: the licence summary.
     """
+    from .index import index_root
+
     project = open_project(p.project)
     registered: list[str] = []
     if p.path is not None:
@@ -273,6 +277,8 @@ def library_search(p: LibrarySearchParams) -> LibrarySearchResult:
     Free text in English or Spanish, filters (type, kit, tags, BPM incl. half/double time,
     compatible keys, duration) and "similar to <uri>" by measured sound features.
     """
+    from .search import search
+
     project = open_project(p.project)
     outcome = search(
         project,
@@ -388,6 +394,8 @@ class LibraryKitsResult(ToolOutput):
 
 def library_kits(p: LibraryKitsParams) -> LibraryKitsResult:
     """List starter drum kits (lane -> sample); with a name, add a ready-to-paste drum pattern."""
+    from .kits import kit_pattern, kit_reports, pattern_names
+
     project = open_project(p.project)
     reports = kit_reports(project, p.name)
     if not reports:
@@ -470,6 +478,8 @@ class LibraryInfoResult(ToolOutput):
 
 def library_info(p: LibraryInfoParams) -> LibraryInfoResult:
     """What is in the library: roots, index status, counts per type/kind/kit, licence limits."""
+    from .index import summarize
+
     project = open_project(p.project)
     out: list[LibraryRootInfo] = []
     missing = False

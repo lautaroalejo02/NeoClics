@@ -13,20 +13,14 @@ import json
 import time
 from datetime import UTC, datetime
 
-import soundfile as sf
 from pydantic import Field, ValidationError
 
-from ..ears import core as ears
 from ..errors import MuestraError
 from ..project import load_song, open_project, validate_song
 from ..schemas._base import IdStr, RelPath, VersionStr
 from ..schemas.render_meta import RenderMeta
 from ..schemas.song import BEATS_PER_BAR
 from ..toolbase import ProjectScoped, ToolOutput
-from ..versions import core as versions
-from ..versions.diff import song_diff
-from .audio import fade
-from .core import beat_frame, render_audio, render_chop, render_song
 
 __all__ = [
     "PreviewParams",
@@ -58,6 +52,11 @@ def preview(p: PreviewParams) -> PreviewResult:
     """Render a short preview of a chop, clip, track or the mix.
     Plays at PROJECT tempo when a song.yaml exists, else at source
     tempo."""
+    import soundfile as sf
+
+    from .audio import fade
+    from .core import beat_frame, render_audio, render_chop
+
     project = open_project(p.project)
     song = load_song(project)
     sr, bpm = project.config.sample_rate, song.meta.bpm
@@ -196,6 +195,13 @@ def render(p: RenderParams) -> RenderResult:
     """Render the song to renders/vNNN/: record the version (git commit
     + tag), render mix + stems, write song.yaml/meta.json, run ears for
     metrics.json (spec section 8)."""
+    import soundfile as sf
+
+    from ..ears import core as ears
+    from ..versions import core as versions
+    from ..versions.diff import song_diff
+    from .core import render_song
+
     project = open_project(p.project)
     started = time.perf_counter()
     hints = []

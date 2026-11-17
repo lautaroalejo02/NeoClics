@@ -8,7 +8,6 @@ from ..project.core import open_project
 from ..schemas._base import RelPath, VersionStr
 from ..schemas.metrics import Metrics, MetricsDelta
 from ..toolbase import ProjectScoped, ToolOutput
-from .core import compare, write_metrics
 
 __all__ = [
     "EarsAnalyzeParams",
@@ -47,6 +46,8 @@ def ears_analyze(p: EarsAnalyzeParams) -> EarsAnalyzeResult:
     clicks, technical checks) with alarms that each carry a suggested
     song.yaml fix. ``summary`` is a short text for the agent; the full
     detail is in ``metrics``."""
+    from .core import write_metrics
+
     project = open_project(p.project)
     m, _path = write_metrics(project, p.version)
     rel = f"renders/{p.version}/metrics.json"
@@ -75,6 +76,8 @@ def ears_compare(p: EarsCompareParams) -> EarsCompareResult:
     """Metrics delta between two versions (b relative to a): louder or
     quieter, brighter or darker, heavier or lighter low end, per-track
     level changes, and which alarms were fixed or introduced."""
+    from .core import compare
+
     project = open_project(p.project)
     files = [
         f"renders/{v}/metrics.json"
