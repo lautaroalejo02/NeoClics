@@ -60,6 +60,7 @@ export class FakeEngine implements PlaybackEngine {
   private listeners = new Set<() => void>();
   private snap: EngineSnapshot = {
     audio: "running",
+    source: "decks",
     playing: false,
     active: null,
     partner: null,
