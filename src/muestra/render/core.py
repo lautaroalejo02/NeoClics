@@ -515,7 +515,9 @@ def _wrap_fx(raw, track, sr, bpm, auto, project, events, processed):
     return audio
 
 
-def render_audio(project: Project, song: Song, range_bars: tuple[int, int]):
+def render_audio(
+    project: Project, song: Song, range_bars: tuple[int, int], report: dict | None = None
+):
     issues = song.check()
     if issues:
         raise MuestraError(issues)
@@ -586,7 +588,7 @@ def render_audio(project: Project, song: Song, range_bars: tuple[int, int]):
     for track in song.tracks:
         process(track.id)
     premaster = sum((processed[t.id] for t in song.tracks), start=np.zeros((n, 2), np.float32))
-    mix = master(premaster, song, sr, auto, project, events, processed)
+    mix = master(premaster, song, sr, auto, project, events, processed, report)
     a = beat_frame((start - 1) * BEATS_PER_BAR, song.meta.bpm, sr)
     b = beat_frame((end - 1) * BEATS_PER_BAR, song.meta.bpm, sr)
 
@@ -611,6 +613,7 @@ def render_song(
     *,
     stems: bool = True,
     directory: Path | None = None,
+    report: dict | None = None,
 ) -> Path:
     """Write stereo PCM24 mix and aligned FLOAT stems into renders/<version>
     (or ``directory``: the render tool stages there, see render/staging.py)."""
@@ -626,7 +629,7 @@ def render_song(
             value=version,
             hint="Use v001, v002, ...",
         ) from exc
-    mix, tracks, lanes, _ = render_audio(project, song, range_bars)
+    mix, tracks, lanes, _ = render_audio(project, song, range_bars, report)
     directory = directory or project.renders_dir / version
     directory.mkdir(parents=True, exist_ok=True)
     sf.write(directory / "mix.wav", mix, project.config.sample_rate, subtype="PCM_24")

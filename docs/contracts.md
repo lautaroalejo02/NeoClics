@@ -352,7 +352,10 @@ on that track's stem. Sidechain cycles are a validation error.
 ### master
 `fx` (same union), `gain_db`, `target_lufs` (optional). **Master chain
 order**: master fx in listed order → loudness gain toward `target_lufs`
-→ final true-peak safety limiter.
+→ final true-peak safety limiter. WP13: gain → limiter → measure is
+iterated to within 0.3 LU (≤ 4 passes) unless the limiter would remove
+more than 3 LU; then the render `hint` says the target is too hot for the
+material and how much the limiter takes off.
 
 ### Validation layers
 1. **Parse** (always): types, ranges, enums, uri/path shape, step chars,

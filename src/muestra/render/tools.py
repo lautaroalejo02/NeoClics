@@ -250,7 +250,18 @@ def _render(project, p: RenderParams) -> RenderResult:
         )
     with staging.stage(project) as stage:
         # Audio first: nothing is versioned until it exists (WP13 finding 1).
-        render_song(project, song, p.version or "v001", bars, stems=p.stems, directory=stage.dir)
+        loudness: dict = {}
+        render_song(
+            project,
+            song,
+            p.version or "v001",
+            bars,
+            stems=p.stems,
+            directory=stage.dir,
+            report=loudness,
+        )
+        if note := loudness_hint(loudness):
+            hints.append(note)
         (stage.dir / "song.yaml").write_bytes(raw)
         with staging.version_lock(project):
             version = p.version or versions.next_version_id(project)
@@ -370,6 +381,25 @@ def _render(project, p: RenderParams) -> RenderResult:
         files=files,
         hint=" ".join(hints) or None,
     )
+
+
+def loudness_hint(report: dict) -> str | None:
+    """Agent-facing note when master.target_lufs was not reached (WP13)."""
+    if not report or report.get("target_lufs") is None:
+        return None
+    target, got = report["target_lufs"], report["integrated_lufs"]
+    if abs(target - got) <= 0.5:
+        return None
+    lost, peak = report["limiter_lu"], report["limiter_peak_db"]
+    if report.get("too_hot"):
+        return (
+            f"Loudness: reached {got:g} LUFS for target_lufs {target:g}: the safety limiter "
+            f"already takes {lost:.1f} LU off (peaks down to -{peak:.1f} dB), so this target is "
+            f"too hot for this material without crushing it. Set master.target_lufs to about "
+            f"{round(got):g}, or tame the peaks first (compressor/saturation, quieter drums)."
+        )
+    passes = report["passes"]
+    return f"Loudness: reached {got:g} LUFS for target_lufs {target:g} after {passes} passes."
 
 
 def unverified_reproducibility(song) -> list[str]:

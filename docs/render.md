@@ -146,8 +146,21 @@ in the contract and is explicit here for mix-level predictability.
 Track inserts precede fader/pan. Muted stems are silent. The pre-master mix
 is the sum of track stems. Master inserts run in listed order, followed by
 master gain, BS.1770 loudness gain toward `target_lufs` (pyloudnorm), then
-a true-peak safety limiter. A limiter may prevent reaching a requested
-LUFS value. Silence stays silent; previews shorter than the meter's 400 ms
+a true-peak safety limiter. **Loudness loop (WP13):** gain → safety limiter →
+BS.1770 measure is iterated (first step = the remaining error, then secant
+steps) until the limited result is within 0.3 LU of `target_lufs`, for at
+most 4 limiter passes, and never past the point where the limiter removes
+3 LU of loudness (loudness of the gained signal minus loudness after the
+limiter). When the target needs more than that, the loop stops at the cap
+and the render result's `hint` says how much the limiter takes off (LU and
+the largest 10 ms peak reduction) and that the target is too hot for the
+material. Measured (warm cache, this laptop): skill-check −1.20 → −0.16 LU
+(3 passes, limiter 2.5 LU / peaks −7.3 dB); demo-e2e −2.47 → −2.25 LU,
+reported too hot (reaching −12 would need the limiter to remove ~9 LU:
++2.5 dB of gain bought only +0.6 LU). Each extra pass costs ≈1 s per 32 s
+of audio (limiter 0.87 s + meter 0.17 s); render times stayed within
+run-to-run noise (skill-check 3.2–4.2 s vs 3.4–3.5 s, demo 5.6–5.7 s vs
+4.4–7.5 s). Silence stays silent; previews shorter than the meter's 400 ms
 block are zero-padded for measurement only.
 
 Pedalboard's `Limiter` was rejected: it automatically adds makeup gain and

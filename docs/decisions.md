@@ -720,3 +720,8 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
    (DNS rebinding). The UI needs no change (same-origin cookie). Why: any
    LAN client could render, restore, import any local file and write index
    files anywhere.
+7. **Loudness is iterated, bounded by a limiter budget.** ≤ 4 passes,
+   0.3 LU tolerance, ≤ 3 LU removed by the safety limiter (beyond that the
+   mix is being crushed: stop and say so in the render hint rather than
+   hit the number). `render_audio`/`render_song` take an optional `report`
+   dict (additive) that `master()` fills.
