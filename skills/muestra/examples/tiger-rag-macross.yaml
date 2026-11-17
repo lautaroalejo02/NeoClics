@@ -1,0 +1,124 @@
+schema_version: 0
+# Tiger Rag (The Home Towners, 1928; CC0), primeros 30 s, fuente src1.
+# El tracker la mide a ~250 BPM: cuenta corcheas. DOBLE GRILLA:
+#   1 compas musical = 2 compases del proyecto, 1 beat del proyecto = 1 corchea,
+#   patrones con steps_per_bar: 8 y bars: 2 (16 caracteres = 1 compas musical).
+# Ver recipes/future-funk.md, "Fuente a doble tempo".
+meta:
+  title: tiger-funk-macross
+  bpm: 266.29  # 244.90 (tempo local de c1, 8 beats) x 2^(1.45/12): +1.45 st, mas rapido y mas agudo; sensacion 133.1
+  key: G#  # un semitono arriba de la version base
+  length_bars: 32  # 16 compases musicales
+  seed: 0
+sources:
+- id: src1
+  file: sources/src1.wav
+chops:
+- id: c1
+  source: src1
+  stem: other
+  start_downbeat: 17
+  length_beats: 8  # 1 compas musical, repetido: corte corto
+  warp: {mode: resample, pitch_semitones: 0}
+  fade_ms: 6
+- id: c2
+  source: src1
+  stem: other
+  start_downbeat: 17
+  length_beats: 2  # una negra musical, para el stutter
+  warp: {mode: resample, pitch_semitones: -0.35}  # su tempo local es 240.0: 12*log2(240/244.9) lo iguala a c1
+  fade_ms: 6
+tracks:
+- id: sample
+  clips:
+  - {chop: c1, at_bar: 1, repeat: 3}
+  - {chop: c2, at_bar: 7, repeat: 4}  # stutter: el primer tiempo 4 veces
+  - {chop: c1, at_bar: 9, repeat: 3}
+  - {chop: c2, at_bar: 15, repeat: 4}  # stutter: el primer tiempo 4 veces
+  - {chop: c1, at_bar: 17, repeat: 3}
+  - {chop: c2, at_bar: 23, repeat: 4}  # stutter: el primer tiempo 4 veces
+  - {chop: c1, at_bar: 25, repeat: 3}
+  - {chop: c2, at_bar: 31, repeat: 4}  # stutter: el primer tiempo 4 veces
+  fx:
+  - {id: hp, type: highpass, cutoff_hz: 200}
+  - {id: lp, type: lowpass, cutoff_hz: 18000}
+  - {id: sat, type: saturation, drive_db: 8}  # crudo
+  - {id: sc, type: sidechain, key_track: kick, depth: 0.7, release_ms: 170}  # bombeo marcado
+  gain_db: 8
+- id: kick
+  pattern:
+    steps_per_bar: 8
+    bars: 2
+    lanes:
+      kick: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav", steps: "x...x...x...x...", gain_db: -4}
+- id: drums
+  at_bar: 9
+  pattern:
+    steps_per_bar: 8
+    bars: 2
+    lanes:
+      clap: {sample: "library://kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav", steps: "....x.......x...", gain_db: -4}
+      ohat: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/ohat-tr-8-open-hat-01.wav", steps: "..x...x...x...x.", gain_db: -9}
+- id: bass
+  at_bar: 9
+  instrument: {plugin: synth-bass}
+  notes:  # octavas cortas en contratiempo
+  - {beat: 34, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 36, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 38, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 40, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 42, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 44, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 46, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 48, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 50, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 52, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 54, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 56, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 58, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 60, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 62, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 64, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 66, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 68, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 70, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 72, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 74, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 76, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 78, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 80, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 82, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 84, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 86, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 88, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 90, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 92, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 94, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 96, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 98, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 100, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 102, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 104, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 106, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 108, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 110, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 112, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 114, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 116, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 118, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 120, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 122, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 124, pitch: G#2, length_beats: 0.6, velocity: 96}
+  - {beat: 126, pitch: G#1, length_beats: 0.6, velocity: 110}
+  - {beat: 128, pitch: G#2, length_beats: 0.6, velocity: 96}
+  fx:
+  - {id: sc, type: sidechain, key_track: kick, depth: 0.5, release_ms: 90}
+  gain_db: 0
+automation:
+- {target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, 400], [8, 2500], [9, 18000]]}  # sube y abre de golpe en el drop
+- {target: tracks.sample.fx.hp.cutoff_hz, curve: exp, points: [[23, 200], [25, 900], [25, 200]]}  # barrido high-pass antes de la ultima vuelta
+master:
+  fx:
+  - {type: compressor, threshold_db: -18, ratio: 3}
+  - {type: limiter, ceiling_db: -1.0}
+  target_lufs: -12
