@@ -1,0 +1,52 @@
+schema_version: 0
+# Tiger Rag (The Home Towners, 1928; CC0), primeros 30 s, fuente src1.
+# El tracker la mide a ~250 BPM: cuenta corcheas. DOBLE GRILLA:
+#   1 compas musical = 2 compases del proyecto, 1 beat del proyecto = 1 corchea,
+#   patrones con steps_per_bar: 8 y bars: 2 (16 caracteres = 1 compas musical).
+# Ver recipes/future-funk.md, "Fuente a doble tempo".
+meta:
+  title: tiger-funk-nighttempo
+  bpm: 252.64  # igual que la base: sensacion 126.3, afinado
+  key: G  # igual que la base
+  length_bars: 32  # 16 compases musicales
+  seed: 0
+sources:
+- id: src1
+  file: sources/src1.wav
+chops:
+- id: c1
+  source: src1
+  stem: mix  # el disco entero: su bateria y su bajo quedan
+  start_downbeat: 17
+  length_beats: 32  # 4 compases musicales: la frase se reconoce
+  warp: {mode: stretch, pitch_semitones: 0.45}  # 4 compases derivan (grid_drift): stretch alinea cada beat; +0.45 st afina el disco
+  fade_ms: 10
+tracks:
+- id: sample
+  clips:
+  - {chop: c1, at_bar: 1, repeat: 4}
+  fx:
+  - {id: hp, type: highpass, cutoff_hz: 70}  # solo limpia rumble
+  - {id: sc, type: sidechain, key_track: kick, depth: 0.25, release_ms: 110}  # respira apenas
+  gain_db: 10
+- id: kick
+  at_bar: 9
+  pattern:
+    steps_per_bar: 8
+    bars: 2
+    lanes:
+      kick: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav", steps: "x...x...x...x...", gain_db: -4}
+- id: drums
+  at_bar: 17
+  pattern:
+    steps_per_bar: 8
+    bars: 2
+    lanes:
+      clap: {sample: "library://kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav", steps: "....x.......x...", gain_db: -9}
+      ohat: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/ohat-tr-8-open-hat-01.wav", steps: "..x...x...x...x.", gain_db: -14}
+automation: []
+master:
+  fx:
+  - {type: compressor, threshold_db: -16, ratio: 2}
+  - {type: limiter, ceiling_db: -1.0}
+  target_lufs: -12
