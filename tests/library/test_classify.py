@@ -232,3 +232,49 @@ def test_hot_quiet_clipped_tags():
     assert "quiet" in descriptor_tags("kick", f, peak_dbfs=-20.0, clipping=False, **kw)
     t = descriptor_tags("kick", f, peak_dbfs=0.0, clipping=True, **kw)
     assert "clipped" in t and "clean" not in t
+
+
+@pytest.mark.parametrize(
+    ("rel", "has", "hasnt"),
+    [
+        (
+            "kits/tr808-musicradar/closed-hi-hat-ch/chat-e808-ch-01.wav",
+            {"808", "roland", "tr808-musicradar"},
+            {"acoustic", "909"},
+        ),
+        (
+            "kits/essential-kits-musicradar/tr-909-kit/kick-tr-909-kick-01.wav",
+            {"909", "roland"},
+            {"808", "acoustic"},
+        ),
+        (
+            "kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav",
+            {"tr8", "roland"},
+            {"808", "909", "acoustic"},
+        ),
+        (
+            "kits/acoustic-drums-1000/kit-1-acoustic-close/kick-cycdh-k1close-kick-07.wav",
+            {"acoustic"},
+            {"909", "808"},
+        ),
+        (
+            "kits/goldbaby-tape-machines/dmx606-samples/misc-dmx606-bd1-l.wav",
+            {"606", "dmx", "tape", "goldbaby"},
+            {"909", "808"},
+        ),
+        (
+            "kits/80s-pop-drums/gated-snares/snare-80pd-gatedsnare-05.wav",
+            {"80s", "gated-reverb"},
+            {"909"},
+        ),
+        (
+            "kits/legowelt-studio-drums/korger1samples/kick-bd-er1-lazerbd5.wav",
+            {"korg", "lofi"},
+            {"808"},
+        ),
+    ],
+)
+def test_machine_tags_come_from_the_path(rel, has, hasnt):
+    tags = set(classify(rel, None).tags)
+    assert has <= tags, tags
+    assert not (hasnt & tags), tags

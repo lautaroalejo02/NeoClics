@@ -412,7 +412,7 @@ _MACHINE_TAGS: list[tuple[re.Pattern[str], list[str]]] = [
         ["goldbaby"],
     ),
     (re.compile(r"legowelt"), ["legowelt", "lofi"]),
-    (re.compile(r"er-?1|korger1|(?:^|-)mr-?16"), ["korg"]),
+    (re.compile(r"(?<![a-z])er-?1(?!\d)|korger1|mr-?16"), ["korg"]),
     (re.compile(r"alesis|hr-?16"), ["alesis"]),
     (re.compile(r"drumbrute"), ["drumbrute", "arturia"]),
     (re.compile(r"nord"), ["nord"]),
@@ -421,9 +421,7 @@ _MACHINE_TAGS: list[tuple[re.Pattern[str], list[str]]] = [
     (re.compile(r"kurz"), ["kurzweil"]),
     (re.compile(r"volca"), ["volca"]),
     (
-        re.compile(
-            r"acoust|ludwig|tama|sonor|sabian|zildjian|piccolo|room|close|loose-kick|kes-kick"
-        ),
+        re.compile(r"acoust|ludwig|tama|sonor|sabian|zildjian|piccolo|loose-kick|kes-kick"),
         ["acoustic"],
     ),
     (re.compile(r"vinyl"), ["vinyl"]),
