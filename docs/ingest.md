@@ -124,8 +124,10 @@ Official models and their licences:
   `https://cloud.cp.jku.at/public.php/dav/files/7ik4RrBKTS273gp/final0.ckpt`.
 
 No BS-RoFormer model was benchmarked. The licensed Mel model was the
-RoFormer alternative evaluated. HTDemucs FT is selectable through the
-same backend, but its larger model bag was not downloaded or benchmarked.
+RoFormer alternative evaluated. HTDemucs FT was not benchmarked in WP1;
+WP19 subsequently measured it on licensed reference multitracks, including
+a repeated 240-second workload. See `docs/ingest-evaluation.md` for current
+SDR, bleed projections, timings and recommendations.
 
 Downloaded model disk usage (not Python/Torch packages):
 
@@ -143,6 +145,10 @@ cache from the direct Demucs installation probe remains under
 chosen backend does not use it. Model files and test audio are outside git.
 
 ## Measurements and choice of default
+
+The measurements in this section are historical WP1 runs. WP19 adds the
+23-track annotated corpus and reference separation comparisons documented
+in `docs/ingest-evaluation.md`; those newer results retain HTDemucs as default.
 
 Fresh worker process per benchmark; psutil sampled process-tree RSS at
 100 ms intervals, including model load and Python runtime. Weights are
@@ -525,8 +531,10 @@ is optional in the Python model despite the prose; ChopChoiceEvent has no
 set_id field despite the prose (recoverable from candidate_id); start offsets
 allow ±4096 in Python versus ±64 in prose. See decisions.md.
 
-No actual 1980s Argentine record, Japanese city-pop/fusion recording, reference
-multitrack or human beat annotation was available. Sound quality on those
+No actual 1980s Argentine record or Japanese city-pop/fusion recording was
+available. WP19 adds published beat-position annotations on 23 Music Delta
+recordings and ten reconstruction-valid reference multitracks; this does not
+establish quality on the owner's material. Sound quality on those target
 sources and macOS execution are not verified. Old mono mixes, swing, 2/4 or
 3/4 meter, noisy transfers, free-time intros, weak kicks, tape pitch drift,
 modulation and vocal bleed remain difficult. The grid checks deliberately

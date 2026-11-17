@@ -4,7 +4,7 @@ CPU-only Windows 11; no listening claims, paid services, commercial recording
 downloads, or LLM inference. Audio stays outside this repository.
 **The final consolidated tables at the end supersede the historical checkpoints
 below**, including their pending statements. Final whole-repository validation
-passes; one additional separation control is still running at this checkpoint.
+passes and all scheduled separation controls are complete.
 
 ## Material and provenance
 
@@ -265,6 +265,20 @@ filter does not change this already-pulsed corpus, though it rejects generated
 silence/sustained-tone intros. Its benefit on real drumless intros is unverified.
 Phase-confidence capping changes no timings; it makes unverified phase explicit.
 
+Remaining highest-risk maps (AFTER):
+
+| Track | Marked reliable track time | False-reliable track time | False among marked time |
+|---|---:|---:|---:|
+| Gospel | 37.498% | 37.498% | 100.000% |
+| Free Jazz | 19.037% | 16.928% | 88.922% |
+| Rock | 99.762% | 16.500% | 16.539% |
+| Zeppelin | 62.832% | 12.704% | 20.219% |
+| Hendrix | 87.987% | 11.087% | 12.600% |
+
+In particular, Gospel's marked regions are NOT safe merely because their
+local meter looks regular. The global `ask_human` must be honoured. Neither
+the aggregate improvement nor the phase-confidence cap solves this failure.
+
 ### Matched input comparisons
 
 Use only the SAME **ten reconstruction-valid tracks** for the primary oracle
@@ -325,6 +339,7 @@ Additional 20-second controls (same reference gate and metrics):
 | Funk Jazz | mel-roformer+htdemucs | 457.59 | 2630 | 13.00 | 17.05 | n/a | 16.65 |
 | Britpop | htdemucs | 38.07 | 1117 | 9.81 | 9.12 | 10.16 | 8.65 |
 | Britpop | htdemucs_ft | 150.01 | 1666 | 10.33 | 9.80 | 10.61 | 8.95 |
+| Britpop | mel-roformer+htdemucs | 478.39 | 2654 | 10.58 | 9.37 | 12.75 | 10.12 |
 
 | Track/model | Vocal projection into other | Bass projection | Drum projection |
 |---|---:|---:|---:|
@@ -333,12 +348,16 @@ Additional 20-second controls (same reference gate and metrics):
 | Funk Jazz / RoFormer hybrid | no vocal reference | .04387% | .03736% |
 | Britpop / htdemucs | .97777% | .39583% | .16736% |
 | Britpop / htdemucs_ft | .83192% | .34713% | .14332% |
+| Britpop / RoFormer hybrid | .22715% | .53697% | .16340% |
 
 These controls strengthen the decision NOT to change the default: FT loses
 .56 dB bass and .54 dB other SDR on instrumental Funk Jazz, with ~2.9x
 more bass projection into other; RoFormer adds almost no value there.
-Britpop RoFormer is the one remaining running control. Raw checkpoints:
-`separation-controls-20s.{md,json}` in the external evaluation directory.
+Britpop's RoFormer hybrid reduces vocal projection ~4.3x and improves other
+SDR by 1.47 dB, but increases bass projection ~1.36x. The evidence supports
+a targeted vocal-cleanup offer, NOT a generally superior sampling stem.
+All six controls completed. Raw checkpoints: `separation-controls-20s.{md,json}`
+in the external evaluation directory.
 
 ## Final chop results
 
@@ -385,8 +404,9 @@ beat-this 1.1.0 (final0 CPU, no DBN); mir_eval .8.2; demucs-infer 4.4.0;
 audio-separator .48.0. No new product dependency or schema change.
 
 Final whole suite: **849 passed, 10 skipped**, **962.29 s**. Ruff check passes;
-format check: **249 files already formatted**. Ingest-only: **76 passed,
-3 skipped**, 57.62 s. Opt-in real-track test: **1 passed** (three tracks),
+format check: **249 files already formatted**. Final ingest-only recheck:
+**76 passed, 3 skipped**, **118.67 s** (concurrent separator load); the earlier
+same-count run took 57.62 s. Opt-in real-track test: **1 passed** (three tracks),
 78.28 s, two upstream Torch autocast warnings. A final diagnostic-text encoding
 repair is additionally covered by **6 pulse tests passed**, 3.64 s, and repeat
 ruff/format checks. No audio/model downloads are required by default tests.
@@ -400,7 +420,20 @@ All source downloads are **1,340,076,252 bytes**. The evaluation directory,
 including duplicate audit-project imports and derived previews, currently uses
 about **3.1 GiB**, slightly over the intended approximate 3 GB budget. A cleanup
 of reproducible oracle-fusion audit copies was refused by environment policy;
-no source data was deleted. Final disk usage/clean-tree status follows below.
+no source data was deleted. Final disk usage after temporary worker cleanup:
+**3,306,029,426 bytes / 3.078980 GiB**, all outside git. This storage overshoot
+is an explicit remaining limitation, not silently excluded audit copies.
+
+Completed external artifacts: `baseline`, `after`, `onset-v1`,
+`parity-only-ablation`, `drums-final`, `fusion-final`, `estimated-mix`,
+`estimated-drums`, `estimated-fusion`, `chops-before`, `chops-after`,
+`chops-production`, `separation-20s`, `separation-240s`,
+`separation-controls-20s`, and `unannotated-smoke` (Markdown/JSON pairs).
+Location: `C:/Users/lauti/Documents/MuestraLibrary/_test-audio/eval/`.
+The full 23-track before/after reports contain individual results, not just
+the macro tables committed here. Prepared source provenance is dated
+2026-11-17 in `mdb-drums/SOURCES.md`; local derivative provenance is in
+the parent `SOURCES.md`. No audio, weights, or audit projects are committed.
 
 Needed outside ingest: optional typed tool/UI source selector for instrumental
 and no-drums sources (CLI plus existing contracts already works), and agent/UI
