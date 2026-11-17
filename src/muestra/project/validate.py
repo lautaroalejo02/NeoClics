@@ -158,6 +158,14 @@ def _yaml_doc(path: Path, label: str) -> CommentedMap:
     """Round-trip parse of a YAML file; duplicate keys are errors."""
     try:
         doc = _YAML.load(path.read_text(encoding="utf-8"))
+    except UnicodeDecodeError as e:
+        raise MuestraError.one(
+            "invalid_encoding",
+            f"{label} is not UTF-8 at byte offset {e.start}.",
+            path=label,
+            value=e.start,
+            hint="Save song.yaml as UTF-8 (not Windows CP1252) and retry song.validate.",
+        ) from e
     except DuplicateKeyError as e:
         mark = getattr(e, "problem_mark", None)
         where = f" (line {mark.line + 1})" if mark is not None else ""

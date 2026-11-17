@@ -51,7 +51,20 @@ def read_set(path: Path) -> ChopCandidateSet:
 
 def fingerprint(project: Project, source_id: str, analysis) -> str:
     _, source = source_file(project, source_id)
-    return hashlib.sha256((digest(source) + analysis.model_dump_json()).encode()).hexdigest()
+    # Reporting/history updates do not move the audio or the effective grid.
+    # In particular, an idempotent regrid must leave its retained sets usable.
+    content = analysis.model_dump_json(
+        include={
+            "file",
+            "duration_s",
+            "sample_rate",
+            "beats_s",
+            "downbeats_s",
+            "stems",
+            "separation_model",
+        }
+    )
+    return hashlib.sha256((digest(source) + content).encode()).hexdigest()
 
 
 def stem_path(project: Project, analysis, stem: str) -> Path:
@@ -179,7 +192,7 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
         raise MuestraError.one(
             "ref_not_found",
             f"Unknown section {query.section}.",
-            hint="Use a label from source.analyze.sections.",
+            hint="Use a section label returned by source.analyze.",
         )
     lengths = [query.length_beats] if query.length_beats else [4.0, 8.0, 16.0, 32.0]
     if any(length > 128 for length in lengths):

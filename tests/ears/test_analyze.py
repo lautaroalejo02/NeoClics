@@ -48,6 +48,31 @@ def test_analyze_fixture_project(fixture_copy):
         assert a.message and (a.severity == "info" or a.fix)
 
 
+def test_summary_lists_skipped_checks_instead_of_claiming_full_coverage(fixture_copy):
+    from muestra.ears.report import summarize
+
+    m = analyze(fixture_copy, "v001")
+    m.alarms = []
+    m.skipped = ["sidechain: instrumento sin referencia seca"]
+    text = summarize(m)
+    assert "sin problemas detectados" not in text
+    assert "Sin comprobar: sidechain: instrumento sin referencia seca" in text
+
+
+def test_instrument_sidechain_skip_names_the_missing_dry_instrument_reference(tmp_path):
+    from muestra.ears.context import load_context
+    from muestra.ears.lowend import _measure_duck
+    from muestra.schemas.song import SidechainFx
+
+    generate(CorpusSpec(sr=24000, bars=4), tmp_path)
+    ctx = load_context(open_project(tmp_path), "v001")
+    fx = SidechainFx(type="sidechain", key_track="drums", key_lane="kick", depth=0.6)
+    assert _measure_duck(ctx, "bass", fx) is None
+    reason = next(s for s in ctx.skipped if "sidechain de 'bass'" in s)
+    assert "instrumento" in reason and "referencia seca" in reason
+    assert "stem fuente del chop" not in reason
+
+
 def test_ears_analyze_tool_writes_metrics(fixture_copy):
     r = run_tool("ears.analyze", {"project": str(fixture_copy.root), "version": "v001"})
     assert r.ok, r.errors

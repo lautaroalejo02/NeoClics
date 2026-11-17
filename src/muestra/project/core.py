@@ -169,6 +169,7 @@ class Project:
         case-insensitive filesystem (Windows, default macOS) still
         validates on a case-sensitive one.
         """
+        ref = ref.replace("\\", "/")
         if is_library_uri(ref):
             return self.resolve_library(ref, must_exist=must_exist)
         p = self.root / Path(ref)
@@ -178,6 +179,7 @@ class Project:
 
     def resolve_library(self, uri: str, *, must_exist: bool = True) -> Path:
         """Resolve 'library://<path>' against configured library roots, in order."""
+        uri = uri.replace("\\", "/")
         rest = uri[len("library://") :]
         dirs = self.library_dirs()
         if not dirs:

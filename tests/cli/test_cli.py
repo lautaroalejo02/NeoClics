@@ -15,6 +15,15 @@ from muestra.registry import REGISTRY
 REPO = Path(__file__).resolve().parents[2]
 
 
+def test_help_on_every_generated_command():
+    for spec in REGISTRY.values():
+        group, action = spec.cli or (spec.group, spec.name.split(".")[-1])
+        args = [group, action] if action else [group]
+        result = cli(*args, "--help")
+        assert result.returncode == 0, (spec.name, result.stdout, result.stderr)
+        assert "usage:" in result.stdout
+
+
 def cli(*args, cwd=REPO, input=None, env=None, fake=False):
     return subprocess.run(
         [sys.executable, "-m", "tests.mcp.host" if fake else "muestra.cli.main", *map(str, args)],

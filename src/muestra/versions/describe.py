@@ -1065,7 +1065,12 @@ class _Describer:
             )
         if not same(x.get("gain_db"), y.get("gain_db")):
             d = _f(y.get("gain_db")) - _f(x.get("gain_db"))
-            out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_in(lane, np)} {_n(abs(d))} dB")
+            if x.get("sample") != y.get("sample"):
+                out.append(
+                    f"Ajusté la ganancia configurada {_del(_lane_np(lane))} {_n(d)} dB; al cambiar el sample, esto no mide el cambio de nivel audible"
+                )
+            else:
+                out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_in(lane, np)} {_n(abs(d))} dB")
         if not same(x.get("pan"), y.get("pan")):
             out.append(f"Paneé {_lane_in(lane, np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})")
         for k in sorted((set(x) | set(y)) - {"steps", "sample", "gain_db", "pan"}):

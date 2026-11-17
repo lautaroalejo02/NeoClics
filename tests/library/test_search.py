@@ -31,6 +31,17 @@ def test_spanish_and_english_words_find_the_same_things(proj):
     assert search(proj, query="platillo").total == 0  # no cymbals in this library
 
 
+def test_empty_local_library_is_quiet_when_global_index_exists(proj):
+    local = proj.path("library")
+    local.mkdir(exist_ok=True)
+    proj.config.library.roots.insert(0, "library")
+    result = run_tool("library.search", {"project": str(proj.root), "query": "kick"})
+    # Search on the in-memory config exercises the same discovery with an
+    # explicit empty local root, alongside the configured indexed root.
+    assert search(proj, query="kick").unindexed_roots == []
+    assert result.ok
+
+
 def test_hat_word_covers_the_family_and_openness_words_narrow_it(proj):
     assert {h.type for h in search(proj, query="hi hat").results} == {"chat", "ohat"}
     assert {h.type for h in search(proj, query="open hat").results} == {"ohat"}

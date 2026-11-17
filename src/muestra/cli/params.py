@@ -69,7 +69,7 @@ def add_tool_arguments(parser: argparse.ArgumentParser, spec: ToolSpec) -> None:
             continue
         dest = f"param__{fname}"
         opt = _flag_name(fname)
-        help_text = finfo.description or ""
+        help_text = (finfo.description or "").replace("%", "%%")
         base, _optional = _unwrap_optional(finfo.annotation)
         if base is bool:
             group = parser.add_mutually_exclusive_group()

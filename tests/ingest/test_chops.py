@@ -69,6 +69,17 @@ def test_unknown_section_missing_stem_and_invalid_adjust(rhythmic_project):
     assert project.song_path.read_bytes() == before
 
 
+def test_noop_regrid_keeps_retained_candidates_choosable(rhythmic_project):
+    from muestra.ingest.regrid import regrid
+
+    project, source_id, _ = rhythmic_project
+    found, _ = find(project, source_id, ChopQuery(stem="mix", length_beats=4, n=1))
+    report = regrid(project, source_id, tempo_factor=1)
+    assert not report.stale_sets
+    chosen, _, _, _ = choose(project, found.candidates[0].id, "kept", "manual", None)
+    assert chosen.chosen.chop_id == "kept"
+
+
 def test_stale_grid_cannot_be_chosen(rhythmic_project):
     project, source_id, analysis = rhythmic_project
     result, _ = find(project, source_id, ChopQuery(stem="mix", n=1))

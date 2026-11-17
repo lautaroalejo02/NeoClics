@@ -268,7 +268,8 @@ def _render_text(data: dict) -> str:
     meta = data.get("meta") or {}
     parent = meta.get("parent")
     head = (
-        f"render OK: {data['version']}"
+        f"render OK: {data.get('draft_id') or data['version']}"
+        + (" (draft; no version created)" if data.get("draft_id") else "")
         + (f" (parent {parent})" if parent else "")
         + f" · bars {meta.get('range_bars')} · {meta.get('duration_s', 0):.2f} s audio"
         + f" · rendered in {meta.get('render_time_s', 0):.1f} s"

@@ -50,12 +50,14 @@ def test_measured_tuning_beats_the_a440_prediction(tmp_path):
     assert "sample_detuned" not in {a.code for a in m.alarms}
 
 
-def test_weak_measurement_sets_the_fix_when_really_detuned(tmp_path):
+def test_weak_measurement_is_informational_and_exposes_strength(tmp_path):
     m = _corpus(tmp_path, ears_toml="[thresholds]\ntuning_min_strength = 0.99\n", detune_cents=30.0)
     alarm = next(a for a in m.alarms if a.code == "sample_detuned")
-    assert alarm.severity == "warn" and "señal débil" in alarm.message
+    assert alarm.severity == "info" and "señal débil" in alarm.message
     assert abs(alarm.value - 30.0) < 6.0
-    assert "pitch_semitones: -0.3" in alarm.fix  # ps 0 - measured/100, not a re-detune
+    assert alarm.fix is None and "no corregir automáticamente" in alarm.message
+    assert 0 < alarm.confidence < 0.99
+    assert m.tonal.detune[0].confidence == alarm.confidence
 
 
 def test_a_fifth_from_the_key_is_not_a_transposition_warning(tmp_path):

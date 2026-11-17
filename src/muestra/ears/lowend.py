@@ -443,6 +443,13 @@ def _measure_duck(ctx: RenderContext, tid: str, fx: SidechainFx) -> SidechainChe
     times, stem_p = _envelope(y, ctx.sr)
     dry = dry_reference(ctx, tid, times)
     if dry is None:
+        track = ctx.track(tid)
+        if track is not None and track.instrument is not None:
+            ctx.skipped.append(
+                f"sidechain de '{tid}': es un instrumento; falta una referencia seca "
+                "para distinguir el bombeo de la envolvente de sus notas"
+            )
+            return None
         ctx.skipped.append(
             f"sidechain de '{tid}': sin el stem fuente del chop en cache/stems no se puede "
             "separar el bombeo del contenido del sample"

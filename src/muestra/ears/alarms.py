@@ -58,6 +58,7 @@ def make_alarm(
     unit: str | None = None,
     count: int | None = None,
     fix: str | None = None,
+    confidence: float | None = None,
 ) -> Alarm:
     locs = []
     for t in sorted(set(round(float(x), 3) for x in where))[:MAX_WHERE]:
@@ -69,6 +70,7 @@ def make_alarm(
         bar, beat = tl.where(at_s)
     return Alarm(
         code=code,
+        confidence=confidence,
         severity=severity,  # type: ignore[arg-type]
         message=message,
         track=track,
