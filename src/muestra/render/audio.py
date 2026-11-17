@@ -21,7 +21,7 @@ from ..project.core import Project
 
 # Bump whenever decoding/warping or its quality settings change.
 CACHE_ABI = (
-    f"render-4-pb{pedalboard.__version__}-numpy{np.__version__}"
+    f"render-5-pb{pedalboard.__version__}-numpy{np.__version__}"
     f"-scipy{scipy.__version__}-sndfile{sf.__libsndfile_version__}"
 )
 
@@ -135,7 +135,9 @@ def vinyl(audio: np.ndarray, frames: int) -> np.ndarray:
     return resample(audio, frames, axis=0).astype(np.float32)
 
 
-def stretch(audio: np.ndarray, sample_rate: int, frames: int, pitch: float = 0) -> np.ndarray:
+def stretch(
+    audio: np.ndarray, sample_rate: int, frames: int, pitch: float = 0, formants: bool = False
+) -> np.ndarray:
     if not len(audio) or frames < 1:
         return np.zeros((frames, 2), np.float32)
     if frames == len(audio) and pitch == 0:
@@ -151,6 +153,6 @@ def stretch(audio: np.ndarray, sample_rate: int, frames: int, pitch: float = 0) 
         retain_phase_continuity=True,
         use_long_fft_window=None,
         use_time_domain_smoothing=False,
-        preserve_formants=True,
+        preserve_formants=formants,
     )
     return fit(result.T, frames)

@@ -149,6 +149,16 @@ class Warp(ContractModel):
 
     mode: Literal["resample", "stretch"] = "resample"
     pitch_semitones: float = Field(default=0.0, ge=-24.0, le=24.0)
+    formants: bool | None = Field(
+        default=None,
+        description="Preserve formants when pitch_semitones != 0. Default: on for "
+        "stem: vocals only (measured: it colours instruments and drums).",
+    )
+
+
+def preserve_formants(warp: Warp, stem: str | None) -> bool:
+    """WP13 default: formant preservation for vocals only (docs/render.md)."""
+    return warp.formants if warp.formants is not None else stem == "vocals"
 
 
 class Chop(ContractModel):

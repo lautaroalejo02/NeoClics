@@ -18,7 +18,16 @@ from ..plugins import core as plugins
 from ..project import chop_times, load_analysis
 from ..project.core import Project
 from ..schemas._base import VersionStr
-from ..schemas.song import BEATS_PER_BAR, Chop, Clip, MidiNote, Song, Track, parse_steps
+from ..schemas.song import (
+    BEATS_PER_BAR,
+    Chop,
+    Clip,
+    MidiNote,
+    Song,
+    Track,
+    parse_steps,
+    preserve_formants,
+)
 from .audio import CACHE_ABI, cache_read, cache_write, decode, digest, fade, fit, stretch, vinyl
 from .automation import Automation, pan_gain
 from .dsp import _dependency, apply_fx, master
@@ -111,6 +120,7 @@ def chop_audio(
             hint="Regenerate analysis for this source file.",
         )
     total = frames + tail
+    formants = preserve_formants(chop.warp, chop.stem)
     if chop.warp.mode == "resample":
         # Extra source before (pre-roll) and after (tail + guard): the input
         # fades that avoid circular-FFT ringing then fall outside the kept part.
@@ -123,7 +133,7 @@ def chop_audio(
         segment[lo - (first - before) : hi - (first - before)] = source[lo:hi]
         out = round(len(segment) / rate)
         audio = vinyl(fade(segment, sample_rate, 5), out)
-        audio = stretch(audio, sample_rate, out, chop.warp.pitch_semitones)
+        audio = stretch(audio, sample_rate, out, chop.warp.pitch_semitones, formants)
         skip = round(before / rate)
         audio = audio[skip : skip + total]
     else:
@@ -159,7 +169,11 @@ def chop_audio(
             right = max(0, min(context, len(source) - b))
             segment = source[min(a, len(source)) - left : min(b, len(source)) + right]
             warped = stretch(
-                segment, sample_rate, round(len(segment) / speed), chop.warp.pitch_semitones
+                segment,
+                sample_rate,
+                round(len(segment) / speed),
+                chop.warp.pitch_semitones,
+                formants,
             )
             lo = max(0, out_a - (cross if i else 0))
             hi = min(frames_all, out_b + (cross if i < len(positions) - 2 else 0))
@@ -206,9 +220,13 @@ def _sample_clip(project, clip, song, sr, decoded, tail=0):
         total = round((consumed + extra) * frames / max(1, consumed))
         if clip.warp.mode == "resample":
             audio = vinyl(fade(audio, sr, start=False), total)
-            audio = stretch(audio, sr, total, clip.warp.pitch_semitones)
+            audio = stretch(
+                audio, sr, total, clip.warp.pitch_semitones, preserve_formants(clip.warp, None)
+            )
         else:
-            audio = stretch(audio, sr, total, clip.warp.pitch_semitones)
+            audio = stretch(
+                audio, sr, total, clip.warp.pitch_semitones, preserve_formants(clip.warp, None)
+            )
     return fit(audio, frames + tail)
 
 

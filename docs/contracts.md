@@ -249,6 +249,9 @@ input (`F#`/`Gb` kept as given, `A#`→`Bb`, `Db`→`C#`, …).
     project grid (pitch-preserving time-stretch), then the same
     length-preserving `pitch_semitones` shift.
   - `pitch_semitones` ∈ −24..24; 0 = no shift.
+  - `formants` (WP13, optional bool): formant preservation for the pitch
+    shift; default (null) = on for `stem: vocals`, off otherwise (sample
+    clips: off). Measurements: `docs/render.md`.
 - `fade_ms` (default 5): **seam crossfade length** (WP13). Each placement
   of the chop is rendered with `fade_ms` of extra source past its end (the
   record continuing, warped at the same rate); when the next placement on

@@ -741,3 +741,8 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
 11. **Curated aliases are level-matched** to −24 LUFS on a reference phrase by
     a per-alias trim (default patch only). Existing songs using them change
     level once (finger-bass +10.3 dB, rhodes −8.8 dB, …).
+12. **Formant preservation only for vocals by default** (`warp.formants`
+    overrides). Measured: it keeps the long-term envelope but adds 0.5–1.9 dB
+    of non-reversible colouring on instruments/drums (0.3–0.6 dB without).
+    `CACHE_ABI` → `render-5`. Pitch-shifted non-vocal chops in existing songs
+    sound slightly different after this change.

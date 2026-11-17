@@ -100,6 +100,33 @@ to −4.6 dB (bar 5/9/13 downbeats: −9.9/−5.6/−3.4 dB, the sidechain
 pump). The master chain still starts cold (not warmed); partial ranges
 still end with a 5 ms fade.
 
+## Formant preservation (WP13)
+
+`pitch_semitones` uses Rubber Band; `warp.formants` (optional, chops and warped
+sample clips) chooses formant preservation, **default on for `stem: vocals`
+only**. It only matters when `pitch_semitones != 0` (with no pitch shift the
+output is bit-identical either way). Measured on demo-e2e's separated stems
+(loudest 10 s of each; 1/3-octave envelope 100 Hz–12.7 kHz, RMS deviation
+after removing the mean level; "round trip" = shift +k then −k, which should
+return the original envelope; HF = 6–16 kHz vs 0.1–6 kHz balance):
+
+| stem | +k st | one-way env dev on / off | HF change on / off | round-trip env on / off |
+|---|---|---|---|---|
+| other | +1 / +2 / +4 | 1.2 / 1.4, 1.6 / 2.4, 3.8 / 5.0 dB | −0.2 / +0.9, +0.0 / +2.1, +0.1 / +4.3 | 0.5 / 0.4, 0.7 / 0.4, 1.9 / 0.4 |
+| bass | +1 / +2 / +4 | 2.3 / 2.4, 2.6 / 3.0, 2.8 / 2.8 | −3.0 / −3.0, −1.7 / −1.5, −0.6 / −1.3 | 0.5 / 0.3, 0.7 / 0.4, 0.9 / 0.5 |
+| drums | +1 / +2 / +4 | 0.6 / 1.0, 0.8 / 1.6, 1.9 / 3.4 | +0.1 / +1.3, +0.4 / +2.4, +0.9 / +4.6 | 0.5 / 0.4, 0.5 / 0.3, 1.3 / 0.3 |
+| vocals | +1 / +2 / +4 | 1.5 / 1.5, 2.4 / 2.4, 4.0 / 4.6 | −1.8 / −1.9, −1.3 / −0.7, −0.6 / −0.5 | 0.9 / 0.7, 1.0 / 0.6, 1.3 / 0.6 |
+
+(One-way shifts of −1/−2/−4 st on the 30–40 s excerpt showed the same one-way pattern; the round trip was measured for upward shifts only.)
+Formant mode keeps the long-term envelope (its purpose) but adds its own
+colouring that does not undo: the round trip leaves 0.5–1.9 dB of envelope
+error with it vs 0.3–0.6 dB without, worst on `other` and `drums` at ±4 st.
+Without it, instruments and drums tilt the way a transposed instrument
+naturally does (brighter up, darker down: HF ±4–5 dB at ±4 st). For vocals the
+vowel identity matters more than the small colouring, so they keep it;
+transient contrast (99th-percentile/median 10 ms RMS) moved < 0.7 dB in every
+case. Set `warp.formants: true|false` to override per chop.
+
 ## Effects, automation, and sidechain
 
 Automation is right-continuous at duplicate positions, holds endpoint
