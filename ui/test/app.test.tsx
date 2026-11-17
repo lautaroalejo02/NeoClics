@@ -242,6 +242,50 @@ describe("App against the mock", () => {
     });
   });
 
+  describe("versions without audio (WP14 finding 3)", () => {
+    const del = (vs: string) => fetch(`${mock.url}/debug/delete-renders?versions=${vs}`, { method: "POST" });
+
+    it("lists them greyed out, with summary, feedback and a copyable regeneration request; no play/A-B", async () => {
+      await del("v001,v003");
+      const { store, engine, user } = await boot();
+      expect(store.state.versions.map((v) => v.version)).toEqual(["v002", "v004"]);
+      expect(store.state.noAudio.map((v) => v.version)).toEqual(["v001", "v003"]);
+      const row = screen.getByTestId("version-v003");
+      expect(row.dataset.noaudio).toBe("true");
+      expect(row.className).toContain("ghost");
+      // summary + the human's feedback survive
+      expect(row.textContent).toContain("Abrí el filtro del sample");
+      expect(within(screen.getByTestId("version-v001")).getByText(/me gustó/)).toBeTruthy();
+      // clear message, no play / A-B affordances
+      expect(screen.getByTestId("noaudio-v003").textContent).toContain("Sin audio: pedile al agente que la regenere (render de v003)");
+      expect(within(row).queryByRole("button", { name: /Escuchar v003/ })).toBeNull();
+      expect(within(row).queryByRole("button", { name: /v003 como A/ })).toBeNull();
+      expect(within(row).queryByRole("button", { name: /v003 como B/ })).toBeNull();
+      await user.click(row);
+      expect(engine.calls.some((c) => c[0] === "select" && c[1] === "v003")).toBe(false);
+      // the copy button puts the request on the clipboard
+      const written: string[] = [];
+      Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText: async (t: string) => void written.push(t) } });
+      await user.click(screen.getByTestId("copy-regen-v003"));
+      expect(written[0]).toContain("render de v003");
+      expect(written[0]).toContain("v003");
+      // number keys still map to versions with audio only
+      expect(store.versionAt(2)).toBe("v004");
+    });
+
+    it("when NO version has audio the app says so instead of 'no versions yet'", async () => {
+      await del("v001,v002,v003,v004");
+      const { store } = await boot().catch(async () => {
+        throw new Error("boot failed");
+      });
+      void store;
+      expect(screen.queryByTestId("empty")).toBeNull();
+      const card = await screen.findByTestId("no-audio");
+      expect(card.textContent).toContain("render de v004");
+      expect(screen.getAllByTestId(/^version-v00[1-4]$/)).toHaveLength(4);
+    });
+  });
+
   it("oídos: alarms in Spanish, clickable to jump", async () => {
     const { engine, user } = await boot();
     await user.keyboard("2"); // v002 has positioned alarms

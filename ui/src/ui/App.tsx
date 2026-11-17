@@ -3,7 +3,7 @@ import { useLayout } from "../hooks/hooks";
 import { handleKey } from "./keys";
 import { useApp, useStore } from "../state/react";
 import { ChopsPanel } from "./Chops";
-import { BootSkeleton, EmptyState, ErrorState, Header, HelpDialog, Jobs, OfferBanner, SettingsDialog, Toasts } from "./Chrome";
+import { BootSkeleton, EmptyState, ErrorState, NoAudioCard, Header, HelpDialog, Jobs, OfferBanner, SettingsDialog, Toasts } from "./Chrome";
 import { EarsPanel } from "./Ears";
 import { FeedbackPanel } from "./Feedback";
 import { MixerPanel } from "./Mixer";
@@ -18,6 +18,7 @@ export function App() {
   const bootError = useApp((s) => s.bootError);
   const theme = useApp((s) => s.theme);
   const chopCount = useApp((s) => s.chopSets.length);
+  const playable = useApp((s) => s.versions.length);
   const layout = useLayout();
   const [help, setHelp] = useState(false);
   const [settings, setSettings] = useState(false);
@@ -56,6 +57,15 @@ export function App() {
       <>
         <Jobs />
         <EmptyState />
+      </>
+    );
+  else if (playable === 0)
+    // every version is known but none has audio (renders/ was deleted)
+    main = (
+      <>
+        <Jobs />
+        <NoAudioCard />
+        {layout === "narrow" && <VersionsPanel />}
       </>
     );
   else

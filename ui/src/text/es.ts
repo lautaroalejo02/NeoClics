@@ -350,3 +350,10 @@ export function friendlyError(
   if (msg && SPANISH_CHARS.test(msg)) return { message: msg, advice: issues[0]?.hint ?? null, detail: null, code };
   return { message: what + ".", advice: null, detail: msg, code };
 }
+
+// ---------------------------------------------------------------- versions without audio
+
+/** What to say to the agent to get the audio of a version back. */
+export function regenRequest(version: string): string {
+  return `La versión ${version} no tiene audio (se borró renders/). Regenerala con render de ${version}, sin cambiar la canción.`;
+}

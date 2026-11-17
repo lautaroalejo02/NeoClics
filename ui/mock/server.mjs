@@ -211,16 +211,20 @@ function readMetrics(v) {
   }
 }
 
+// versions whose renders/ folder was deleted (POST /debug/delete-renders): the
+// real versions.list still knows them (git tags), with rendered=false.
+const ghosts = new Map();
+
 function listVersions() {
   const liked = {};
   for (const { e } of readFeedbackFile().events) if (e.type === "rating") liked[e.version] = e.value === "like";
-  return {
-    files: [],
-    versions: versionDirs().map((v) => {
-      const m = readMeta(v) ?? {};
-      return { version: v, parent: m.parent ?? null, created_at: m.created_at ?? null, git_commit: m.git_commit ?? null, summary: m.summary ?? null, liked: liked[v] ?? null };
-    }),
-  };
+  const live = versionDirs().map((v) => {
+    const m = readMeta(v) ?? {};
+    return { version: v, parent: m.parent ?? null, created_at: m.created_at ?? null, git_commit: m.git_commit ?? null, request: m.request ?? null, summary: m.summary ?? null, liked: liked[v] ?? null, rendered: true, rerenderable: false, has_meta: !!readMeta(v) };
+  });
+  const gone = [...ghosts.values()].filter((g) => !live.some((l) => l.version === g.version)).map((g) => ({ ...g, liked: liked[g.version] ?? null }));
+  const all = [...live, ...gone].sort((a, b) => Number(a.version.slice(1)) - Number(b.version.slice(1)));
+  return { files: [], versions: all };
 }
 
 function songTitle() {
@@ -454,6 +458,16 @@ const server = http.createServer(async (req, res) => {
   if (pathname === "/debug/received") return send(res, 200, received);
   if (pathname === "/debug/render" && req.method === "POST") return send(res, 200, startRender(Number(url.searchParams.get("ms") ?? RENDER_MS)));
   if (pathname === "/debug/separate" && req.method === "POST") return send(res, 200, startSeparate("src1", Number(url.searchParams.get("ms") ?? 45_000)));
+  if (pathname === "/debug/delete-renders" && req.method === "POST") {
+    for (const v of (url.searchParams.get("versions") ?? "").split(",").filter(Boolean)) {
+      const rec = listVersions().versions.find((x) => x.version === v);
+      if (!rec) continue;
+      ghosts.set(v, { ...rec, rendered: false, rerenderable: true, has_meta: false });
+      fs.rmSync(path.join(PROJECT, "renders", v), { recursive: true, force: true });
+    }
+    peaksCache.clear();
+    return send(res, 200, { ok: true });
+  }
   if (pathname === "/debug/choose" && req.method === "POST") {
     // what the next chops.choose does: ok | fail (the real English clip_overrun) | newid | rescale | fail-recorded
     chooseMode = url.searchParams.get("mode") ?? "ok";
@@ -461,6 +475,7 @@ const server = http.createServer(async (req, res) => {
   }
   if (pathname === "/debug/reset" && req.method === "POST") {
     chooseMode = "ok";
+    ghosts.clear();
     freshProject();
     peaksCache.clear();
     return send(res, 200, { ok: true });

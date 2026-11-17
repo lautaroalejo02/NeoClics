@@ -176,7 +176,13 @@ export interface VersionInfo {
   created_at?: string | null;
   git_commit?: string | null;
   summary?: string | null;
+  request?: string | null;
   liked?: boolean | null;
+  /** versions.list (WP5): renders/<v>/mix.wav exists. Absent on older servers. */
+  rendered?: boolean;
+  /** no audio on disk but the song is in git: `render` with version=<v> regenerates it */
+  rerenderable?: boolean;
+  has_meta?: boolean;
 }
 
 export interface VersionsListResult {

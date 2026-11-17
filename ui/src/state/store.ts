@@ -102,7 +102,9 @@ export interface AppState {
   boot: "loading" | "ready" | "empty" | "error";
   bootError: string | null;
   title: string | null;
-  versions: VersionInfo[]; // sorted ascending
+  versions: VersionInfo[]; // sorted ascending; only versions with audio
+  /** versions the project knows but whose renders/ is gone (WP14 finding 3), ascending */
+  noAudio: VersionInfo[];
   metas: Record<VersionId, RenderMeta>;
   metrics: Record<VersionId, Metrics | null>;
   peaks: Record<VersionId, Float32Array>;
@@ -209,6 +211,7 @@ export class Store {
       bootError: null,
       title: null,
       versions: [],
+      noAudio: [],
       metas: {},
       metrics: {},
       peaks: {},
@@ -284,7 +287,7 @@ export class Store {
     this.set({ boot: "loading", bootError: null });
     try {
       await this.loadAll();
-      this.set({ boot: this.state.versions.length ? "ready" : "empty" });
+      this.set({ boot: this.hasAnyVersion() ? "ready" : "empty" });
     } catch (e) {
       this.set({ boot: "error", bootError: e instanceof Error ? e.message : String(e) });
     }
@@ -294,7 +297,13 @@ export class Store {
   /** Full (re)load — also used after a websocket reconnect, where events
    *  may have been missed. */
   async loadAll(): Promise<void> {
-    const summary = await this.client.getSummary();
+    // versions.list knows EVERY version, also those whose renders/ is gone
+    // (the /project summary only lists versions with a meta.json).
+    const [summary, listedRes] = await Promise.all([this.client.getSummary(), this.client.listVersions().catch((e: unknown) => e)]);
+    const listed: VersionInfo[] | null =
+      listedRes && !(listedRes instanceof Error) && Array.isArray((listedRes as { versions?: unknown }).versions)
+        ? (listedRes as { versions: VersionInfo[] }).versions
+        : null;
     let versions: VersionInfo[] = summary?.versions ?? [];
     let title = summary?.title ?? null;
     if (summary?.song) {
@@ -307,27 +316,33 @@ export class Store {
         .catch(() => undefined);
     }
     if (!summary?.versions) {
-      const [list, project, song] = await Promise.all([
-        this.client.listVersions().catch((e: unknown) => e),
-        this.client.openProject().catch(() => null),
-        this.client.getSong().catch(() => null),
-      ]);
+      const [project, song] = await Promise.all([this.client.openProject().catch(() => null), this.client.getSong().catch(() => null)]);
       title = song?.song?.meta?.title ?? project?.project_path?.split(/[\\/]/).filter(Boolean).pop() ?? null;
       this.noteSong(song);
-      if (list instanceof Error || list == null) {
+      if (listed == null) {
         // versions.list unavailable (e.g. still a stub): fall back to the
         // render dirs project.open reports.
-        if (!project) throw list instanceof Error ? list : new Error("Sin respuesta de la API");
+        if (!project) throw listedRes instanceof Error ? listedRes : new Error("Sin respuesta de la API");
         versions = (project.versions ?? []).map((v) => ({ version: v }));
       } else {
-        versions = (list as { versions: VersionInfo[] }).versions;
+        versions = listed;
       }
     }
+    if (summary?.versions && listed) {
+      // union: the summary has the playable ones, the list also the rest
+      const byId = new Map(listed.map((l) => [l.version, l]));
+      versions = versions.map((v) => ({ ...(byId.get(v.version) ?? {}), ...v, rendered: byId.get(v.version)?.rendered, rerenderable: byId.get(v.version)?.rerenderable }));
+      const have = new Set(versions.map((v) => v.version));
+      versions = [...versions, ...listed.filter((l) => !have.has(l.version))];
+    }
+    // Versions the project lists as not rendered have no audio to fetch.
+    const noRender = new Set((listed ?? []).filter((l) => l.rendered === false).map((l) => l.version));
     versions = sortVersions(versions);
     const metas: Record<VersionId, RenderMeta> = { ...(summary?.metas ?? {}) };
     const metrics: Record<VersionId, Metrics | null> = { ...(summary?.metrics ?? {}) };
     await Promise.all(
       versions.map(async (v) => {
+        if (noRender.has(v.version) && !metas[v.version]) return;
         const [m, x] = await Promise.all([
           metas[v.version] ? metas[v.version] : this.client.getMeta(v.version).catch(() => null),
           v.version in metrics ? metrics[v.version] : this.client.getMetrics(v.version).catch(() => null),
@@ -336,17 +351,19 @@ export class Store {
         metrics[v.version] = x ?? null;
       }),
     );
-    // Only versions with a render (meta.json) are playable.
-    versions = versions
-      .filter((v) => metas[v.version])
-      .map((v) => ({
-        ...v,
-        parent: v.parent ?? metas[v.version].parent ?? null,
-        created_at: v.created_at ?? metas[v.version].created_at,
-        summary: v.summary ?? metas[v.version].summary ?? null,
-      }));
+    // Only versions with a render (meta.json + audio) are playable; the rest
+    // are listed greyed out with how to regenerate them.
+    const enrich = (v: VersionInfo): VersionInfo => ({
+      ...v,
+      parent: v.parent ?? metas[v.version]?.parent ?? null,
+      created_at: v.created_at ?? metas[v.version]?.created_at ?? null,
+      summary: v.summary ?? metas[v.version]?.summary ?? null,
+      request: v.request ?? metas[v.version]?.request ?? null,
+    });
+    const noAudio = versions.filter((v) => !metas[v.version] || noRender.has(v.version)).map(enrich);
+    versions = versions.filter((v) => metas[v.version] && !noRender.has(v.version)).map(enrich);
     for (const v of versions) this.engine.register(specOf(metas[v.version]));
-    this.set({ title: title ?? this.state.title, versions, metas, metrics });
+    this.set({ title: title ?? this.state.title, versions, noAudio, metas, metrics });
     await Promise.all([this.loadFeedback(), this.loadChops(summary?.analyses)]);
     if (!this.state.active && versions.length) {
       const latest = versions[versions.length - 1].version;
@@ -359,6 +376,10 @@ export class Store {
       void this.engine.prepare(latest, { stems: true }).catch(() => undefined);
     }
     void this.fetchRemotePeaks();
+  }
+
+  private hasAnyVersion(): boolean {
+    return this.state.versions.length > 0 || this.state.noAudio.length > 0;
   }
 
   private noteSong(song: SongGetResult | null): void {
@@ -429,7 +450,7 @@ export class Store {
       this.wsRetry = 0;
       this.set({ ws: "open" });
       // Events may have been missed while disconnected: resync.
-      if (wasRetry) void this.loadAll().then(() => this.set({ boot: this.state.versions.length ? "ready" : "empty" }));
+      if (wasRetry) void this.loadAll().then(() => this.set({ boot: this.hasAnyVersion() ? "ready" : "empty" }));
     };
     ws.onmessage = (ev) => this.onWsMessage(ev.data);
     ws.onerror = () => {
@@ -533,7 +554,8 @@ export class Store {
   }
 
   async onNewVersion(version: VersionId, meta: RenderMeta | null, eventMetrics?: Metrics | null): Promise<void> {
-    if (this.state.metas[version]) {
+    const wasGhost = this.state.noAudio.some((g) => g.version === version);
+    if (this.state.metas[version] && !wasGhost) {
       // Known version: metrics.json landed later, or the version was re-rendered.
       const m = meta ?? this.state.metas[version];
       const metrics = eventMetrics !== undefined ? eventMetrics : await this.client.getMetrics(version).catch(() => null);
@@ -551,6 +573,7 @@ export class Store {
     const versions = sortVersions([...this.state.versions.filter((v) => v.version !== version), info]);
     this.set({
       versions,
+      noAudio: this.state.noAudio.filter((g) => g.version !== version),
       metas: { ...this.state.metas, [version]: m },
       metrics: { ...this.state.metrics, [version]: metrics },
       boot: "ready",
