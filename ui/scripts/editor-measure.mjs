@@ -191,4 +191,42 @@ if (mode === "fidelity") {
   console.log(`browser mix vs ${res.version} stems (track soloed, no master, bus bypassed); bands 20-120/120-500/500-2k/2k-6k/6k-16k Hz`);
   for (const r of res.results) console.log(`${r.mode.padEnd(14)} ${r.track.padEnd(8)} level ${String(r.levelDiffDb).padStart(6)} dB  residual ${String(r.residualDb).padStart(6)} dB  bands ${r.bandDiffDb.join(" / ")}`);
 }
+
+if (mode === "latency") {
+  // edits that need audio from the backend: time until the browser plays the new piece
+  const cases = [
+    ["pitch of one pass (+5 st)", "sample", [{ op: "set", path: "tracks.sample.clips[0].instances.3", value: { pitch_semitones: 5 } }]],
+    ["chop warp -> other mode", "sample", "warp"],
+    ["note moved (instrument)", "bass", [{ op: "set", path: "tracks.bass.notes[0].beat", value: 1.5 }]],
+    ["drum fx: compressor ratio", "drums", [{ op: "set", path: "tracks.drums.fx.comp.ratio", value: 2 }]],
+  ];
+  for (const [label, track, ops] of cases) {
+    const r = await p.evaluate(
+      async ([track, ops]) => {
+        const ed = window.__muestra.editor;
+        if (ops === "warp") {
+          const cur = ed.state.song.chops[0].warp?.mode ?? null;
+          ops = [{ op: "set", path: "chops.c1.warp.mode", value: cur === "stretch" ? "resample" : "stretch", expect: cur }];
+        }
+        const t0 = performance.now();
+        if (!ed.edit(ops, "latency")) return null;
+        const local = performance.now() - t0;
+        const wait = async (cond) => {
+          while (!cond()) await new Promise((res) => setTimeout(res, 20));
+          return performance.now() - t0;
+        };
+        await new Promise((res) => setTimeout(res, 50));
+        const playable = await wait(() => ed.state.trackStatus[track]?.state !== "waiting" && ed.state.inFlight === 0);
+        const exact = await wait(() => ed.state.trackStatus[track]?.state === "exact");
+        return { local, playable, exact };
+      },
+      [track, ops],
+    );
+    if (!r) {
+      console.log(label, "edit refused");
+      continue;
+    }
+    console.log(`${label.padEnd(30)} applied ${r.local.toFixed(1)} ms · audible ${(r.playable / 1000).toFixed(2)} s · exact (wet) ${(r.exact / 1000).toFixed(2)} s`);
+  }
+}
 await b.close();

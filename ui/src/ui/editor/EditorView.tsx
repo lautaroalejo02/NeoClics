@@ -70,7 +70,7 @@ export function EditorView({ onListen }: { onListen: () => void }) {
 
   return (
     <section className={`editor ${layout}`} aria-label="Arreglo">
-      <Toolbar onHelp={() => setHelp(true)} onAsk={() => askRef.current?.focus()} onListen={onListen} />
+      <Toolbar onHelp={() => setHelp(true)} onAsk={() => askRef.current?.focus()} />
       <div className={`ed-body ${inspector ? "with-insp" : ""}`}>
         <div className="ed-main card">
           <TrackHeaders />
@@ -85,7 +85,7 @@ export function EditorView({ onListen }: { onListen: () => void }) {
   );
 }
 
-function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () => void; onListen: () => void }) {
+function Toolbar({ onHelp, onAsk }: { onHelp: () => void; onAsk: () => void }) {
   const editor = useEditorStore();
   const eng = useEngine();
   const view = useEditor((s) => s.view);
@@ -234,9 +234,6 @@ function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () =>
             Fuente
           </button>
         )}
-        <button type="button" className="btn small ghost hide-narrow" onClick={onListen} title="Comparar versiones renderizadas (A/B), comentar, oídos">
-          Versiones
-        </button>
       </div>
     </div>
   );

@@ -45,6 +45,26 @@ for (const theme of ["dark", "light"]) {
   });
   await shot(`ed-phone-${theme}`, phone, theme);
 }
+const shiftClickHit = async (p) => {
+  const pt = await p.evaluate(() => window.__muestra.editor.locate("drums", { beat0: 26, lane: "kick" }));
+  const box = await p.getByTestId("timeline").boundingBox();
+  await p.keyboard.down("Shift");
+  await p.mouse.click(box.x + pt.x, box.y + pt.y);
+  await p.keyboard.up("Shift");
+  await p.waitForTimeout(300);
+};
+for (const theme of ["dark", "light"]) {
+  await shot(`ed-desk-${theme}-hits`, desk, theme, shiftClickHit);
+  await shot(`ed-desk-${theme}-source`, desk, theme, async (p) => {
+    await p.getByTestId("ed-source").click();
+    await p.waitForTimeout(3500);
+  });
+  await shot(`ed-phone-${theme}-sheet`, phone, theme, async (p) => {
+    await shiftClickHit(p);
+    await p.getByLabel("Panel de detalles").tap();
+    await p.waitForTimeout(300);
+  });
+}
 await shot("ed-desk-dark-help", desk, "dark", async (p) => {
   await p.keyboard.press("?");
   await p.waitForTimeout(300);

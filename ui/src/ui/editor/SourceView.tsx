@@ -255,7 +255,7 @@ export function SourceView({ sourceId, onClose }: { sourceId: string; onClose: (
           <h2>Fuente {sourceId}</h2>
           <span className="muted small-text">
             {a.bpm_global ? `${a.bpm_global.toFixed(1)} BPM · ` : ""}
-            {a.downbeats_s.length} compases · {a.reliability ? `grilla confiable en ${Math.round(a.reliability.confidence * 100)}%` : ""}
+            {a.downbeats_s.length} compases{a.reliability ? ` · grilla confiable en ${Math.round(a.reliability.confidence * 100)}%` : ""}
           </span>
           <span className="header-spacer" />
           <label className="ed-snap">

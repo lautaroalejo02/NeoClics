@@ -696,3 +696,16 @@
   place-items: center;
   font-size: 13px;
 }
+
+.ed-insp.sheet {
+  max-height: 46vh;
+}
+
+.ed-insp.sheet .insp-empty ul,
+.ed-insp.sheet .insp-foot {
+  display: none;
+}
+
+.ed-insp.sheet .ask-box textarea {
+  min-height: 38px;
+}
