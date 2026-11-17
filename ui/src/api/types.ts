@@ -1,4 +1,5 @@
-// Contract types mirroring docs/contracts.md and schemas/*.schema.json.
+// Contract types mirroring docs/contracts.md and schemas/*.schema.json
+// (the pydantic models under src/muestra/schemas/ are the source of truth).
 // Field comments reference the contract where the shape is non-obvious.
 
 export type VersionId = string; // "vNNN"
@@ -8,8 +9,8 @@ export interface Issue {
   path: string;
   code: string;
   message: string;
-  hint: string | null;
-  value?: string;
+  hint?: string | null;
+  value?: string | null;
 }
 
 export interface ToolResult<T = unknown> {
@@ -28,17 +29,22 @@ export interface DiffEntry {
   to?: unknown;
 }
 
-export interface TrackStemInfo {
+export interface StemLaneRef {
+  id: string;
+  stem: string; // pre track fx
+}
+
+export interface RenderTrackMeta {
   id: string;
   kind: string; // clips | pattern | instrument
-  stem: string; // project-relative path, post track fx / pre master
-  lanes: { id: string; stem: string }[]; // pre track fx (pattern tracks)
+  stem: string; // project-relative; post track fx/fader/pan, PRE master
+  lanes: StemLaneRef[];
 }
 
 export interface RenderMeta {
   schema_version: number;
   version: VersionId;
-  parent: VersionId | null;
+  parent?: VersionId | null;
   git_commit?: string | null;
   created_at: string;
   request?: string | null;
@@ -53,10 +59,26 @@ export interface RenderMeta {
   length_bars: number;
   range_bars: [number, number]; // [start, end) 1-indexed, end exclusive
   mix: string;
-  tracks: TrackStemInfo[];
+  tracks: RenderTrackMeta[];
 }
 
-// ---------- renders/vNNN/metrics.json → Metrics ----------
+// ---------- renders/vNNN/metrics.json → Metrics (spec 10) ----------
+export interface BandLevels {
+  low_db: number;
+  mid_db: number;
+  high_db: number;
+}
+
+export type AlarmSeverity = "info" | "warn" | "error";
+
+export interface Alarm {
+  code: string;
+  severity: AlarmSeverity;
+  message: string;
+  track?: string | null;
+  at_s?: number | null;
+}
+
 export interface Metrics {
   schema_version: number;
   version: VersionId;
@@ -68,19 +90,16 @@ export interface Metrics {
   };
   spectral: {
     bands_hz: { low: [number, number]; mid: [number, number]; high: [number, number] };
-    mix: { low_db: number; mid_db: number; high_db: number };
-    tracks: Record<string, { low_db: number; mid_db: number; high_db: number }>;
+    mix: BandLevels;
+    tracks: Record<string, BandLevels>;
   };
   low_end_masking: {
     band_hz: [number, number];
     energy_db: Record<string, number>;
-    dominant_track: string;
+    dominant_track?: string | null;
   };
   alignment: {
-    tracks: Record<
-      string,
-      { mean_offset_ms: number; max_abs_offset_ms: number; n_transients: number }
-    >;
+    tracks: Record<string, { mean_offset_ms: number; max_abs_offset_ms: number; n_transients: number }>;
     max_abs_offset_ms: number;
   };
   tonal: {
@@ -91,21 +110,15 @@ export interface Metrics {
     in_key: boolean;
   };
   clicks: { count: number; events: { track: string; at_s: number; severity: number }[] };
-  style_similarity: {
+  style_similarity?: {
     model: string;
     references: { reference: string; score: number }[];
     mean_score: number;
   } | null;
-  alarms: {
-    code: string;
-    severity: "info" | "warn" | "error";
-    message: string;
-    track?: string | null;
-    at_s?: number | null;
-  }[];
+  alarms: Alarm[];
 }
 
-// ---------- feedback.jsonl → FeedbackEvent ----------
+// ---------- feedback.jsonl → FeedbackEvent (spec 7.5) ----------
 export interface RatingEvent {
   ts: string;
   type: "rating";
@@ -135,25 +148,28 @@ export interface ChopChoiceEvent {
   ts: string;
   type: "chop_choice";
   version?: VersionId | null;
-  candidate_id: string; // "csNNN/candN"
+  candidate_id: string; // global "csNNN/candN"
   adjust?: ChopAdjust | null;
 }
-export type FeedbackEvent =
-  | RatingEvent
-  | CommentEvent
-  | ABChoiceEvent
-  | ChopChoiceEvent;
+export type FeedbackEvent = RatingEvent | CommentEvent | ABChoiceEvent | ChopChoiceEvent;
+
+export interface SkippedFeedbackLine {
+  path: string;
+  line: number;
+  message: string;
+  hint?: string | null;
+}
 
 export interface FeedbackReadResult {
   files: string[];
   events: FeedbackEvent[];
   next_cursor: number;
-  latest_ts: string | null;
-  count: number;
-  skipped: { path: string; line: number; message: string; hint: string }[];
+  latest_ts?: string | null;
+  count?: number;
+  skipped?: SkippedFeedbackLine[];
 }
 
-// ---------- versions.list / versions.get ----------
+// ---------- versions.list / versions.get / versions.diff ----------
 export interface VersionInfo {
   version: VersionId;
   parent?: VersionId | null;
@@ -175,13 +191,24 @@ export interface VersionsGetResult {
   song_yaml: string;
 }
 
-// ---------- Chop candidates ----------
+export interface VersionsDiffResult {
+  files: string[];
+  a: VersionId;
+  b: VersionId;
+  diff: DiffEntry[];
+  musical_summary?: string | null;
+}
+
+// ---------- Chop candidates (cache/chops/<src>/<set_id>.json) ----------
+export type StemName = "drums" | "bass" | "vocals" | "other" | "mix";
+
 export interface ChopCandidate {
-  /** Local id inside the set in chops.list results ("candN"); the global
-   *  contract id is `<set_id>/<id>`. */
+  /** The pydantic model (source of truth) and its JSON Schema use the LOCAL
+   *  id ("cand2"); contracts.md R5 says global. The UI accepts both and
+   *  always builds the global id with `globalCandidateId()`. */
   id: string;
   source_id: string;
-  stem: "drums" | "bass" | "vocals" | "other" | "mix";
+  stem: StemName;
   start_downbeat: number;
   start_s: number;
   length_beats: number;
@@ -217,9 +244,16 @@ export interface ChopsListResult {
   sets: ChopCandidateSet[];
 }
 
-// ---------- analysis.json → Analysis (via source.analyze) ----------
+export interface ChopsChooseResult {
+  files: string[];
+  set_id: string;
+  candidate_id: string;
+  chop: Record<string, unknown>;
+}
+
+// ---------- analysis.json → Analysis ----------
 export interface Analysis {
-  schema_version: number;
+  schema_version?: number;
   source_id: string;
   file: string;
   duration_s: number;
@@ -239,14 +273,7 @@ export interface Analysis {
 export interface ProjectOpenResult {
   files: string[];
   project_path: string;
-  config: {
-    schema_version: number;
-    sample_rate: number;
-    export_bit_depth: number;
-    library: { roots: string[] };
-    plugins: { search_dirs: string[]; aliases: Record<string, unknown> };
-    separation: { backend: string; model?: string | null };
-  };
+  config: Record<string, unknown>;
   has_song: boolean;
   sources?: string[];
   versions?: string[];
@@ -254,20 +281,39 @@ export interface ProjectOpenResult {
 
 export interface SongGetResult {
   files: string[];
-  path: string;
+  path?: string;
   song: {
     meta?: { title?: string; bpm?: number; key?: string; length_bars?: number };
     [k: string]: unknown;
   };
 }
 
-// ---------- Jobs + websocket ----------
+// ---------- OPTIONAL accelerators (NOT in the contract; see API-NEEDS.md) ----------
+/** GET /summary — one round-trip for everything the UI needs at boot. */
+export interface ProjectSummary {
+  project_path?: string;
+  title?: string | null;
+  has_song?: boolean;
+  versions?: VersionInfo[];
+  metas?: Record<VersionId, RenderMeta>;
+  metrics?: Record<VersionId, Metrics | null>;
+  analyses?: Record<string, Analysis>;
+}
+
+/** GET /peaks/<project-relative wav>?buckets=N — min/max per bucket. */
+export interface PeaksData {
+  /** peaks[channel][bucket] = [min, max] in -1..1 */
+  peaks: [number, number][][];
+  duration_s?: number;
+}
+
+// ---------- Jobs + websocket (schemas/api.py) ----------
 export type JobStatus = "queued" | "running" | "done" | "failed";
 export interface Job {
   id: string;
   tool: string;
   status: JobStatus;
-  progress: number | null;
+  progress?: number | null;
   message?: string | null;
   result?: ToolResult | null;
 }

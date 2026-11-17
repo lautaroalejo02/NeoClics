@@ -1,250 +1,272 @@
-// Thin API client — the ONLY file that knows HTTP routes, tool names and
+// Thin API client: the ONLY module that knows HTTP routes, tool names and
 // envelope shapes. Everything the UI needs from the backend goes through
-// here so a contract change is a one-file edit. See ui/API-NEEDS.md for
-// the full endpoint/field list and what is contractual vs assumed.
+// here, so a contract change is a one-file edit. ui/API-NEEDS.md lists every
+// endpoint/field used and which ones are contractual vs assumptions.
 
 import type {
   Analysis,
   ChopAdjust,
-  ChopCandidateSet,
+  ChopsChooseResult,
   ChopsListResult,
   FeedbackEvent,
   FeedbackReadResult,
   Job,
   Metrics,
+  PeaksData,
   ProjectOpenResult,
+  ProjectSummary,
   RenderMeta,
   SongGetResult,
   ToolResult,
   VersionId,
-  VersionsGetResult,
+  VersionsDiffResult,
   VersionsListResult,
   WsEvent,
+  WsEventType,
 } from "./types";
 
 export class ApiError extends Error {
-  constructor(
-    message: string,
-    readonly status: number | null,
-    readonly issues: ToolResult["errors"] = [],
-  ) {
+  readonly status: number | null;
+  readonly issues: ToolResult["errors"];
+  constructor(message: string, status: number | null, issues: ToolResult["errors"] = []) {
     super(message);
     this.name = "ApiError";
+    this.status = status;
+    this.issues = issues;
   }
 }
 
 export interface ClientOptions {
-  /** API base URL. "" = same origin (production: API serves ui/dist). */
+  /** API base URL. "" = same origin (production: the API serves ui/dist). */
   baseUrl?: string;
-  /** Project path sent inside project-scoped tool params. The HTTP API
-   *  serves one project per process, so this is a formality; default ".". */
-  project?: string;
+  /** Project path for project-scoped tool params. The HTTP API is bound to
+   *  ONE project and injects it when omitted (WP7), so leave it unset. */
+  project?: string | null;
   fetchImpl?: typeof fetch;
+}
+
+const WS_TYPES: ReadonlySet<string> = new Set<WsEventType>([
+  "job.updated",
+  "version.created",
+  "candidates.created",
+  "feedback.appended",
+  "song.changed",
+]);
+
+/** Resolve the API base URL: `?api=` query param, then VITE_MUESTRA_API,
+ *  then same origin. */
+export function resolveBaseUrl(): string {
+  try {
+    const q = new URLSearchParams(globalThis.location?.search ?? "").get("api");
+    if (q) return q.replace(/\/$/, "");
+  } catch {
+    /* no location (tests) */
+  }
+  const env = (import.meta.env?.VITE_MUESTRA_API as string | undefined) ?? "";
+  return env.replace(/\/$/, "");
+}
+
+/** Encode a project-relative POSIX path for a URL, segment by segment. */
+export function encodePath(p: string): string {
+  return p.split("/").map(encodeURIComponent).join("/");
 }
 
 export class MuestraClient {
   readonly baseUrl: string;
-  readonly project: string;
-  private fetchImpl: typeof fetch;
+  readonly project: string | null;
+  private readonly fetchImpl: typeof fetch;
+  /** Optional endpoints we already know are missing (404) — don't retry. */
+  private missing = new Set<string>();
 
   constructor(opts: ClientOptions = {}) {
     this.baseUrl = (opts.baseUrl ?? "").replace(/\/$/, "");
-    this.project = opts.project ?? ".";
-    this.fetchImpl = opts.fetchImpl ?? fetch;
+    this.project = opts.project ?? null;
+    this.fetchImpl = opts.fetchImpl ?? ((...a) => fetch(...a));
   }
 
-  // ---------- low level ----------
+  // ---------------------------------------------------------------- low level
 
-  private async request(path: string, init?: RequestInit): Promise<Response> {
-    const res = await this.fetchImpl(this.baseUrl + path, init);
-    return res;
+  private url(path: string): string {
+    return this.baseUrl + path;
   }
 
-  /** POST (or GET for readonly tools) /tools/<mcp_name>. Returns ToolResult. */
-  async tool<T = unknown>(
-    mcpName: string,
-    params: Record<string, unknown> = {},
-    { method = "POST", projectScoped = true } = {},
-  ): Promise<ToolResult<T>> {
-    const body = { ...(projectScoped ? { project: this.project } : {}), ...params };
+  /** POST /tools/<mcp_name> with the tool's params. Unwraps the ToolResult
+   *  envelope; `ok: false` becomes an ApiError carrying the Issues. */
+  async tool<T>(mcpName: string, params: Record<string, unknown> = {}): Promise<T> {
+    const body: Record<string, unknown> = { ...params };
+    if (this.project && !("project" in body)) body.project = this.project;
     let res: Response;
-    if (method === "GET") {
-      const qs = new URLSearchParams(
-        Object.entries(body).map(([k, v]) => [k, JSON.stringify(v)]),
-      );
-      res = await this.request(`/tools/${mcpName}?${qs}`);
-    } else {
-      res = await this.request(`/tools/${mcpName}`, {
+    try {
+      res = await this.fetchImpl(this.url(`/tools/${mcpName}`), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(body),
       });
+    } catch (e) {
+      throw new ApiError(`${mcpName}: sin conexión con la API (${String(e)})`, null);
     }
-    if (!res.ok) {
+    let tr: ToolResult<T> | null = null;
+    try {
+      tr = (await res.json()) as ToolResult<T>;
+    } catch {
+      /* non-JSON error page */
+    }
+    if (!tr || typeof tr.ok !== "boolean") {
       throw new ApiError(`${mcpName}: HTTP ${res.status}`, res.status);
     }
-    const tr = (await res.json()) as ToolResult<T>;
     if (!tr.ok) {
-      const msg = tr.errors.map((e) => e.message).join("; ") || tr.hint || "tool error";
-      throw new ApiError(msg, res.status, tr.errors);
+      const msg =
+        tr.errors?.map((e) => e.message).join("; ") || tr.hint || `${mcpName} falló`;
+      throw new ApiError(msg, res.status, tr.errors ?? []);
     }
-    return tr;
+    return tr.data as T;
   }
 
-  /** GET a JSON file under /files (renders/, cache/previews/). */
-  private async getJson<T>(projectPath: string): Promise<T> {
-    const res = await this.request(`/files/${projectPath}`);
-    if (!res.ok) throw new ApiError(`${projectPath}: HTTP ${res.status}`, res.status);
+  /** GET JSON; null on 404 (optional files/endpoints). */
+  private async getJson<T>(path: string): Promise<T | null> {
+    const res = await this.fetchImpl(this.url(path));
+    if (res.status === 404) return null;
+    if (!res.ok) throw new ApiError(`${path}: HTTP ${res.status}`, res.status);
     return (await res.json()) as T;
   }
 
-  /** Public URL for a project file (audio). */
+  private async optional<T>(key: string, path: string): Promise<T | null> {
+    if (this.missing.has(key)) return null;
+    try {
+      const v = await this.getJson<T>(path);
+      if (v == null) this.missing.add(key);
+      return v;
+    } catch {
+      this.missing.add(key);
+      return null;
+    }
+  }
+
+  /** URL of a project file under /files (renders/, cache/previews/). */
   fileUrl(projectPath: string): string {
-    return `${this.baseUrl}/files/${projectPath}`;
+    return this.url(`/files/${encodePath(projectPath)}`);
   }
 
-  // ---------- project / song ----------
-
-  async openProject(): Promise<ProjectOpenResult> {
-    const tr = await this.tool<ProjectOpenResult>("project_open", {
-      path: this.project,
-    });
-    return tr.data as ProjectOpenResult;
-  }
-
-  async getSong(): Promise<SongGetResult> {
-    const tr = await this.tool<SongGetResult>("song_get", {});
-    return tr.data as SongGetResult;
-  }
-
-  // ---------- versions ----------
-
-  async listVersions(): Promise<VersionsListResult> {
-    const tr = await this.tool<VersionsListResult>("versions_list", {});
-    return tr.data as VersionsListResult;
-  }
-
-  async getVersion(version: VersionId): Promise<VersionsGetResult> {
-    const tr = await this.tool<VersionsGetResult>("versions_get", { version });
-    return tr.data as VersionsGetResult;
-  }
-
-  /** meta.json is inside renders/, so plain /files works too — cheaper than
-   *  versions.get when we don't need the song.yaml snapshot. */
-  async getMeta(version: VersionId): Promise<RenderMeta> {
-    return this.getJson<RenderMeta>(`renders/${version}/meta.json`);
-  }
-
-  async getMetrics(version: VersionId): Promise<Metrics | null> {
-    try {
-      return await this.getJson<Metrics>(`renders/${version}/metrics.json`);
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 404) return null;
-      throw e;
-    }
-  }
-
-  // ---------- waveforms ----------
-
-  /** Optional peaks endpoint — NOT in the contract (see API-NEEDS.md).
-   *  Expected shape: {peaks: number[][], channels: 1|2} with min/max pairs.
-   *  Returns null on 404/invalid so callers can decode the wav locally. */
-  async getPeaks(version: VersionId): Promise<number[][] | null> {
-    try {
-      const data = await this.getJson<{ peaks?: unknown }>(
-        `renders/${version}/peaks.json`,
-      );
-      if (Array.isArray(data?.peaks) && data.peaks.every((p) => Array.isArray(p))) {
-        return data.peaks as number[][];
-      }
-      return null;
-    } catch (e) {
-      if (e instanceof ApiError && e.status === 404) return null;
-      return null;
-    }
-  }
-
-  async fetchAudio(projectPath: string): Promise<ArrayBuffer> {
-    const res = await this.request(`/files/${projectPath}`);
+  async fetchFile(projectPath: string, signal?: AbortSignal): Promise<ArrayBuffer> {
+    const res = await this.fetchImpl(this.fileUrl(projectPath), { signal });
     if (!res.ok) throw new ApiError(`${projectPath}: HTTP ${res.status}`, res.status);
     return res.arrayBuffer();
   }
 
-  // ---------- feedback ----------
+  // ---------------------------------------------------------------- project
 
-  async readFeedback(opts: { since?: string; cursor?: number } = {}): Promise<FeedbackReadResult> {
+  /** Optional accelerator (NOT in the contract): GET /summary. */
+  getSummary(): Promise<ProjectSummary | null> {
+    return this.optional<ProjectSummary>("summary", "/summary");
+  }
+
+  openProject(): Promise<ProjectOpenResult> {
+    // `path` omitted: the HTTP server is bound to its project.
+    return this.tool<ProjectOpenResult>("project_open", this.project ? { path: this.project } : {});
+  }
+
+  getSong(): Promise<SongGetResult> {
+    return this.tool<SongGetResult>("song_get");
+  }
+
+  // ---------------------------------------------------------------- versions
+
+  listVersions(): Promise<VersionsListResult> {
+    return this.tool<VersionsListResult>("versions_list");
+  }
+
+  diffVersions(a: VersionId, b: VersionId): Promise<VersionsDiffResult> {
+    return this.tool<VersionsDiffResult>("versions_diff", { a, b });
+  }
+
+  /** meta.json lives under renders/, which /files serves (contract). */
+  async getMeta(version: VersionId): Promise<RenderMeta | null> {
+    return this.getJson<RenderMeta>(`/files/renders/${encodeURIComponent(version)}/meta.json`);
+  }
+
+  async getMetrics(version: VersionId): Promise<Metrics | null> {
+    return this.getJson<Metrics>(`/files/renders/${encodeURIComponent(version)}/metrics.json`);
+  }
+
+  /** Optional accelerator (NOT in the contract): GET /peaks/<wav path>. */
+  async getPeaks(projectPath: string, buckets: number): Promise<PeaksData | null> {
+    const d = await this.optional<PeaksData>(
+      "peaks",
+      `/peaks/${encodePath(projectPath)}?buckets=${buckets}`,
+    );
+    if (d && Array.isArray(d.peaks) && d.peaks.length > 0 && Array.isArray(d.peaks[0])) return d;
+    return null;
+  }
+
+  /** Source analysis for the chop panel. cache/analysis/ is NOT in the
+   *  /files whitelist and `source.analyze` is a long-running COMPUTE tool,
+   *  so we only read it from /summary or (requested) /files. */
+  async getAnalysis(sourceId: string): Promise<Analysis | null> {
+    return this.optional<Analysis>(
+      `analysis:${sourceId}`,
+      `/files/cache/analysis/${encodeURIComponent(sourceId)}.json`,
+    );
+  }
+
+  // ---------------------------------------------------------------- feedback
+
+  readFeedback(opts: { since?: string; cursor?: number } = {}): Promise<FeedbackReadResult> {
     const params: Record<string, unknown> = {};
     if (opts.since) params.since = opts.since;
     if (opts.cursor != null) params.cursor = opts.cursor;
-    const tr = await this.tool<FeedbackReadResult>("feedback_read", params);
-    return tr.data as FeedbackReadResult;
+    return this.tool<FeedbackReadResult>("feedback_read", params);
   }
 
   async appendFeedback(event: FeedbackEvent): Promise<void> {
     await this.tool("feedback_append", { event });
   }
 
-  // ---------- chops ----------
+  // ---------------------------------------------------------------- chops
 
-  async listChopSets(): Promise<ChopsListResult> {
-    const tr = await this.tool<ChopsListResult>("chops_list", {});
-    return tr.data as ChopsListResult;
+  listChopSets(): Promise<ChopsListResult> {
+    return this.tool<ChopsListResult>("chops_list");
   }
 
-  async getChopSet(setPath: string): Promise<ChopCandidateSet> {
-    // Candidate sets live under cache/chops/ which is NOT inside the /files
-    // whitelist; the contract route is chops.list. Kept for API-NEEDS.
-    return this.getJson<ChopCandidateSet>(setPath);
-  }
-
-  async chooseChop(
-    candidateId: string,
-    chopId: string,
-    adjust?: ChopAdjust,
-  ): Promise<void> {
+  /** Manual override of the agent's pick (spec 3 step 4). The tool itself
+   *  logs the `chop_choice` feedback event in mode manual. */
+  chooseChop(candidateId: string, chopId: string, adjust?: ChopAdjust | null): Promise<ChopsChooseResult> {
     const params: Record<string, unknown> = {
       candidate_id: candidateId,
       chop_id: chopId,
       mode: "manual",
     };
-    if (adjust && (adjust.start_beats !== 0 || adjust.length_beats !== 0)) {
-      params.adjust = adjust;
-    }
-    await this.tool("chops_choose", params);
+    if (adjust && (adjust.start_beats !== 0 || adjust.length_beats !== 0)) params.adjust = adjust;
+    return this.tool<ChopsChooseResult>("chops_choose", params);
   }
 
-  // ---------- analysis ----------
+  // ---------------------------------------------------------------- jobs
 
-  async getAnalysis(sourceId: string): Promise<Analysis> {
-    const tr = await this.tool<{ analysis: Analysis }>("source_analyze", {
-      source_id: sourceId,
-    });
-    return (tr.data as { analysis: Analysis }).analysis;
+  async getJob(id: string): Promise<Job | null> {
+    return this.getJson<Job>(`/jobs/${encodeURIComponent(id)}`);
   }
 
-  // ---------- jobs ----------
+  // ---------------------------------------------------------------- events
 
-  async getJob(id: string): Promise<Job> {
-    const res = await this.request(`/jobs/${id}`);
-    if (!res.ok) throw new ApiError(`job ${id}: HTTP ${res.status}`, res.status);
-    return (await res.json()) as Job;
+  eventsUrl(): string {
+    const base = this.baseUrl || globalThis.location?.origin || "http://localhost";
+    return base.replace(/^http/, "ws") + "/events";
   }
 
-  // ---------- websocket ----------
-
-  /** Connect to /events. Caller owns reconnect; returns the WebSocket. */
-  eventsSocket(): WebSocket {
-    const base = this.baseUrl || location.origin;
-    const url = base.replace(/^http/, "ws") + "/events";
-    return new WebSocket(url);
-  }
-
-  static parseWsEvent(raw: string): WsEvent | null {
+  static parseWsEvent(raw: unknown): WsEvent | null {
+    if (typeof raw !== "string") return null;
     try {
-      const e = JSON.parse(raw) as WsEvent;
-      return typeof e?.type === "string" ? e : null;
+      const e = JSON.parse(raw) as Partial<WsEvent>;
+      if (!e || typeof e.type !== "string" || !WS_TYPES.has(e.type)) return null;
+      return { type: e.type as WsEventType, ts: String(e.ts ?? ""), data: e.data ?? {} };
     } catch {
       return null;
     }
+  }
+
+  /** `feedback.appended` carries "the event line" as data (schemas/api.py);
+   *  tolerate a `{event}` wrapper too. */
+  static feedbackFromWs(data: Record<string, unknown>): FeedbackEvent | null {
+    const d = (typeof data.type === "string" ? data : data.event) as FeedbackEvent | undefined;
+    return d && typeof d.type === "string" && typeof d.ts === "string" ? d : null;
   }
 }
