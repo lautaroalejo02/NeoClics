@@ -155,6 +155,13 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
     from .reliability import reliable_window
 
     analysis = load_analysis(project, source_id)
+    if len(analysis.beats_s) < 2 or not analysis.downbeats_s:
+        raise MuestraError.one(
+            "no_candidates",
+            "No beat grid was detected in this source.",
+            hint="Listen with source.preview_grid(window_s=[start, end]); "
+            "import a rhythmic source with source.import then source.analyze.",
+        )
     original_fingerprint = fingerprint(project, source_id, analysis)
     stem = query.stem or ("other" if analysis.stems and analysis.stems.other else "mix")
     audio, sr = decode(stem_path(project, analysis, stem))

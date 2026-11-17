@@ -5,8 +5,15 @@
       "description": "analysis.json minus the beat lists (``beats_s``, ``downbeats_s``, raw grid):\na 4-minute record has ~1000 beats, which do not belong in an LLM context.",
       "properties": {
         "bpm_global": {
-          "title": "Bpm Global",
-          "type": "number"
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Bpm Global"
         },
         "duration_s": {
           "title": "Duration S",
@@ -51,7 +58,7 @@
         "reliability": {
           "anyOf": [
             {
-              "$ref": "#/$defs/GridReliability"
+              "$ref": "#/$defs/GridReliabilitySummary"
             },
             {
               "type": "null"
@@ -164,49 +171,6 @@
       "title": "GridAlternative",
       "type": "object"
     },
-    "GridBar": {
-      "additionalProperties": false,
-      "properties": {
-        "beat_count": {
-          "minimum": 0,
-          "title": "Beat Count",
-          "type": "integer"
-        },
-        "end_s": {
-          "exclusiveMinimum": 0,
-          "title": "End S",
-          "type": "number"
-        },
-        "reason": {
-          "title": "Reason",
-          "type": "string"
-        },
-        "reliable": {
-          "title": "Reliable",
-          "type": "boolean"
-        },
-        "start_downbeat": {
-          "minimum": 1,
-          "title": "Start Downbeat",
-          "type": "integer"
-        },
-        "start_s": {
-          "minimum": 0,
-          "title": "Start S",
-          "type": "number"
-        }
-      },
-      "required": [
-        "start_s",
-        "end_s",
-        "reliable",
-        "reason",
-        "start_downbeat",
-        "beat_count"
-      ],
-      "title": "GridBar",
-      "type": "object"
-    },
     "GridRegion": {
       "additionalProperties": false,
       "properties": {
@@ -238,16 +202,9 @@
       "title": "GridRegion",
       "type": "object"
     },
-    "GridReliability": {
+    "GridReliabilitySummary": {
       "additionalProperties": false,
       "properties": {
-        "bars": {
-          "items": {
-            "$ref": "#/$defs/GridBar"
-          },
-          "title": "Bars",
-          "type": "array"
-        },
         "confidence": {
           "description": "Reliable fraction of complete bars; heuristic.",
           "maximum": 1,
@@ -271,7 +228,7 @@
         "confidence",
         "hint"
       ],
-      "title": "GridReliability",
+      "title": "GridReliabilitySummary",
       "type": "object"
     },
     "GridReport": {
@@ -538,8 +495,15 @@
       "type": "array"
     },
     "grid": {
-      "$ref": "#/$defs/GridReport",
-      "description": "How the beat grid was read and corrected (WP12)."
+      "anyOf": [
+        {
+          "$ref": "#/$defs/GridReport"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "description": "How the grid was read; null when no pulse was detected."
     },
     "hint": {
       "anyOf": [

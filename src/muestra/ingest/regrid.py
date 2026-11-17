@@ -363,7 +363,7 @@ class GridPreview:
     beat_phase: int
     downbeat_shift_beats: int
     beats_per_bar: int
-    bpm: float
+    bpm: float | None
     start_downbeat: int
     start_s: float
     end_s: float
@@ -399,6 +399,33 @@ def preview_grid(
             path="window_s",
             hint="Use [start_s, end_s] from source.analyze.",
         )
+    if analysis.bpm_global is None:
+        # No invented clicks: the human can still audition the requested audio.
+        start, end = window_s or (0, min(15, analysis.duration_s))
+        audio, sr = decode(project.resolve(analysis.file))
+        out_dir = project.path(g.preview_dir(source_id))
+        out_dir.mkdir(parents=True, exist_ok=True)
+        path = out_dir / f"unverified-{start:g}-{end:g}.wav"
+        sf.write(path, stereo(audio[round(start * sr) : round(end * sr)]), sr, subtype="PCM_24")
+        result = GridPreview(
+            path=path.relative_to(project.root).as_posix(),
+            label="Sin pulsos detectados: audio sin clicks",
+            tempo_factor=1,
+            beat_phase=0,
+            downbeat_shift_beats=0,
+            beats_per_bar=4,
+            bpm=None,
+            start_downbeat=0,
+            start_s=start,
+            end_s=end,
+            bars=0,
+            applied=True,
+        )
+        write_json(
+            out_dir / "index.json",
+            {"source_id": source_id, "bpm": None, "raw_bpm": None, "previews": [vars(result)]},
+        )
+        return [result]
     if stem == "mix":
         ref = analysis.file
     else:

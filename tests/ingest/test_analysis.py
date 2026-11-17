@@ -100,3 +100,19 @@ def test_partial_grid_windows_use_full_analysis(rhythmic_project):
     assert attached.stems.other == result.file
     assert attached.beats_s == result.beats_s
     assert attached.reliability == result.reliability
+
+
+def test_valid_audio_without_tracked_pulse_is_not_an_analysis_error(rhythmic_project):
+    from muestra.ingest.regrid import preview_grid
+    from muestra.ingest.tools import SourceAnalyzeParams, source_analyze
+
+    project, source_id, _ = rhythmic_project
+    result = analyze(project, source_id, tracker=lambda a, sr: ([], []))
+    assert result.bpm_global is None and not result.beats_s
+    assert result.reliability.confidence == 0
+    assert (
+        source_analyze(SourceAnalyzeParams(project=str(project.root), source_id=source_id)).grid
+        is None
+    )
+    audition = preview_grid(project, source_id, window_s=(1, 3))
+    assert audition[0].bpm is None and project.path(audition[0].path).exists()

@@ -168,13 +168,16 @@ class GridBar(GridRegion):
     beat_count: int = Field(ge=0)
 
 
-class GridReliability(ContractModel):
+class GridReliabilitySummary(ContractModel):
     confidence: float = Field(
         ge=0, le=1, description="Reliable fraction of complete bars; heuristic."
     )
-    bars: list[GridBar] = Field(default_factory=list)
     regions: list[GridRegion] = Field(default_factory=list)
     hint: str
+
+
+class GridReliability(GridReliabilitySummary):
+    bars: list[GridBar] = Field(default_factory=list)
 
 
 class Analysis(ContractModel):
@@ -183,10 +186,10 @@ class Analysis(ContractModel):
     file: RelPath = Field(description="Project-relative path of the source audio.")
     duration_s: float = Field(gt=0.0)
     sample_rate: int = Field(gt=0)
-    bpm_global: float = Field(gt=0.0, lt=400.0)
+    bpm_global: float | None = Field(default=None, gt=0.0, lt=400.0)
     tempo_variable: bool = False
-    beats_s: list[float] = Field(min_length=1)
-    downbeats_s: list[float] = Field(min_length=1)
+    beats_s: list[float] = Field(default_factory=list)
+    downbeats_s: list[float] = Field(default_factory=list)
     key: KeyEstimate | None = None
     sections: list[Section] = Field(default_factory=list)
     loudness_lufs: float | None = None
@@ -215,7 +218,7 @@ class Analysis(ContractModel):
                 {"hint": "Sort the downbeat timestamps."},
             )
         for name, seq in (("beats_s", self.beats_s), ("downbeats_s", self.downbeats_s)):
-            if seq[0] < 0 or seq[-1] > self.duration_s:
+            if seq and (seq[0] < 0 or seq[-1] > self.duration_s):
                 raise PydanticCustomError(
                     "out_of_range",
                     f"'{name}' must lie within [0, duration_s].",

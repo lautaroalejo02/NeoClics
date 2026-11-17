@@ -12,6 +12,20 @@ from ..schemas.analysis import Analysis, GridBar, GridRegion, GridReliability
 
 
 def assess_reliability(analysis: Analysis) -> GridReliability:
+    if len(analysis.beats_s) < 2 or len(analysis.downbeats_s) < 2:
+        return GridReliability(
+            confidence=0,
+            regions=[
+                GridRegion(
+                    start_s=0,
+                    end_s=analysis.duration_s,
+                    reliable=False,
+                    reason="No se detectó ningún compás completo; sin grilla fiable.",
+                )
+            ],
+            hint="Audio analizado, sin grilla fiable. source.preview_grid permite escuchar "
+            "una ventana; source.find_chops no inventa pulsos ni propone cortes sin grilla.",
+        )
     beats = np.asarray(analysis.beats_s)
     downs = analysis.downbeats_s
     indices = np.asarray([int(np.argmin(abs(beats - d))) for d in downs])
@@ -80,6 +94,8 @@ def assess_reliability(analysis: Analysis) -> GridReliability:
     for span in spans:
         if regions and regions[-1].reliable == span.reliable and regions[-1].end_s == span.start_s:
             regions[-1].end_s = span.end_s
+            if regions[-1].reason != span.reason:
+                regions[-1].reason = "Grilla dudosa; ver el detalle por compás."
         else:
             regions.append(span)
     confidence = sum(bar.reliable for bar in bars) / len(bars) if bars else 0

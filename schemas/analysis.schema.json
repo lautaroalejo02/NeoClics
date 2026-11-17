@@ -498,21 +498,27 @@
       "items": {
         "type": "number"
       },
-      "minItems": 1,
       "title": "Beats S",
       "type": "array"
     },
     "bpm_global": {
-      "exclusiveMaximum": 400.0,
-      "exclusiveMinimum": 0.0,
-      "title": "Bpm Global",
-      "type": "number"
+      "anyOf": [
+        {
+          "exclusiveMaximum": 400.0,
+          "exclusiveMinimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bpm Global"
     },
     "downbeats_s": {
       "items": {
         "type": "number"
       },
-      "minItems": 1,
       "title": "Downbeats S",
       "type": "array"
     },
@@ -629,10 +635,7 @@
     "source_id",
     "file",
     "duration_s",
-    "sample_rate",
-    "bpm_global",
-    "beats_s",
-    "downbeats_s"
+    "sample_rate"
   ],
   "title": "Analysis",
   "type": "object"

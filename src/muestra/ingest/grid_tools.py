@@ -16,7 +16,7 @@ from ..schemas._base import ContractModel, IdStr, RelPath
 from ..schemas.analysis import (
     Analysis,
     GridAlternative,
-    GridReliability,
+    GridReliabilitySummary,
     KeyEstimate,
     Section,
     Stems,
@@ -100,7 +100,7 @@ class AnalysisSummary(ContractModel):
     file: RelPath
     duration_s: float
     sample_rate: int
-    bpm_global: float
+    bpm_global: float | None
     tempo_variable: bool
     n_beats: int
     n_downbeats: int
@@ -109,11 +109,13 @@ class AnalysisSummary(ContractModel):
     loudness_lufs: float | None = None
     stems: Stems | None = None
     separation_model: str | None = None
-    reliability: GridReliability | None = None
+    reliability: GridReliabilitySummary | None = None
 
     @classmethod
     def of(cls, analysis: Analysis) -> AnalysisSummary:
         data = analysis.model_dump(exclude={"beats_s", "downbeats_s", "grid", "schema_version"})
+        if analysis.reliability:
+            data["reliability"] = analysis.reliability.model_dump(exclude={"bars"})
         return cls(**data, n_beats=len(analysis.beats_s), n_downbeats=len(analysis.downbeats_s))
 
 
@@ -246,7 +248,7 @@ class GridPreviewFile(ContractModel):
     beat_phase: int
     downbeat_shift_beats: int
     beats_per_bar: int
-    bpm: float
+    bpm: float | None
     start_downbeat: int
     start_s: float
     end_s: float
@@ -292,7 +294,10 @@ def source_preview_grid(p: SourcePreviewGridParams) -> SourcePreviewGridResult:
     return SourcePreviewGridResult(
         source_id=p.source_id,
         previews=[GridPreviewFile(**vars(x)) for x in previews],
-        listen=LISTEN,
+        listen=LISTEN
+        if previews[0].bpm is not None
+        else "No se detectaron pulsos: "
+        "este audio no tiene clicks agregados. Confirmá de oído si hay un pulso utilizable.",
         files=[x.path for x in previews] + [f"cache/previews/{p.source_id}/grid/index.json"],
     )
 

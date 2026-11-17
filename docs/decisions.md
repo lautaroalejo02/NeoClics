@@ -832,3 +832,37 @@ that field)**; schemas regenerated (`uv run python -m muestra.schemas.export`).
   compatibility alongside the WP13 fields.
 - Analyze the unseparated mix first. Separation attaches stems to that cached
   analysis without changing its grid or needing another inference pass.
+
+### WP15 — drafts and transport reconciliation
+
+`render(draft=true)` uses the same staged renderer and a random `d-<12 hex>`
+render id, but never allocates a version or commits/tags. Its `version` result
+is null; `draft_id` identifies the audio and snapshot. Ears is opt-in for drafts
+(`analyze=true`, or later `ears.analyze(version=<draft_id>)`). Existing version
+renders retain automatic ears. Metadata/metrics accept either id; history
+contracts remain version-only. `/project` lists drafts and ordinary previews;
+disk watching emits `draft.created`/`drafts.changed`, including deletions.
+Public static UI assets and Bearer-header acceptance reconcile the WP14 client
+with LAN authentication. API/audio/write restrictions remain authenticated.
+Heavy render/ears imports are lazy again; shared MCP conventions appear once
+in initialization instructions, and tool descriptions contain specific purposes.
+
+### WP15 — no-pulse audio and honest metrics
+
+Valid decoded audio whose tracker yields no usable grid still produces analysis
+descriptors: `bpm_global=null`, empty beat/downbeat arrays, `grid=null` in the
+tool result, zero reliability. This relaxes the old nonempty grid contract;
+readers must handle absent pulse. No timestamps are invented. A window preview
+then plays explicitly labelled audio without clicks. Summary reliability omits
+the per-bar array; the complete map remains in `analysis.json`.
+
+`DetuneCheck.confidence` and optional `Alarm.confidence` expose tuning strength
+(heuristic, not a probability). Weak/predicted detune becomes `info` with no
+automatic fix. Possibly intentional fourth/fifth transpositions also omit a
+destructive fix. Ears summary lists skipped checks/reasons; instrument ducking
+reports the lack of a dry instrument reference. Relative file references now
+accept backslashes and normalize to `/`; traversal/absolute-path checks apply
+after normalization. UTF-8 input errors include the byte offset. CLI doctor
+retains its documented `{ok,checks}` diagnostic exception. Generated help escapes
+percent signs. Drum sample swaps precede configured-gain notes, which explicitly
+do not claim an isolated audible level change.

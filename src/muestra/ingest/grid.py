@@ -360,6 +360,13 @@ def apply_correction(analysis: Analysis, correction: GridCorrection) -> Analysis
 
 
 def raw_of(analysis: Analysis) -> RawGrid:
+    if analysis.bpm_global is None or len(analysis.beats_s) < 2 or not analysis.downbeats_s:
+        raise MuestraError.one(
+            "grid_unavailable",
+            "This source has no detected beat grid.",
+            hint="Use source.preview_grid with window_s to listen; "
+            "choose a rhythmic source with source.import and source.analyze.",
+        )
     if analysis.grid is not None:
         return analysis.grid.raw
     return RawGrid(

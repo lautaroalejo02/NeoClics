@@ -131,7 +131,9 @@ class SourceAnalyzeResult(ToolOutput):
     analysis: AnalysisSummary = Field(
         description="analysis.json without the beat lists (read the file for those)."
     )
-    grid: GridReport = Field(description="How the beat grid was read and corrected (WP12).")
+    grid: GridReport | None = Field(
+        description="How the grid was read; null when no pulse was detected."
+    )
     hint: str | None = Field(
         default=None, description="Agent-facing note, e.g. confirm the grid by ear."
     )
@@ -153,9 +155,9 @@ def source_analyze(p: SourceAnalyzeParams, progress: Progress | None = None) -> 
         open_project(Path(p.project)), p.source_id, progress=progress, tempo_range=tempo_range
     )
     rel = f"cache/analysis/{p.source_id}.json"
-    report = GridReport.of(analysis)
+    report = GridReport.of(analysis) if analysis.bpm_global is not None else None
     hint = analysis.reliability.hint if analysis.reliability else None
-    if report.ask_human or report.corrected:
+    if report is not None and (report.ask_human or report.corrected):
         hint = (hint + " " if hint else "") + report.reason
         if report.ask_human:
             hint += (
