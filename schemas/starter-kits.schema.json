@@ -1,0 +1,79 @@
+{
+  "$defs": {
+    "StarterKit": {
+      "additionalProperties": false,
+      "description": "One named drum kit: lane -> library-root-relative sample path.",
+      "properties": {
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "lanes": {
+          "description": "Lane name -> sample path relative to the library root.",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Lanes",
+          "type": "object"
+        },
+        "notes": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Notes"
+        }
+      },
+      "required": [
+        "lanes"
+      ],
+      "title": "StarterKit",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "``starter-kits.json`` inside a library root.",
+  "properties": {
+    "kits": {
+      "additionalProperties": {
+        "$ref": "#/$defs/StarterKit"
+      },
+      "title": "Kits",
+      "type": "object"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Free-text provenance/caveat for the whole manifest.",
+      "title": "Note"
+    },
+    "schema_version": {
+      "const": 0,
+      "default": 0,
+      "title": "Schema Version",
+      "type": "integer"
+    }
+  },
+  "title": "StarterKits",
+  "type": "object"
+}

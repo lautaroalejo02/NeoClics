@@ -12,7 +12,66 @@
         }
       ],
       "default": null,
+      "description": "Only loops/phrases near this BPM (half/double time too).",
       "title": "Bpm"
+    },
+    "bpm_tolerance": {
+      "default": 0.04,
+      "description": "Fraction, 0.04 = 4%.",
+      "exclusiveMinimum": 0,
+      "maximum": 0.5,
+      "title": "Bpm Tolerance",
+      "type": "number"
+    },
+    "clean_only": {
+      "default": false,
+      "description": "Drop clipped / very quiet / mislabelled / BPM-disputed files.",
+      "title": "Clean Only",
+      "type": "boolean"
+    },
+    "detail": {
+      "default": "compact",
+      "description": "'full' adds measured features and licence terms to every hit.",
+      "enum": [
+        "compact",
+        "full"
+      ],
+      "title": "Detail",
+      "type": "string"
+    },
+    "duration_max": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Seconds.",
+      "title": "Duration Max"
+    },
+    "duration_min": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Seconds.",
+      "title": "Duration Min"
+    },
+    "half_double": {
+      "default": true,
+      "description": "Also match half/double-time BPMs.",
+      "title": "Half Double",
+      "type": "boolean"
     },
     "key": {
       "anyOf": [
@@ -24,14 +83,56 @@
         }
       ],
       "default": null,
-      "description": "Key filter, e.g. 'F#m'.",
+      "description": "Only tonal samples in a compatible key, e.g. 'F#m'.",
       "title": "Key"
     },
+    "key_exact": {
+      "default": false,
+      "description": "Exact key only (no relative/fifth keys).",
+      "title": "Key Exact",
+      "type": "boolean"
+    },
+    "kind": {
+      "anyOf": [
+        {
+          "enum": [
+            "one-shot",
+            "loop",
+            "phrase"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Kind"
+    },
+    "kit": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Substring of a folder name, e.g. 'tr8', '80s-pop', 'tr-909-kit'.",
+      "title": "Kit"
+    },
     "limit": {
-      "default": 20,
-      "maximum": 200,
+      "default": 10,
+      "maximum": 100,
       "minimum": 1,
       "title": "Limit",
+      "type": "integer"
+    },
+    "offset": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Offset",
       "type": "integer"
     },
     "project": {
@@ -42,9 +143,43 @@
     },
     "query": {
       "default": "",
-      "description": "Free-text query; empty lists all.",
+      "description": "Free text, English or Spanish: 'punchy 909 kick', 'bombo seco', 'open hat', 'palmas', 'conga loop 120'. Empty lists everything.",
       "title": "Query",
       "type": "string"
+    },
+    "similar_to": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "A library:// URI: rank by closeness of measured sound features to it.",
+      "title": "Similar To"
+    },
+    "subtype": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "e.g. conga|cowbell|crash|ride|roll|sidestick.",
+      "title": "Subtype"
+    },
+    "tags": {
+      "description": "Tags that must ALL be present (e.g. ['909', 'punchy']).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Tags",
+      "type": "array"
     },
     "type": {
       "anyOf": [
@@ -56,6 +191,7 @@
         }
       ],
       "default": null,
+      "description": "Instrument: kick|snare|clap|chat|ohat|hat|tom|cym|rim|perc|drums|fill|bass|keys|synth|guitar|pad|vox|fx. Aliases like 'bombo' work; comma-separate several.",
       "title": "Type"
     }
   },

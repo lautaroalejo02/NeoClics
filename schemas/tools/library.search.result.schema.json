@@ -1,8 +1,218 @@
 {
   "$defs": {
+    "AudioFeatures": {
+      "additionalProperties": false,
+      "description": "Descriptive audio features \u2014 the agent's ears.\n\nFrequencies in Hz, times in ms. ``sub``/``low``/``mid``/``high``/\n``air`` are the SHARE (0..1) of the file's spectral energy in\n20-120 / 120-400 / 400-2000 / 2000-8000 / 8000+ Hz; they sum to ~1.\n``tonality`` is the fraction of spectral energy concentrated in a few\nnarrow peaks (1 = pure tone, ~0 = noise). Attack/decay are only\nmeasured for files up to a few seconds long.",
+      "properties": {
+        "air": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy above 8 kHz.",
+          "title": "Air"
+        },
+        "attack_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Envelope rise time, 10% -> 90% of peak (small = clicky).",
+          "title": "Attack Ms"
+        },
+        "decay_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Time from the peak until the envelope is 30 dB down.",
+          "title": "Decay Ms"
+        },
+        "fundamental_hz": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Dominant low-frequency pitch of the body (30-300 Hz): kick/tom/bass tuning.",
+          "title": "Fundamental Hz"
+        },
+        "high": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 2-8 kHz.",
+          "title": "High"
+        },
+        "low": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 120-400 Hz.",
+          "title": "Low"
+        },
+        "mid": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 400-2000 Hz.",
+          "title": "Mid"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Nearest note name of fundamental_hz, e.g. 'F#1'.",
+          "title": "Note"
+        },
+        "spectral_centroid_hz": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Brightness: energy-weighted mean frequency.",
+          "title": "Spectral Centroid Hz"
+        },
+        "sub": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Share of energy 20-120 Hz.",
+          "title": "Sub"
+        },
+        "tonality": {
+          "anyOf": [
+            {
+              "maximum": 1,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "0 = noise .. 1 = pure harmonic tone.",
+          "title": "Tonality"
+        }
+      },
+      "title": "AudioFeatures",
+      "type": "object"
+    },
+    "KitLicense": {
+      "additionalProperties": false,
+      "description": "Per-kit licence summary read from the kit's LICENSE.txt.",
+      "properties": {
+        "path": {
+          "description": "Kit directory relative to the library root.",
+          "title": "Path",
+          "type": "string"
+        },
+        "restrictions": {
+          "description": "Machine-readable limits: 'no-redistribution', 'no-ai-training', 'no-resale', 'non-commercial'.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Restrictions",
+          "type": "array"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Source pack/page named in the licence.",
+          "title": "Source"
+        },
+        "summary": {
+          "default": "",
+          "description": "Condensed terms from LICENSE.txt.",
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path"
+      ],
+      "title": "KitLicense",
+      "type": "object"
+    },
     "LibraryHit": {
       "additionalProperties": false,
-      "description": "A search/lookup result, usable directly in song.yaml.",
+      "description": "A library lookup/search result.",
       "properties": {
         "bpm": {
           "anyOf": [
@@ -15,6 +225,42 @@
           ],
           "default": null,
           "title": "Bpm"
+        },
+        "clipping": {
+          "default": false,
+          "title": "Clipping",
+          "type": "boolean"
+        },
+        "duration_s": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Duration S"
+        },
+        "features": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/AudioFeatures"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Full measured features (search detail='full')."
+        },
+        "flags": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Flags",
+          "type": "array"
         },
         "key": {
           "anyOf": [
@@ -29,15 +275,113 @@
           "default": null,
           "title": "Key"
         },
+        "kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "one-shot",
+                "loop",
+                "phrase"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kind"
+        },
+        "kit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Kit"
+        },
+        "license": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KitLicense"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "loudness_lufs": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Loudness Lufs"
+        },
         "path": {
           "description": "Path relative to its library root.",
           "title": "Path",
           "type": "string"
         },
+        "reasons": {
+          "description": "Why this hit matched / ranked here.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Reasons",
+          "type": "array"
+        },
         "root": {
           "description": "The library root this hit lives in, as configured (may be absolute).",
           "title": "Root",
           "type": "string"
+        },
+        "score": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Search rank score (0..1).",
+          "title": "Score"
+        },
+        "subtype": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subtype"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "One-line plain-language description of the sound (type, length, pitch, decay, brightness, character).",
+          "title": "Summary"
         },
         "tags": {
           "items": {
@@ -56,11 +400,11 @@
             }
           ],
           "default": null,
-          "description": "e.g. kick/snare/clap/hat/loop/oneshot.",
+          "description": "e.g. kick/snare/clap/chat/ohat/drums.",
           "title": "Type"
         },
         "uri": {
-          "description": "library:// URI usable in song.yaml.",
+          "description": "library://<path>",
           "title": "Uri",
           "type": "string"
         }
@@ -83,11 +427,52 @@
       "title": "Files",
       "type": "array"
     },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "interpreted": {
+      "description": "How the query was understood (filters / preferences).",
+      "items": {
+        "type": "string"
+      },
+      "title": "Interpreted",
+      "type": "array"
+    },
     "results": {
       "items": {
         "$ref": "#/$defs/LibraryHit"
       },
       "title": "Results",
+      "type": "array"
+    },
+    "searched_roots": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Searched Roots",
+      "type": "array"
+    },
+    "total": {
+      "default": 0,
+      "description": "Matches before limit/offset.",
+      "minimum": 0,
+      "title": "Total",
+      "type": "integer"
+    },
+    "unindexed_roots": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Unindexed Roots",
       "type": "array"
     }
   },

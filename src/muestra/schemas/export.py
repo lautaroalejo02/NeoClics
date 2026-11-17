@@ -24,7 +24,7 @@ from .api import Job, WsEvent
 from .chops import ChopCandidateSet
 from .config import ProjectConfig
 from .feedback import FeedbackEvent
-from .library import LibraryIndex
+from .library import LibraryIndex, StarterKits
 from .metrics import Metrics
 from .render_meta import RenderMeta
 from .song import Song
@@ -49,6 +49,7 @@ def generated_schemas() -> dict[str, dict]:
         f"config{_SCHEMA_SUFFIX}": _schema_of(ProjectConfig),
         f"chop-candidates{_SCHEMA_SUFFIX}": _schema_of(ChopCandidateSet),
         f"library-index{_SCHEMA_SUFFIX}": _schema_of(LibraryIndex),
+        f"starter-kits{_SCHEMA_SUFFIX}": _schema_of(StarterKits),
         f"job{_SCHEMA_SUFFIX}": _schema_of(Job),
         f"ws-event{_SCHEMA_SUFFIX}": _schema_of(WsEvent),
         f"tool-result{_SCHEMA_SUFFIX}": _schema_of(ToolResult),

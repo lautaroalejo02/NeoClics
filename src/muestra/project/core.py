@@ -151,12 +151,12 @@ class Project:
         return self.root / "cache"
 
     def library_dirs(self) -> list[Path]:
-        """Configured library roots, absolute, in search order."""
-        dirs: list[Path] = []
-        for entry in self.config.library.roots:
-            p = Path(entry)
-            dirs.append(p if p.is_absolute() else (self.root / p).resolve())
-        return dirs
+        """Library roots, absolute, in search order: ``[library] roots``,
+        then ``MUESTRA_LIBRARY``, then ``~/Documents/MuestraLibrary`` when
+        it exists (see ``muestra.library.discovery`` for opt-outs)."""
+        from ..library.discovery import effective_roots
+
+        return effective_roots(self.config.library, self.root)
 
     def resolve(self, ref: str, *, must_exist: bool = True) -> Path:
         """Resolve a FileRef (project-relative path or library:// URI).

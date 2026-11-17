@@ -1,0 +1,36 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "name": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Kit to show in full; omit to list all starter kits.",
+      "title": "Name"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "steps_per_bar": {
+      "default": 16,
+      "maximum": 64,
+      "minimum": 4,
+      "title": "Steps Per Bar",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "project"
+  ],
+  "title": "LibraryKitsParams",
+  "type": "object"
+}

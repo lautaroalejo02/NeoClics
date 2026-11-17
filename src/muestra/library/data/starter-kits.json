@@ -1,0 +1,55 @@
+{
+  "schema_version": 0,
+  "note": "Curated for the owner's MuestraLibrary (kits/<pack>/... layout). NOBODY HAS LISTENED TO THESE: members were picked from measured features (unclipped, sensible level, tight decays, tuned kicks) and source reputation (REPORT.md section 2). Audition before committing; swap members by editing this file (copy it next to the samples as starter-kits.json). Levels differ between packs: set gain_db per lane.",
+  "kits": {
+    "disco-01": {
+      "description": "909-style four-on-the-floor kit: tight punchy kick, 909 clap on 2 & 4, metallic hats, off-beat open hat, cowbell, crash. Follows REPORT.md section 2.",
+      "lanes": {
+        "kick": "kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav",
+        "clap": "kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav",
+        "chat": "kits/tr8-hardware-machines/roland-tr-8/chat-tr-8-closed-hat-01.wav",
+        "ohat": "kits/tr8-hardware-machines/roland-tr-8/ohat-tr-8-open-hat-01.wav",
+        "perc": "kits/tr808-musicradar/cowbell-cb/cowbell-e808-cb-02.wav",
+        "crash": "kits/tr8-hardware-machines/roland-tr-8/crash-tr-8-crash-02.wav"
+      },
+      "notes": "Kick: 0.26 s, ~62 Hz (B1), 96 ms decay, peak -0.1 dBFS (hot; trim ~2 dB). Longer 909 boom alternative: roland-tr-8/kick-tr-8-kick-03.wav. Snare alternative for the backbeat: essential-kits-musicradar/tr-909-kit/snare-tr-909-snare-01.wav. The TR-8 is a 909/808-modelled hardware unit, not a vintage 909."
+    },
+    "disco-808": {
+      "description": "808 flavour: short tuned 808 kick, tight 808 clap, 808 hats, cowbell and conga for the disco-percussion glue.",
+      "lanes": {
+        "kick": "kits/tr808-musicradar/bass-drum-bd/kick-e808-bd-short-12.wav",
+        "clap": "kits/tr808-musicradar/clap-cp/clap-e808-cp-02.wav",
+        "chat": "kits/tr808-musicradar/closed-hi-hat-ch/chat-e808-ch-02.wav",
+        "ohat": "kits/tr808-musicradar/open-hi-hat-oh/ohat-e808-oh-01.wav",
+        "cowbell": "kits/tr808-musicradar/cowbell-cb/cowbell-e808-cb-02.wav",
+        "conga": "kits/tr808-musicradar/congas-hc-mc-lc/conga-hi-e808-hc-05.wav"
+      },
+      "notes": "Kick: ~60 Hz (B1), 185 ms decay, peak -5.8 dBFS (headroom; raise gain_db). The long 808 booms are kick-e808-bd-long-*.wav. This pack is multi-sampled: many sibling takes exist per voice (search kit='tr808')."
+    },
+    "city-pop-80s": {
+      "description": "80s pop / LinnDrum-era feel: deep kick, gated-reverb snare layered with a clap, bright digital hats, toms for fills. (LinnDrum-ERA aesthetic from the SampleRadar 80s pack; it is NOT actual LinnDrum samples.)",
+      "lanes": {
+        "kick": "kits/80s-pop-drums/kit-b/kick-80pd-kitb-kick01.wav",
+        "snare": "kits/80s-pop-drums/gated-snares/snare-80pd-gatedsnare-05.wav",
+        "clap": "kits/80s-pop-drums/kit-b/clap-80pd-kitb-clap.wav",
+        "chat": "kits/80s-pop-drums/kit-b/misc-80pd-kitb-clhat02.wav",
+        "ohat": "kits/80s-pop-drums/kit-b/misc-80pd-kitb-ophat01.wav",
+        "tom": "kits/80s-pop-drums/kit-b/tom-80pd-kitb-tom-mid.wav",
+        "shaker": "kits/80s-pop-drums/kit-a/shaker-80pd-kita-shaker.wav"
+      },
+      "notes": "Kick: ~37 Hz fundamental (very deep, peak -0.25 dBFS: hot, trim). Hats and shaker peak around -7 to -11 dBFS: raise their gain_db. The tom lane has silent default steps; program fills yourself. 31 more gated snares live in kits/80s-pop-drums/gated-snares/."
+    },
+    "acoustic-disco": {
+      "description": "Dry close-miked acoustic kit for a live Studio-54 feel: short tight kick, snare backbeat, crisp hats, tambourine and a crash.",
+      "lanes": {
+        "kick": "kits/acoustic-drums-1000/kit-1-acoustic-close/kick-cycdh-k1close-kick-07.wav",
+        "snare": "kits/acoustic-drums-1000/kit-1-acoustic-close/snare-cycdh-k1close-snr-05.wav",
+        "chat": "kits/acoustic-drums-1000/kit-1-acoustic-close/misc-cycdh-k1close-clhat-03.wav",
+        "ohat": "kits/acoustic-drums-1000/kit-1-acoustic-close/misc-cycdh-k1close-ophat-05.wav",
+        "perc": "kits/acoustic-drums-1000/kit-8-vinyl/tamb-cycdh-vinylk1-tamb.wav",
+        "crash": "kits/hats-cymbals-gongs/accoustic/crash-02.wav"
+      },
+      "notes": "Kick: ~59 Hz, 110 ms decay, peak -4.4 dBFS. Acoustic hits in this pack are generally quiet (many peak below -12 dBFS; these were picked for peaks above -7 dBFS). Mixed from two packs, so expect level/room differences. The REPORT's 909 disco-01 under a live kick is another option."
+    }
+  }
+}
