@@ -12,7 +12,8 @@ Los tiempos son los medidos en la laptop de Lautaro (Ryzen 5 7530U, CPU, 2026-11
    tu respuesta o en `docs/` del proyecto) y usalo en la próxima lectura.
 3. `versions.list`: cuál es la última, cuál le gustó (`liked`, `feedback.rating`), cuál es la
    base (`is_base`: de esa desciende el próximo render).
-4. `versions.get(<última>)` → `metrics.summary` (y `metrics.alarms` si hace falta detalle).
+4. `versions.get(<última>)` → `metrics_summary` (con `detail=true`, `metrics.alarms` y el
+   `song_yaml` de esa versión, si hace falta detalle).
 5. `song.get`. Recién ahora planificá.
 
 Si hay comentarios nuevos, respondé a eso primero. Si hay una `chop_choice` manual, esa
@@ -36,10 +37,16 @@ texto el plan del loop.
 
 `source.analyze(source_id)` (≈ 15 s para 30 s de audio) → `cache/analysis/<src>.json` con
 `bpm_global`, `tempo_variable`, `beats_s`, `downbeats_s`, `key {tonic, mode, confidence}`,
-`sections`, `loudness_lufs`. Leé:
+`sections`, `loudness_lufs`. La respuesta trae un resumen (sin las listas de beats) y
+`grid`: qué leyó el tracker (`raw_bpm`), qué se aplicó (`bpm`, `tempo_factor`), confianza y
+`alternatives`. Leé:
 
-- `bpm_global` fuera de ~90-160 → probablemente doble o mitad de tempo (ver
-  [troubleshooting.md](troubleshooting.md#el-tracker-midio-doble-tempo)).
+- `grid.corrected` / `grid.reason`: el tracker suele contar corcheas en discos viejos (Tiger
+  Rag: 250); `source.analyze` elige la octava que cae en 70-160 BPM (`min_bpm`/`max_bpm` lo
+  cambian) y guarda la lectura cruda. **Nunca dupliques el tempo del proyecto para
+  compensar**: si la grilla está mal, se corrige la grilla (`source.regrid`).
+- `grid.ask_human: true` → antes de armar el tema, que el humano escuche la grilla
+  ([recipes/future-funk.md](recipes/future-funk.md#la-grilla-de-la-fuente-antes-que-nada)).
 - `key.confidence` < 0.4 → la tonalidad es una suposición; la confirmás después con ears.
 - `sections`: etiquetas `intro`, `section_02`... (por novedad, no "verso/estribillo").
 - Si el análisis falla por compás (4/4 no consistente), no lo fuerces: decile al humano.
@@ -69,7 +76,7 @@ librería ([más abajo](#batería-sin-oír)), bajo con alias de instrumento. Esc
 `song.yaml` y corré `song.validate` (con `check_files` por defecto). Arreglá **todos** los
 issues que devuelve (cada uno trae `path`, `code`, `hint`).
 
-Alias de instrumento listos (no hace falta `plugins.list`, que devuelve ~540 KB):
+Alias de instrumento listos (`plugins.list` los da, y presets de Surge por categoría si hace falta):
 `finger-bass` (bajo eléctrico real, E1-G3), `slap-bass` (FM slap), `synth-bass`
 (square, fundamental fuerte), `rhodes`, `brass-stab`, `pad`.
 
@@ -77,8 +84,8 @@ Alias de instrumento listos (no hace falta `plugins.list`, que devuelve ~540 KB)
 
 `render(request=..., summary=..., agent=<tu nombre>)`. 16 compases ≈ 4-10 s. Crea `vNNN`
 (commit + tag), `mix.wav`, stems, `meta.json`, `metrics.json`; la respuesta trae
-`data.metrics_summary` (leé eso primero; el detalle está en `metrics.json`, vía `versions.get`). `range_bars:
-[1, 5]` renderiza solo los compases 1-4. `version: v003` re-renderiza esa versión sin
+`data.metrics_summary` (leé eso primero; el detalle está en `metrics.json`, vía
+`versions.get detail=true`). `range_bars: [1, 5]` renderiza solo los compases 1-4. `version: v003` re-renderiza esa versión sin
 crear otra. `preview(target="track:bass", bars=4)` escucha una parte sin crear versión
 (pero sin métricas).
 
@@ -131,8 +138,10 @@ la tonalidad resultante. Cuentas y ejemplo resuelto en
 
 1. `library.kits` → kits curados (`disco-01` 909, `disco-808`, `city-pop-80s`,
    `acoustic-disco`); `library.kits name=disco-01` trae URIs, descripción medida y un
-   `pattern:` para pegar. Copiá solo los lanes que usás: el pattern de ejemplo pone un crash
-   en **todos** los compases y cencerro todo el tiempo.
+   `pattern:` para pegar (`basic`: bombo en negras, clap en 2 y 4, hat abierto a
+   contratiempo, cerrado suave). Otros: `pattern=busy` (más hats y percusión), `fill` (el
+   compás antes de una parte nueva: ponelo en un track con su ventana `at_bar`/`until_bar`) y
+   `phrase` (4 compases con un solo crash en el primer uno, para donde empieza una parte).
 2. Para cambiar una pieza, buscá por descriptores medidos: `library.search query="bombo
    corto punchy" type=kick clean_only=true`, o `similar_to=<uri>` + palabras ("menos boomy").
    Leé el `summary` de cada hit: `kick | 0.26s | pitch B1 (62 Hz) | decay 96 ms | ...`.

@@ -20,10 +20,11 @@ from typing import Literal
 from pydantic import Field
 
 from ..schemas._base import CandidateIdStr, IdStr, RelPath
-from ..schemas.analysis import Analysis
 from ..schemas.chops import ChopAdjust, ChopCandidateSet
 from ..schemas.song import Chop, StemName
 from ..toolbase import ProjectScoped, ToolOutput
+from .grid_tools import TOOLS as _GRID_TOOLS
+from .grid_tools import AnalysisSummary, GridReport
 
 __all__ = [
     "SourceImportParams",
@@ -112,24 +113,62 @@ def source_separate(
 
 class SourceAnalyzeParams(ProjectScoped):
     source_id: IdStr
+    min_bpm: float | None = Field(
+        default=None,
+        gt=0,
+        lt=400,
+        description="Lowest plausible tempo (default 70). Of the tracked tempo, its half "
+        "and its double, the one inside [min_bpm, max_bpm] is used for the grid.",
+    )
+    max_bpm: float | None = Field(
+        default=None, gt=0, lt=400, description="Highest plausible tempo (default 160)."
+    )
 
 
 class SourceAnalyzeResult(ToolOutput):
     source_id: IdStr
     analysis_path: RelPath
-    analysis: Analysis
+    analysis: AnalysisSummary = Field(
+        description="analysis.json without the beat lists (read the file for those)."
+    )
+    grid: GridReport = Field(description="How the beat grid was read and corrected (WP12).")
+    hint: str | None = Field(
+        default=None, description="Agent-facing note, e.g. confirm the grid by ear."
+    )
 
 
 def source_analyze(p: SourceAnalyzeParams, progress: Progress | None = None) -> SourceAnalyzeResult:
     """Generate cache/analysis/<source_id>.json (BPM, key, beats, downbeats,
-    sections, loudness)."""
+    sections, loudness). The tempo octave is chosen inside [min_bpm, max_bpm]
+    (default 70-160); ``grid`` says what the tracker read, what was applied, how
+    confident it is (``ask_human``) and the alternatives (half/double/shifted
+    "one") to offer the human. ``source.regrid`` changes it."""
     from ..project import open_project
     from .analysis import analyze
 
-    analysis = analyze(open_project(Path(p.project)), p.source_id, progress=progress)
+    tempo_range = None
+    if p.min_bpm is not None or p.max_bpm is not None:
+        tempo_range = (p.min_bpm or 70.0, p.max_bpm or 160.0)
+    analysis = analyze(
+        open_project(Path(p.project)), p.source_id, progress=progress, tempo_range=tempo_range
+    )
     rel = f"cache/analysis/{p.source_id}.json"
+    report = GridReport.of(analysis)
+    hint = None
+    if report.ask_human or report.corrected:
+        hint = report.reason
+        if report.ask_human:
+            hint += (
+                " Usá source.preview_grid (alternatives=true) y preguntale al humano si los "
+                "clicks caen en los golpes y el acento en el uno."
+            )
     return SourceAnalyzeResult(
-        source_id=p.source_id, analysis_path=rel, analysis=analysis, files=[rel]
+        source_id=p.source_id,
+        analysis_path=rel,
+        analysis=AnalysisSummary.of(analysis),
+        grid=report,
+        hint=hint,
+        files=[rel],
     )
 
 
@@ -285,3 +324,5 @@ TOOLS = [
         {"readonly": True, "cli": ("chops", "list")},
     ),
 ]
+
+TOOLS += _GRID_TOOLS

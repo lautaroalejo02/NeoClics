@@ -177,4 +177,13 @@ def run_tool(name: str, params: dict[str, Any] | None = None) -> ToolResult:
         )
     data = result.model_dump(mode="json") if result is not None else None
     files = getattr(result, "files", []) or []
-    return ToolResult(tool=name, ok=True, data=data, files=list(files))
+    # A result's own nonfatal ``hint`` (render, source.analyze, ...) is mirrored to
+    # the envelope so an agent reading only {ok, hint} still sees it (WP12).
+    hint = getattr(result, "hint", None)
+    return ToolResult(
+        tool=name,
+        ok=True,
+        data=data,
+        files=list(files),
+        hint=hint if isinstance(hint, str) and hint else None,
+    )

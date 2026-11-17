@@ -301,6 +301,29 @@ class TrackAlignment(ContractModel):
     )
     flagged: list[AlignmentEvent] = Field(default_factory=list)
     clips: list[ClipOffset] = Field(default_factory=list)
+    # --- WP12 additions (clip tracks): how far the measurement itself can be trusted ---
+    verified: bool | None = Field(
+        default=None,
+        description="Clip tracks: True when the offset estimate is stable enough to alarm on; "
+        "False = the material is too dense/ambiguous (only an info note is raised).",
+    )
+    confidence: float | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description="Heuristic trust in the clip-track offset (stability x count x tightness); "
+        "not a probability.",
+    )
+    onsets_per_beat: float | None = Field(
+        default=None, ge=0.0, description="Detected onsets per quarter note inside the clips."
+    )
+    window_spread_ms: float | None = Field(
+        default=None,
+        ge=0.0,
+        description="Self-test error: every onset is moved by ±timing_probe_ms (as a chop "
+        "that late/early would be) and re-measured; this is how far the estimate misses "
+        "that known shift, ms. Large = which onsets count depends on the shift itself.",
+    )
 
 
 class AlignmentReport(ContractModel):

@@ -62,3 +62,30 @@ def test_missing_preset_and_inventory_without_plugins(project, monkeypatch):
     scan = plugins_scan(PluginsScanParams(project=str(project.root), names=["does-not-exist"]))
     assert scan.plugins[0].errors[0].code == "plugin_missing"
     assert project.path(scan.files[0]).is_file()
+
+
+def test_plugins_list_is_compact_by_default_and_browses_presets(project, monkeypatch, tmp_path):
+    """WP12: 3000 presets used to come back in one ~540 KB result."""
+    from muestra.plugins import tools
+
+    monkeypatch.setattr(discovery, "default_search_dirs", lambda: [])
+    fake = [tmp_path / "Basses" / f"Bass {i}.fxp" for i in range(150)]
+    fake += [tmp_path / "Pads" / "Warm Pad.fxp", tmp_path / "Basses" / "FM Slap.fxp"]
+    monkeypatch.setattr(tools, "surge_presets", lambda: fake)
+    monkeypatch.setattr(tools, "vst_presets", lambda: [])
+    base = {"project": str(project.root)}
+    default = plugins_list(PluginsListParams(**base))
+    assert default.presets == [] and default.matched == 0
+    assert default.preset_counts["surge-xt"] == 152
+    assert default.categories["surge-xt"] == {"Basses": 151, "Pads": 1}
+    assert "presets not listed" in default.hint
+    assert len(default.model_dump_json()) < 8000
+    page = plugins_list(PluginsListParams(**base, plugin="surge-xt", category="basses", limit=50))
+    assert page.matched == 151 and len(page.presets) == 50 and page.next_offset == 50
+    assert all(p.path is None for p in page.presets) and "offset=50" in page.hint
+    last = plugins_list(PluginsListParams(**base, plugin="surge-xt", category="Basses", offset=150))
+    assert len(last.presets) == 1 and last.next_offset is None
+    slap = plugins_list(PluginsListParams(**base, query="slap bass"))
+    assert [p.name for p in slap.presets] == ["Basses/FM Slap"]
+    with pytest.raises(ValueError):
+        PluginsListParams(**base, limit=tools.MAX_PRESETS + 1)

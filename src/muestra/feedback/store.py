@@ -19,15 +19,16 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from pydantic import AwareDatetime, TypeAdapter, ValidationError
+from pydantic import AwareDatetime, ValidationError
 
 from ..errors import MuestraError, issues_from_validation_error
 from ..project.core import FEEDBACK_FILE, Project
+from ..schemas._base import LazyAdapter
 from ..schemas.feedback import FeedbackEvent
 
 __all__ = ["EVENT_ADAPTER", "ReadPage", "SkippedLine", "append_event", "read_events"]
 
-EVENT_ADAPTER = TypeAdapter(FeedbackEvent)
+EVENT_ADAPTER = LazyAdapter(FeedbackEvent)
 
 
 @dataclass(frozen=True)

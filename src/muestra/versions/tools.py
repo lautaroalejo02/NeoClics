@@ -65,10 +65,16 @@ def versions_list(p: VersionsListParams) -> VersionsListResult:
 
 class VersionsGetParams(ProjectScoped):
     version: VersionStr
+    detail: bool = Field(
+        default=False,
+        description="Also return the full metrics report and the song.yaml text "
+        "(~10-20 KB); by default only metrics_summary and paths.",
+    )
 
 
 def versions_get(p: VersionsGetParams) -> VersionsGetResult:
-    """Return one version's merged record, meta, metrics and song.yaml text."""
+    """Return one version's merged record, meta and ears ``metrics_summary``;
+    ``detail=true`` adds the full metrics and the version's song.yaml text."""
     project = open_project(p.project)
     data, source = snapshot_bytes(project, p.version)
     try:
@@ -88,13 +94,19 @@ def versions_get(p: VersionsGetParams) -> VersionsGetResult:
     meta, _ = load_meta(project, p.version)
     meta_out = RenderMetaOut.model_validate(meta.model_dump(by_alias=True)) if meta else None
     mix = project.renders_dir / p.version / "mix.wav"
+    metrics = load_metrics(project, p.version)
+    metrics_file = project.renders_dir / p.version / "metrics.json"
     return VersionsGetResult(
         version=p.version,
         meta=meta_out,
-        song_yaml=text,
+        song_yaml=text if p.detail else None,
         song_source=source,  # type: ignore[arg-type]
         info=info,
-        metrics=load_metrics(project, p.version),
+        metrics=metrics if p.detail else None,
+        metrics_summary=metrics.summary if metrics is not None else None,
+        metrics_path=metrics_file.relative_to(project.root).as_posix()
+        if metrics_file.is_file()
+        else None,
         mix=mix.relative_to(project.root).as_posix() if mix.is_file() else None,
         stems=stems_on_disk(project, p.version),
     )

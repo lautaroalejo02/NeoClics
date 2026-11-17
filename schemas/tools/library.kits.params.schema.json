@@ -14,6 +14,12 @@
       "description": "Kit to show in full; omit to list all starter kits.",
       "title": "Name"
     },
+    "pattern": {
+      "default": "basic",
+      "description": "Named starter pattern to return (with name): 'basic' (four-on-the-floor, clap/snare on 2 and 4, off-beat open hat), 'busy', 'fill' (the bar before a new part), 'phrase' (4 bars, crash only on the first downbeat) when the kit has them.",
+      "title": "Pattern",
+      "type": "string"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,

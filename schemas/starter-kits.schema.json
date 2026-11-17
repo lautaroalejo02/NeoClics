@@ -1,5 +1,42 @@
 {
   "$defs": {
+    "KitPattern": {
+      "additionalProperties": false,
+      "description": "A named starter pattern of a kit (16 steps per bar, step chars as in song.yaml).",
+      "properties": {
+        "bars": {
+          "default": 1,
+          "maximum": 16,
+          "minimum": 1,
+          "title": "Bars",
+          "type": "integer"
+        },
+        "description": {
+          "default": "",
+          "title": "Description",
+          "type": "string"
+        },
+        "steps": {
+          "description": "Lane -> step string, 16 per bar (spaces ignored); lanes not listed are left out of this pattern.",
+          "minProperties": 1,
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "type": "string"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Steps",
+          "type": "object"
+        }
+      },
+      "required": [
+        "steps"
+      ],
+      "title": "KitPattern",
+      "type": "object"
+    },
     "StarterKit": {
       "additionalProperties": false,
       "description": "One named drum kit: lane -> library-root-relative sample path.",
@@ -35,6 +72,14 @@
           ],
           "default": null,
           "title": "Notes"
+        },
+        "patterns": {
+          "additionalProperties": {
+            "$ref": "#/$defs/KitPattern"
+          },
+          "description": "Named starter patterns (WP12): 'basic' (the default), 'busy', 'fill', 'phrase'... Each lane must be one of the kit's lanes.",
+          "title": "Patterns",
+          "type": "object"
         }
       },
       "required": [

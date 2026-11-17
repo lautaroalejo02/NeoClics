@@ -1,6 +1,36 @@
 {
   "additionalProperties": false,
   "properties": {
+    "max_bpm": {
+      "anyOf": [
+        {
+          "exclusiveMaximum": 400,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Highest plausible tempo (default 160).",
+      "title": "Max Bpm"
+    },
+    "min_bpm": {
+      "anyOf": [
+        {
+          "exclusiveMaximum": 400,
+          "exclusiveMinimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Lowest plausible tempo (default 70). Of the tracked tempo, its half and its double, the one inside [min_bpm, max_bpm] is used for the grid.",
+      "title": "Min Bpm"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,

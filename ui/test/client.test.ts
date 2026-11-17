@@ -76,7 +76,7 @@ describe("MuestraClient", () => {
     expect(meta?.version).toBe("v001");
     expect(metrics).toBeNull();
     expect(calls.map((x) => x.url)).toEqual(["/tools/versions_get"]);
-    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ version: "v001" });
+    expect(JSON.parse(String(calls[0].init?.body))).toEqual({ version: "v001", detail: true }); // the UI wants the full metrics
   });
 
   it("boots from the real GET /project shape and maps it to the summary", async () => {

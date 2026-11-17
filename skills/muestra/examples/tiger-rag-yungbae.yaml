@@ -1,14 +1,14 @@
 schema_version: 0
 # Tiger Rag (The Home Towners, 1928; CC0), primeros 30 s, fuente src1.
-# El tracker la mide a ~250 BPM: cuenta corcheas. DOBLE GRILLA:
-#   1 compas musical = 2 compases del proyecto, 1 beat del proyecto = 1 corchea,
-#   patrones con steps_per_bar: 8 y bars: 2 (16 caracteres = 1 compas musical).
-# Ver recipes/future-funk.md, "Fuente a doble tempo".
+# El tracker la lee a 250 BPM (cuenta corcheas); source.analyze eligio la octava
+# en 70-160 y la grilla quedo en 125 BPM (grid.tempo_factor 0.5). Grilla NORMAL:
+# compases musicales, patrones de 16 pasos. Antes de armar el tema, el humano
+# confirma la grilla de oido (source.preview_grid).
 meta:
   title: tiger-funk-yungbae
-  bpm: 252.64  # igual que la base: sensacion 126.3, afinado
+  bpm: 126.32  # igual que la base: afinado
   key: G  # igual que la base
-  length_bars: 32  # 16 compases musicales
+  length_bars: 16
   seed: 0
 sources:
 - id: src1
@@ -17,10 +17,20 @@ chops:
 - id: c1
   source: src1
   stem: other
-  start_downbeat: 17
-  length_beats: 16
+  start_downbeat: 9
+  length_beats: 8
   warp: {mode: resample, pitch_semitones: 0}
   fade_ms: 8
+phrases:
+- id: groove  # octava y notas de paso (Sol, Re, Fa)
+  length_bars: 1
+  notes:
+  - {beat: 1.5, pitch: G1, length_beats: 0.35, velocity: 100}
+  - {beat: 2, pitch: G2, length_beats: 0.25, velocity: 80}
+  - {beat: 2.5, pitch: G1, length_beats: 0.35, velocity: 96}
+  - {beat: 3.5, pitch: D2, length_beats: 0.25, velocity: 100}
+  - {beat: 3.75, pitch: F2, length_beats: 0.25, velocity: 84}
+  - {beat: 4.5, pitch: G1, length_beats: 0.35, velocity: 96}
 tracks:
 - id: sample
   clips:
@@ -32,25 +42,22 @@ tracks:
   - {id: sc, type: sidechain, key_track: kick, depth: 0.45, release_ms: 120}
   gain_db: 9
 - id: kick
-  until_bar: 25  # sale en el break (compases musicales 13 y 14)
+  until_bar: 13  # sale en el break (compases 13 y 14)
   pattern:
-    steps_per_bar: 8
-    bars: 2
+    steps_per_bar: 16
     lanes:
       kick: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav", steps: "x...x...x...x...", gain_db: -4}
 - id: kick-back
-  at_bar: 29  # vuelve en los ultimos 2 compases musicales
+  at_bar: 15  # vuelve en los ultimos 2 compases
   pattern:
-    steps_per_bar: 8
-    bars: 2
+    steps_per_bar: 16
     lanes:
       kick: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/kick-tr-8-kick-02.wav", steps: "x...x...x...x...", gain_db: -4}
 - id: drums
-  at_bar: 9
-  until_bar: 25
+  at_bar: 5
+  until_bar: 13
   pattern:
-    steps_per_bar: 8
-    bars: 2
+    steps_per_bar: 16
     swing: 0.2  # semicorcheas apenas arrastradas: groove
     lanes:
       clap: {sample: "library://kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav", steps: "....x.......x...", gain_db: -5}
@@ -58,74 +65,16 @@ tracks:
       ohat: {sample: "library://kits/tr8-hardware-machines/roland-tr-8/ohat-tr-8-open-hat-01.wav", steps: "..x...x...x...x.", gain_db: -10}
       perc: {sample: "library://kits/tr808-musicradar/cowbell-cb/cowbell-e808-cb-02.wav", steps: "...........o..o.", gain_db: -16}
 - id: bass
-  at_bar: 9
-  instrument: {plugin: finger-bass}  # slap-bass da avisos `click` en estas notas cortas (ver styles.md)
-  notes:  # linea con octava y notas de paso (Sol, Re, Fa); calla en el break
-  - {beat: 34, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 35, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 36, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 38, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 38.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 40, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 42, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 43, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 44, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 46, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 46.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 48, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 50, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 51, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 52, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 54, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 54.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 56, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 58, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 59, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 60, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 62, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 62.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 64, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 66, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 67, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 68, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 70, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 70.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 72, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 74, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 75, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 76, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 78, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 78.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 80, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 82, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 83, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 84, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 86, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 86.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 88, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 90, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 91, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 92, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 94, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 94.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 96, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 114, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 115, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 116, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 118, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 118.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 120, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 122, pitch: G1, length_beats: 0.7, velocity: 100}
-  - {beat: 123, pitch: G2, length_beats: 0.5, velocity: 80}
-  - {beat: 124, pitch: G1, length_beats: 0.7, velocity: 96}
-  - {beat: 126, pitch: D2, length_beats: 0.5, velocity: 100}
-  - {beat: 126.5, pitch: F2, length_beats: 0.5, velocity: 84}
-  - {beat: 128, pitch: G1, length_beats: 0.7, velocity: 96}
+  at_bar: 5
+  instrument: {plugin: finger-bass}  # slap-bass tambien sirve; ver styles.md
+  phrases:
+  - {phrase: groove, repeat: 8}  # compases 5-12; calla en el break
+  - {phrase: groove, at_bar: 15}  # vuelve con el bombo
   fx:
   - {id: sc, type: sidechain, key_track: kick, depth: 0.5, release_ms: 90}
   gain_db: 10
 automation:
-- {target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, 600], [9, 18000], [25, 18000], [29, 900], [29, 18000]]}  # intro y break filtrados
+- {target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, 600], [5, 18000], [13, 18000], [15, 900], [15, 18000]]}  # intro y break filtrados
 master:
   fx:
   - {type: compressor, threshold_db: -18, ratio: 3}

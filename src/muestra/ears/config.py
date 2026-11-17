@@ -74,6 +74,12 @@ class Thresholds:
     timing_min_pulse_share: float = 0.3
     timing_drift_warn_ms: float = 20.0
     timing_clip_warn_ms: float = 20.0  # one clip instance deviates from the track median
+    # WP12: a clip-track offset is only alarmed when the estimator, on this very
+    # material, measures a known ±probe shift correctly; otherwise an info note says
+    # the timing could not be verified.
+    timing_probe_ms: float = 20.0  # the shift the self-test applies (± this many ms)
+    timing_max_window_spread_ms: float = 5.0  # allowed miss on that known shift
+    timing_dense_onsets_per_beat: float = 3.0  # reported in the note; not a gate by itself
     swing_info_ms: float = 12.0  # sample off-beat 16ths late vs drum pattern swing
     # tonal
     key_min_confidence: float = 0.25
@@ -91,6 +97,9 @@ class Thresholds:
     # attack (the preset's own transient, like a drum hit), not a click; measured
     # on Surge 'FM Slap' onsets out of a release tail: +17.3..+17.6 dB (WP11).
     click_onset_rise_db: float = 12.0
+    # WP12: a note start over a sounding note is the preset's attack when its jump is
+    # within this many dB of the track's own attacks out of silence (median).
+    click_attack_margin_db: float = 6.0
     # technical
     dc_warn_db: float = -45.0
     low_corr_warn: float = 0.5

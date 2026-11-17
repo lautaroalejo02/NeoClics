@@ -8,11 +8,11 @@ from pathlib import Path
 import numpy as np
 import soundfile as sf
 from fastapi import HTTPException
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 
-from ..schemas._base import WINDOWS_RESERVED_NAMES, RelPath
+from ..schemas._base import WINDOWS_RESERVED_NAMES, LazyAdapter, RelPath
 
-_RELATIVE = TypeAdapter(RelPath)
+_RELATIVE = LazyAdapter(RelPath)
 _RESERVED = WINDOWS_RESERVED_NAMES | {f"{prefix}{n}" for prefix in ("COM", "LPT") for n in "¹²³"}
 MIME = {
     ".wav": "audio/wav",

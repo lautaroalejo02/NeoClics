@@ -3,8 +3,8 @@
 Los perfiles calibran; no se clonan. Se mezclan por dimensión ("más Yung Bae en la
 batería, más Macross en los cortes") y se puede salir de ellos: el objetivo es que suene
 a Lautaro (rock nacional de los 80 cruzado con city pop y fusión japonesa). Cada fila es
-un movimiento concreto en `song.yaml`. Tempos en sensación musical (en doble grilla,
-`meta.bpm` es el doble).
+un movimiento concreto en `song.yaml`. Tempos en BPM musicales (`meta.bpm`), con la grilla
+de la fuente ya corregida (`source.analyze`/`source.regrid`).
 
 ## Tabla de movimientos
 
@@ -24,24 +24,25 @@ un movimiento concreto en `song.yaml`. Tempos en sensación musical (en doble gr
 | Cuánto se reconoce el original | parcial: un gesto repetido | bastante, recortado | totalmente | bastante, con la voz como gancho | poco | el loop entero, transformado por el filtro |
 | Arreglo | loop + cortes; drops con filtro | intro, groove, break, vuelta (ventanas `at_bar`/`until_bar`) | edit del tema con batería encima | loop de 2-4 compases | partes compuestas | tensión por automatización, no por acordes |
 
-## Ejemplos renderizados (Tiger Rag, doble grilla)
+## Ejemplos renderizados (Tiger Rag, grilla corregida a 125)
 
 Validados y renderizados en el proyecto de prueba; nadie los escuchó.
 
 - [examples/tiger-rag-macross.yaml](examples/tiger-rag-macross.yaml): c1 de 1 compás x3 +
   stutter c2 de una negra x4 cada 4 compases (con `pitch_semitones: -0.35` para igualar su
-  tempo local), `meta.bpm` 266.29 (+1.45 st), saturación 8 dB, sidechain 0.7/170 ms, sin hats
+  tempo local), `meta.bpm` 133.15 (+1.45 st), saturación 8 dB, sidechain 0.7/170 ms, sin hats
   cerrados, `synth-bass`, low-pass que abre de golpe en el drop y high-pass antes de la última
   vuelta.
 - [examples/tiger-rag-yungbae.yaml](examples/tiger-rag-yungbae.yaml): mismo chop de 2
   compases, swing 0.2, hats en 16avos con fantasmas, cencerro bajito, bajo con octava y
   notas de paso (Sol-Re-Fa), chorus, break filtrado sin bombo ni bajo en los compases 13-14 y
-  vuelta en el 15. Con `slap-bass` ears marcó 7 clicks en ataques de notas cortas (~-40 dBFS);
-  con `finger-bass` desaparecen, por eso el ejemplo usa finger. Si Lautaro quiere slap,
+  vuelta en el 15. Con `slap-bass` ears marcaba clicks en notas ligadas: era el ataque del
+  propio preset (el mismo transitorio que en cada nota, medido muestra a muestra) y ya no
+  se marca; el ejemplo usa finger por sonido, no por clicks. Si Lautaro quiere slap,
   probalo y preguntale si oye clicks.
 - [examples/tiger-rag-nighttempo.yaml](examples/tiger-rag-nighttempo.yaml): frase de 4
   compases del `mix`, `stretch` + `pitch_semitones: 0.45` (la frase larga derivaba: ears
-  `grid_drift`), high-pass 70 Hz, sidechain 0.25, bombo desde el compás musical 5 y clap desde
+  `grid_drift`), high-pass 70 Hz, sidechain 0.25, bombo desde el compás 5 y clap desde
   el 9, sin bajo propio.
 
 ## Cómo mezclar perfiles

@@ -39,7 +39,7 @@ class Issue(BaseModel):
         value: ``repr()`` of the offending value, if there is one.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", defer_build=True)
 
     path: str = ""
     code: str
@@ -96,7 +96,7 @@ class ToolResult(BaseModel):
     ``hint`` is a short message for the agent when something is off.
     """
 
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", defer_build=True)
 
     tool: str
     ok: bool

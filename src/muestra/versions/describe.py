@@ -7,7 +7,7 @@ not as field names. Rules:
 
 * **Grouped**: a new track is one sentence, not thirty; an fx added together
   with its automation is one sentence ("Agregué un filtro pasa-bajos
-  automatizado de 800 Hz a 18 kHz en los compases 1 a 4 del track sample");
+  automatizado de 800 Hz a 18 kHz en los compases 1 a 4 del sample");
   automation of a removed/added track or fx is folded into that sentence.
 * **Musical**: drum patterns are described rhythmically (negras, corcheas,
   contratiempos, síncopa), notes as added/removed/transposed, delays in note
@@ -30,7 +30,7 @@ from collections import Counter
 from typing import TYPE_CHECKING, Any
 
 from ..schemas.song import BEATS_PER_BAR, parse_automation_target, parse_steps
-from .diff import CLIPS, NOTES, align_items, fx_alignment, same
+from .diff import CLIPS, NOTES, PLACEMENTS, align_items, fx_alignment, same
 
 if TYPE_CHECKING:
     from ..schemas.song import Song
@@ -187,6 +187,15 @@ _TRACK_NOUNS = {
     "brass": "los vientos",
     "melody": "la melodía",
     "melodia": "la melodía",
+    "sample": "el sample",
+    "samples": "los samples",
+    "loop": "el loop",
+    "chop": "el chop",
+    "rhodes": "el Rhodes",
+    "organ": "el órgano",
+    "organo": "el órgano",
+    "synth": "el synth",
+    "fx": "los efectos",
 }
 
 _LANE_NOUNS = {
@@ -295,6 +304,15 @@ def _lane_np(lane: str) -> str:
     if head in _LANE_NOUNS and head != lane:
         return f"{_LANE_NOUNS[head]} ({lane})"
     return f"el lane {lane}"
+
+
+def _lane_in(lane: str, track_np: str) -> str:
+    """'el clap de la batería', but just 'el bombo' for lane kick on track kick
+    (never 'el bombo del bombo')."""
+    lane_np = _lane_np(lane)
+    if _bare(track_np).startswith(_bare(lane_np)):  # kick/kick, hat/hats, kick/kick2
+        return track_np
+    return f"{lane_np} {_del(track_np)}"
 
 
 def _scope_np(tid: str | None) -> str:
@@ -482,6 +500,7 @@ def _curve_note(auto: dict) -> str:
 
 class _Describer:
     def __init__(self, a: Song, b: Song) -> None:
+        self.a, self.b = a, b
         self.da = a.model_dump(mode="json")
         self.db = b.model_dump(mode="json")
         self.a_tracks = {t["id"]: t for t in self.da.get("tracks", [])}
@@ -573,6 +592,7 @@ class _Describer:
         out += self._meta()
         out += self._sources()
         out += self._chops()
+        out += self._phrases()
         out += self._tracks()
         out += self._master()
         leftover = [
@@ -639,6 +659,77 @@ class _Describer:
                 out.append(f"Saqué el chop {cid}")
             else:
                 out += self._chop_change(cid, ca, cb)
+        return out
+
+    # -- phrases (WP12) ---------------------------------------------------------
+
+    def _phrases(self) -> list[str]:
+        a = {p["id"]: p for p in self.da.get("phrases", [])}
+        b = {p["id"]: p for p in self.db.get("phrases", [])}
+        out: list[str] = []
+        for pid in [*b, *(p for p in a if p not in b)]:
+            pa, pb = a.get(pid), b.get(pid)
+            np = f"la frase {pid}"
+            if pa is None:
+                n = len(pb["notes"])
+                out.append(
+                    f"Escribí {np} ({pb['length_bars']} "
+                    f"{_plural(pb['length_bars'], 'compás', 'compases')}, {n} "
+                    f"{_plural(n, 'nota', 'notas')})"
+                )
+            elif pb is None:
+                out.append(f"Borré {np}")
+            else:
+                if pa.get("length_bars") != pb.get("length_bars"):
+                    out.append(
+                        f"{_cap(np)} ahora dura {pb['length_bars']} "
+                        f"{_plural(pb['length_bars'], 'compás', 'compases')} "
+                        f"(antes {pa['length_bars']})"
+                    )
+                out += [
+                    s.replace(" en el compás ", " en su compás ").replace(
+                        " en los compases ", " en sus compases "
+                    )
+                    for s in self._notes(np, pa["notes"], pb["notes"])
+                ]
+        return out
+
+    def _phrase_len(self, song: dict, pid: str) -> int | None:
+        for p in song.get("phrases", []):
+            if p["id"] == pid:
+                return int(p["length_bars"])
+        return None
+
+    def _placement_text(self, song: dict, t: dict, pl: dict) -> str:
+        length = self._phrase_len(song, pl["phrase"])
+        size = f" de {length} {_plural(length, 'compás', 'compases')}" if length else ""
+        at = pl.get("at_bar") or t.get("at_bar", 1)
+        if pl.get("repeat") is None:
+            span = (
+                "hasta el final"
+                if t.get("until_bar") is None
+                else (f"hasta el compás {int(t['until_bar']) - 1}")
+            )
+            how = f"repite la frase {pl['phrase']}{size} desde el compás {at} {span}"
+        elif pl["repeat"] == 1:
+            how = f"toca la frase {pl['phrase']}{size} en el compás {at}"
+        else:
+            how = f"repite {pl['repeat']} veces la frase {pl['phrase']}{size} desde el compás {at}"
+        if pl.get("transpose_semitones"):
+            d = pl["transpose_semitones"]
+            how += f", {_semitones(d)} {'arriba' if d > 0 else 'abajo'}"
+        return how
+
+    def _placements(self, tid: str, np: str, a: dict, b: dict) -> list[str]:
+        pa, pb = a.get("phrases") or [], b.get("phrases") or []
+        al = align_items(pa, pb, PLACEMENTS)
+        out: list[str] = []
+        for ib in al.added:
+            out.append(f"{_cap(np)} ahora {self._placement_text(self.db, b, pb[ib])}")
+        for ia in al.removed:
+            out.append(f"{_cap(np)} ya no toca la frase {pa[ia]['phrase']}")
+        for _ia, ib in al.modified(pa, pb):
+            out.append(f"{_cap(np)} ahora {self._placement_text(self.db, b, pb[ib])}")
         return out
 
     def _chop_change(self, cid: str, a: dict, b: dict) -> list[str]:
@@ -720,6 +811,8 @@ class _Describer:
         bits = [f"instrumento {inst.get('plugin', '?')}"]
         if inst.get("preset"):
             bits.append(f"preset {_base(inst['preset'])}")
+        for pl in tb.get("phrases") or []:
+            bits.append(self._placement_text(self.db, tb, pl))
         if tb.get("notes") is not None:
             bits.append(f"{len(tb['notes'])} {_plural(len(tb['notes']), 'nota', 'notas')}")
         elif tb.get("midi"):
@@ -802,10 +895,39 @@ class _Describer:
             elif a.get("midi"):
                 out.append(f"{_cap(np)} ahora usa notas escritas en el song en vez de {a['midi']}")
         na, nb = a.get("notes"), b.get("notes")
+        rewrote = self._rewrote_as_phrases(tid, np, a, b)
+        out += rewrote
         if na is not None and nb is not None:
             out += self._notes(np, na, nb)
+        if not rewrote and (a.get("phrases") or b.get("phrases")):
+            out += self._placements(tid, np, a, b)
         out += self._fx_chain(tid, a.get("fx") or [], b.get("fx") or [])
         return out
+
+    def _rewrote_as_phrases(self, tid: str, np: str, a: dict, b: dict) -> list[str]:
+        """notes <-> phrases with the same expanded notes: say so, not 64 edits."""
+        if bool(a.get("phrases")) == bool(b.get("phrases")):
+            return []
+        ta = next((t for t in self.a.tracks if t.id == tid), None)
+        tb = next((t for t in self.b.tracks if t.id == tid), None)
+        if ta is None or tb is None:
+            return []
+        xa, xb = self.a.track_notes(ta), self.b.track_notes(tb)
+        if xa is None or xb is None:
+            return []
+        key = [(round(n.beat, 6), n.pitch, round(n.length_beats, 6), n.velocity) for n in xa]
+        same_notes = key == [
+            (round(n.beat, 6), n.pitch, round(n.length_beats, 6), n.velocity) for n in xb
+        ]
+        if b.get("phrases"):
+            how = "; ".join(self._placement_text(self.db, b, pl) for pl in b["phrases"])
+            s = f"Reescribí {np} con frases: {how}"
+        else:
+            s = f"Reescribí {np} como notas sueltas ({len(xb)} {_plural(len(xb), 'nota', 'notas')})"
+        s += " (suena igual)" if same_notes else ""
+        if not same_notes:
+            s += f"; ahora son {len(xb)} notas en total (antes {len(xa)})"
+        return [s]
 
     @staticmethod
     def _kind(t: dict) -> str:
@@ -919,11 +1041,9 @@ class _Describer:
             x, y = la.get(lane), lb.get(lane)
             if x is None:
                 pos = _rhythm_name(_hit_positions(y["steps"], spp_b)[0], spp_b)
-                out.append(
-                    f"Agregué {_lane_np(lane)} {_del(np)} ({pos}, sample {_base(y['sample'])})"
-                )
+                out.append(f"Agregué {_lane_in(lane, np)} ({pos}, sample {_base(y['sample'])})")
             elif y is None:
-                out.append(f"Saqué {_lane_np(lane)} {_del(np)}")
+                out.append(f"Saqué {_lane_in(lane, np)}")
             elif not same(x, y):
                 out += self._lane_change(tid, np, at_bar, lane, x, y, spp_a, spp_b)
         return out
@@ -945,16 +1065,12 @@ class _Describer:
             )
         if not same(x.get("gain_db"), y.get("gain_db")):
             d = _f(y.get("gain_db")) - _f(x.get("gain_db"))
-            out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_np(lane)} {_del(np)} {_n(abs(d))} dB")
+            out.append(f"{'Subí' if d > 0 else 'Bajé'} {_lane_in(lane, np)} {_n(abs(d))} dB")
         if not same(x.get("pan"), y.get("pan")):
-            out.append(
-                f"Paneé {_lane_np(lane)} {_del(np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})"
-            )
+            out.append(f"Paneé {_lane_in(lane, np)} ({_n(x.get('pan'))} a {_n(y.get('pan'))})")
         for k in sorted((set(x) | set(y)) - {"steps", "sample", "gain_db", "pan"}):
             if not same(x.get(k), y.get(k)):
-                out.append(
-                    f"Cambié {k} de {_lane_np(lane)} {_del(np)} de {_n(x.get(k))} a {_n(y.get(k))}"
-                )
+                out.append(f"Cambié {k} de {_lane_in(lane, np)} de {_n(x.get(k))} a {_n(y.get(k))}")
         return out
 
     def _instrument(self, np: str, a: dict, b: dict) -> list[str]:

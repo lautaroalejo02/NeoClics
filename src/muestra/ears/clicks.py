@@ -17,7 +17,12 @@ a drum hit IS an intentional discontinuity. For the same reason an
 instrument note that starts out of (near) silence -- it rises at least
 ``click_onset_rise_db`` above what was sounding -- is its preset's attack,
 not a click; note starts over a sustained sound (retriggers) and note ends
-are still scanned.
+are still scanned. A note end that coincides with the next note's start
+(legato) is scanned once, as that start, and a retrigger whose spike is
+within ``click_attack_margin_db`` of the track's own attacks out of silence
+(median sharpest second difference in their first 3 ms) is that attack, not
+a click (WP12: Surge's FM Slap retriggers were flagged only when their
+transient happened to land inside the +-search window).
 """
 
 from __future__ import annotations
@@ -42,6 +47,15 @@ def _onset_rise_db(y: np.ndarray, i: int, sr: int) -> float:
     if pre.size == 0 or post.size == 0:
         return 0.0
     return dsp.db(float(np.sqrt(np.mean(post * post)))) - dsp.db(float(np.sqrt(np.mean(pre * pre))))
+
+
+def _attack_spike(y: np.ndarray, i: int, sr: int) -> float:
+    """Sharpest second difference in the first 3 ms of a note: how 'clicky' this
+    preset's attack is by itself (FM slap transients are sharp)."""
+    seg = y[max(0, i - 2) : i + int(0.003 * sr)]
+    if seg.size < 3:
+        return 0.0
+    return float(np.max(np.abs(seg[2:] - 2.0 * seg[1:-1] + seg[:-2])))
 
 
 def _severity(jump_db: float, floor_db: float) -> float:
@@ -88,11 +102,19 @@ def measure_clicks(ctx: RenderContext) -> tuple[ClickReport, list[Alarm]]:
                 edges.append((c.start_s, "clip_start", c.ref, c.chop))
                 edges.append((c.end_s, "clip_end", c.ref, c.chop))
         elif track.instrument is not None:
-            for n in tl.notes(track.id):
+            notes = tl.notes(track.id)
+            starts = [int(round(n.t * sr)) for n in notes]
+            for n in notes:
                 edges.append((n.t, "note_start", None, None))
                 if n.dur_s:
-                    edges.append((n.t + n.dur_s, "other", None, None))
+                    end = int(round((n.t + n.dur_s) * sr))
+                    # A note that ends where the next one starts (legato line) is that
+                    # next note's attack, not a cut: scan it once, as a note start.
+                    if not any(abs(end - k) <= search for k in starts):
+                        edges.append((n.t + n.dur_s, "other", None, None))
         seen: list[int] = []
+        candidates = []
+        attack_jumps: list[float] = []
         for t, edge, ref, chop in sorted(edges, key=lambda e: e[0]):
             i = int(round(t * sr))
             if i <= search + 16 or i >= y.size - search - 2:
@@ -100,9 +122,26 @@ def measure_clicks(ctx: RenderContext) -> tuple[ClickReport, list[Alarm]]:
             gap = fades.get(chop, 0) if chop else 0
             ratio, jump, j = dsp.edge_discontinuity(y, i, sr, search, gap)
             if ratio < th.click_ratio or jump < min_jump:
+                if edge == "note_start" and _onset_rise_db(y, i, sr) >= th.click_onset_rise_db:
+                    attack_jumps.append(_attack_spike(y, i, sr))
                 continue
             if edge == "note_start" and _onset_rise_db(y, i, sr) >= th.click_onset_rise_db:
-                continue  # a new attack out of (near) silence is the preset's transient
+                # the preset's own transient, out of silence: remember how sharp it is
+                # (its spike may land a few samples after the nominal note time)
+                attack_jumps.append(_attack_spike(y, i, sr))
+                continue
+            candidates.append((j, ratio, jump, edge, ref, chop))
+        # WP12 (skill finding 10): a FM-slap retrigger over a still-sounding note has
+        # the same transient as every attack out of silence, so it is not a click
+        # unless it is clearly bigger than this track's own clean attacks.
+        attack_ref = float(np.median(attack_jumps)) if len(attack_jumps) >= 3 else None
+        for j, ratio, jump, edge, ref, chop in candidates:
+            if (
+                edge == "note_start"
+                and attack_ref is not None
+                and jump <= attack_ref * 10 ** (th.click_attack_margin_db / 20.0)
+            ):
+                continue
             if edge == "note_start":
                 edge = "other"
             if any(abs(j - k) <= 2 * search for k in seen):

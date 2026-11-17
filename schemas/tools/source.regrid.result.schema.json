@@ -1,0 +1,348 @@
+{
+  "$defs": {
+    "ChopGridChange": {
+      "additionalProperties": false,
+      "properties": {
+        "after": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Same keys on the new grid; null = no longer fits.",
+          "title": "After"
+        },
+        "before": {
+          "additionalProperties": true,
+          "description": "start_downbeat/start_offset_beats/length_beats, start_s/end_s, local_bpm, rate (= meta.bpm / local_bpm).",
+          "title": "Before",
+          "type": "object"
+        },
+        "chop_id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Chop Id",
+          "type": "string"
+        },
+        "moved_ms": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Moved Ms"
+        },
+        "note": {
+          "description": "Spanish: what this chop now refers to.",
+          "title": "Note",
+          "type": "string"
+        },
+        "rate_after": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate After"
+        },
+        "rate_before": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rate Before"
+        },
+        "same_audio": {
+          "description": "Still cuts the same audio (edges within 5 ms).",
+          "title": "Same Audio",
+          "type": "boolean"
+        },
+        "updated": {
+          "description": "song.yaml was edited for this chop.",
+          "title": "Updated",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "chop_id",
+        "before",
+        "after",
+        "updated",
+        "same_audio",
+        "note"
+      ],
+      "title": "ChopGridChange",
+      "type": "object"
+    },
+    "GridAlternative": {
+      "additionalProperties": false,
+      "description": "Another plausible reading of the grid, as ready-to-pass source.regrid params.",
+      "properties": {
+        "beat_phase": {
+          "default": 0,
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Beat Phase",
+          "type": "integer"
+        },
+        "bpm": {
+          "description": "Global tempo of this reading.",
+          "exclusiveMinimum": 0.0,
+          "title": "Bpm",
+          "type": "number"
+        },
+        "downbeat_shift_beats": {
+          "default": 0,
+          "title": "Downbeat Shift Beats",
+          "type": "integer"
+        },
+        "label": {
+          "description": "Short Spanish description for the human.",
+          "title": "Label",
+          "type": "string"
+        },
+        "tempo_factor": {
+          "enum": [
+            0.5,
+            1.0,
+            2.0
+          ],
+          "title": "Tempo Factor",
+          "type": "number"
+        }
+      },
+      "required": [
+        "tempo_factor",
+        "bpm",
+        "label"
+      ],
+      "title": "GridAlternative",
+      "type": "object"
+    },
+    "GridReport": {
+      "additionalProperties": false,
+      "description": "Compact view of a source's beat grid and how it was corrected (no beat lists).",
+      "properties": {
+        "alternatives": {
+          "items": {
+            "$ref": "#/$defs/GridAlternative"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "ask_human": {
+          "title": "Ask Human",
+          "type": "boolean"
+        },
+        "bar_phase_confidence": {
+          "title": "Bar Phase Confidence",
+          "type": "number"
+        },
+        "beat_phase": {
+          "title": "Beat Phase",
+          "type": "integer"
+        },
+        "beats_per_bar": {
+          "title": "Beats Per Bar",
+          "type": "integer"
+        },
+        "bpm": {
+          "description": "Effective global tempo (what chops and the song use).",
+          "title": "Bpm",
+          "type": "number"
+        },
+        "corrected": {
+          "description": "True when the effective grid differs from the raw one.",
+          "title": "Corrected",
+          "type": "boolean"
+        },
+        "downbeat_shift_beats": {
+          "title": "Downbeat Shift Beats",
+          "type": "integer"
+        },
+        "first_downbeats_s": {
+          "description": "First 4 downbeats (seconds), to locate the 'one'.",
+          "items": {
+            "type": "number"
+          },
+          "title": "First Downbeats S",
+          "type": "array"
+        },
+        "n_beats": {
+          "title": "N Beats",
+          "type": "integer"
+        },
+        "n_downbeats": {
+          "title": "N Downbeats",
+          "type": "integer"
+        },
+        "origin": {
+          "enum": [
+            "tracker",
+            "auto",
+            "manual"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "raw_bpm": {
+          "description": "Tempo as the beat tracker read it.",
+          "title": "Raw Bpm",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "tempo_confidence": {
+          "title": "Tempo Confidence",
+          "type": "number"
+        },
+        "tempo_factor": {
+          "title": "Tempo Factor",
+          "type": "number"
+        },
+        "tempo_range_bpm": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Tempo Range Bpm",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_id",
+        "bpm",
+        "raw_bpm",
+        "corrected",
+        "origin",
+        "tempo_factor",
+        "beat_phase",
+        "downbeat_shift_beats",
+        "beats_per_bar",
+        "tempo_range_bpm",
+        "tempo_confidence",
+        "bar_phase_confidence",
+        "ask_human",
+        "reason",
+        "n_beats",
+        "n_downbeats"
+      ],
+      "title": "GridReport",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "analysis_path": {
+      "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
+      "title": "Analysis Path",
+      "type": "string"
+    },
+    "bpm_after": {
+      "title": "Bpm After",
+      "type": "number"
+    },
+    "bpm_before": {
+      "title": "Bpm Before",
+      "type": "number"
+    },
+    "chops": {
+      "items": {
+        "$ref": "#/$defs/ChopGridChange"
+      },
+      "title": "Chops",
+      "type": "array"
+    },
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "grid": {
+      "$ref": "#/$defs/GridReport"
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Hint"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "stale_candidate_sets": {
+      "description": "Candidate sets scored on the old grid, moved to cache/chops/<src>/stale/.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Stale Candidate Sets",
+      "type": "array"
+    },
+    "suggested_bpm": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "meta.bpm that keeps the song's chops at the same speed (tempo changed).",
+      "title": "Suggested Bpm"
+    }
+  },
+  "required": [
+    "source_id",
+    "analysis_path",
+    "bpm_before",
+    "bpm_after",
+    "grid"
+  ],
+  "title": "SourceRegridResult",
+  "type": "object"
+}

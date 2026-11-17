@@ -124,10 +124,10 @@ def merge(fragment: dict) -> dict:
             song["meta"].update(value)
         elif key == "master":
             song["master"] = value
-        elif key in ("sources", "chops", "tracks", "automation"):
+        elif key in ("sources", "chops", "phrases", "tracks", "automation"):
             ident = "target" if key == "automation" else "id"
             for item in value:
-                song[key] = [x for x in song[key] if x[ident] != item[ident]] + [item]
+                song[key] = [x for x in song.get(key, []) if x[ident] != item[ident]] + [item]
         else:
             song[key] = value
     return song

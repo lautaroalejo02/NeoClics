@@ -37,6 +37,7 @@ __all__ = [
     "KitLaneInfo",
     "KitReport",
     "kit_pattern",
+    "pattern_names",
     "kit_reports",
     "load_manifest",
 ]
@@ -44,22 +45,21 @@ __all__ = [
 #: the template shipped with the package.
 BUNDLED_KITS_FILE = Path(__file__).parent / "data" / STARTER_KITS_FILE
 
-#: four-on-the-floor friendly default step strings per lane name.
+#: fallback 'basic' steps per lane name, for a kit without named patterns:
+#: four-on-the-floor, backbeat, off-beat open hat, light closed hats. Lanes
+#: not listed (crash, toms, percussion) are left out: a crash on every bar or
+#: a cowbell all the time is not a default (WP12).
 DEFAULT_STEPS: dict[str, str] = {
     "kick": "x...x...x...x...",
     "clap": "....x.......x...",
     "snare": "....x.......x...",
     "rim": "....x.......x...",
-    "chat": "x.x.x.x.x.x.x.x.",
-    "hat": "x.x.x.x.x.x.x.x.",
+    "chat": "o...o...o...o...",
+    "hat": "o...o...o...o...",
     "ohat": "..x...x...x...x.",
-    "perc": ".x.x..x..x.x..x.",
-    "conga": ".x.x..x..x.x..x.",
-    "cowbell": "x..x..x..x..x...",
-    "shaker": "xxxxxxxxxxxxxxxx",
-    "tom": "................",
-    "crash": "x...............",
 }
+
+DEFAULT_PATTERN = "basic"
 
 #: lane name -> index ``type`` values that make sense there.
 _LANE_TYPES: dict[str, set[str]] = {
@@ -128,15 +128,70 @@ def load_manifest(root: Path) -> tuple[StarterKits, str] | None:
     return None
 
 
-def kit_pattern(kit: StarterKit, *, steps_per_bar: int = 16) -> dict:
-    """A ``pattern:`` mapping ready to paste under a drum track in song.yaml."""
-    lanes = {}
-    for lane, path in kit.lanes.items():
-        steps = DEFAULT_STEPS.get(lane, "x...............")
-        if steps_per_bar != 16:
-            steps = (steps * (steps_per_bar // 16 + 1))[:steps_per_bar]
-        lanes[lane] = {"sample": f"{LIBRARY_SCHEME}{path}", "steps": steps}
-    return {"steps_per_bar": steps_per_bar, "lanes": lanes}
+def _regrid(steps: str, steps_per_bar: int) -> str:
+    """16-steps-per-bar string -> ``steps_per_bar`` keeping each hit's musical time."""
+    steps = steps.replace(" ", "")
+    if steps_per_bar == 16:
+        return steps
+    if steps_per_bar % 16 == 0:
+        pad = "." * (steps_per_bar // 16 - 1)
+        return "".join(c + pad for c in steps)
+    if 16 % steps_per_bar == 0:
+        k = 16 // steps_per_bar
+        return "".join(steps[i] for i in range(0, len(steps), k))  # off-grid hits dropped
+    raise MuestraError.one(
+        "invalid_value",
+        f"steps_per_bar {steps_per_bar} cannot express the 16-step starter patterns.",
+        path="steps_per_bar",
+        hint="Use 16 (or 8, 32, 48, 64).",
+    )
+
+
+def pattern_names(kit: StarterKit) -> list[str]:
+    return list(kit.patterns) or [DEFAULT_PATTERN]
+
+
+def kit_pattern(kit: StarterKit, *, steps_per_bar: int = 16, name: str = DEFAULT_PATTERN) -> dict:
+    """A ``pattern:`` mapping ready to paste under a drum track in song.yaml.
+
+    ``name`` picks one of the kit's named patterns ('basic', 'busy', 'fill',
+    'phrase'...); a kit without patterns falls back to :data:`DEFAULT_STEPS`.
+    """
+    if kit.patterns:
+        if name not in kit.patterns:
+            raise MuestraError.one(
+                "ref_not_found",
+                f"The kit has no pattern {name!r}.",
+                path="pattern",
+                value=name,
+                hint=f"Use one of: {', '.join(kit.patterns)}.",
+            )
+        spec = kit.patterns[name]
+        chosen = {lane: steps for lane, steps in spec.steps.items()}
+        bars = spec.bars
+    elif name != DEFAULT_PATTERN:
+        raise MuestraError.one(
+            "ref_not_found",
+            f"The kit has no pattern {name!r}.",
+            path="pattern",
+            value=name,
+            hint=f"This kit only has {DEFAULT_PATTERN!r}.",
+        )
+    else:
+        chosen = {lane: DEFAULT_STEPS[lane] for lane in kit.lanes if lane in DEFAULT_STEPS}
+        bars = 1
+    lanes = {
+        lane: {
+            "sample": f"{LIBRARY_SCHEME}{kit.lanes[lane]}",
+            "steps": _regrid(steps, steps_per_bar),
+        }
+        for lane, steps in chosen.items()
+    }
+    pattern: dict = {"steps_per_bar": steps_per_bar}
+    if bars != 1:
+        pattern["bars"] = bars
+    pattern["lanes"] = lanes
+    return pattern
 
 
 def _resolve_kit(

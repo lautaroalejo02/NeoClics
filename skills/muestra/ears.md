@@ -92,6 +92,7 @@ Tiger Rag: 0.5 → 5.6 dB, recupera en 178 ms. `low_end_masking.sidechain[]` tra
 | `grid_offset` | todo el sample llega tarde/temprano (> 15 ms, mediana) | `chops.<id>.start_offset_beats` con el valor del `fix` (N ms = N·bpm/60000 beats) |
 | `grid_drift` | el loop se va corriendo dentro del chop (el disco acelera/frena) | `warp.mode: stretch` en ese chop (+ `pitch_semitones` para mantener el tono que daba el resample) o un chop más corto |
 | `clip_offset` | una repetición sola está corrida | revisá ese clip (`offset_beats`) |
+| `grid_unverified` (info) | ears **no pudo medir** si el sample cae en la grilla: material denso (un ataque en casi cada semicorchea, swing, adornos) donde su propia prueba falla (corre los ataques ±20 ms y no lo mide bien) | nada automático: pedile al humano que escuche el loop contra el bombo; si se siente corrido, `source.regrid` o `start_offset_beats`. `alignment.tracks.<t>.verified/confidence` dicen cuánto confiar |
 | `lane_offset` | un lane de batería llega tarde (one-shot con silencio al principio) | cambiá el `sample` de ese lane |
 | `notes_offset` | notas de un instrumento fuera de tiempo (presets de ataque lento) | info; cambiá preset si molesta |
 | `swing_mismatch` (info) | las semicorcheas del sample swinguean más que la batería | `pattern.swing` al valor del `fix` |
@@ -132,7 +133,7 @@ principal.
 
 | code | qué significa | qué cambiar |
 |---|---|---|
-| `click` | salto en el borde de un clip o nota | chop: `fade_ms` 10-15; nota: otro preset o notas que no se pisen (`slap-bass` da clicks en ataques de notas cortas: medido) |
+| `click` | salto en el borde de un clip o nota | chop: `fade_ms` 10-15; nota: otro preset o notas que no se cortan en seco (el ataque propio del preset, como el "slap" de `slap-bass`, ya no cuenta como click) |
 | `loop_seam_click` | salto en la vuelta del loop | `fade_ms` del chop, o un chop que cierre mejor (otro candidato) |
 
 No busca clicks fuera de bordes conocidos (automatización, ataque de sidechain).

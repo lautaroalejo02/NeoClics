@@ -70,6 +70,7 @@ const WS_TYPES: ReadonlySet<string> = new Set<WsEventType>([
   "song.changed",
   "draft.created",
   "drafts.changed",
+  "grid.changed",
 ]);
 
 /** Resolve the API base URL: `?api=` query param, then VITE_MUESTRA_API,
@@ -244,7 +245,8 @@ export class MuestraClient {
   private getVersion(version: VersionId): Promise<VersionsGetResult | null> {
     let pending = this.versionRequests.get(version);
     if (!pending) {
-      pending = this.tool<VersionsGetResult>("versions_get", { version }).catch(() => null);
+      // detail: the UI wants the full metrics (the agent default is the summary).
+      pending = this.tool<VersionsGetResult>("versions_get", { version, detail: true }).catch(() => null);
       this.versionRequests.set(version, pending);
       void pending.finally(() => this.versionRequests.delete(version));
     }
@@ -368,6 +370,7 @@ export function summaryFromProjectView(view: ProjectView): ProjectSummary {
     metrics,
     analyses: view.analyses ?? {},
     drafts: normalizeDrafts(view.drafts, "draft").concat(normalizeDrafts(view.previews, "preview")),
+    gridPreviews: view.grid_previews ?? {},
   };
 }
 

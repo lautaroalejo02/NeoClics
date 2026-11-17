@@ -8,7 +8,6 @@ from ..project.core import open_project
 from ..schemas._base import RelPath, VersionStr
 from ..schemas.metrics import Metrics, MetricsDelta
 from ..toolbase import ProjectScoped, ToolOutput
-from .core import compare, write_metrics
 
 __all__ = [
     "EarsAnalyzeParams",
@@ -23,11 +22,16 @@ __all__ = [
 
 class EarsAnalyzeParams(ProjectScoped):
     version: VersionStr = Field(description="Render version to analyze, e.g. 'v001'.")
+    detail: bool = Field(
+        default=False,
+        description="Also return the full metrics report (~10 KB); by default only the "
+        "summary (the file is always written to metrics_path).",
+    )
 
 
 class EarsAnalyzeResult(ToolOutput):
     version: VersionStr
-    metrics: Metrics
+    metrics: Metrics | None = Field(default=None, description="Full report (detail=true only).")
     metrics_path: RelPath
     summary: str = Field(
         default="",
@@ -42,11 +46,17 @@ def ears_analyze(p: EarsAnalyzeParams) -> EarsAnalyzeResult:
     clicks, technical checks) with alarms that each carry a suggested
     song.yaml fix. ``summary`` is a short text for the agent; the full
     detail is in ``metrics``."""
+    from .core import write_metrics
+
     project = open_project(p.project)
     m, _path = write_metrics(project, p.version)
     rel = f"renders/{p.version}/metrics.json"
     return EarsAnalyzeResult(
-        version=p.version, metrics=m, metrics_path=rel, summary=m.summary, files=[rel]
+        version=p.version,
+        metrics=m if p.detail else None,
+        metrics_path=rel,
+        summary=m.summary,
+        files=[rel],
     )
 
 
@@ -66,6 +76,8 @@ def ears_compare(p: EarsCompareParams) -> EarsCompareResult:
     """Metrics delta between two versions (b relative to a): louder or
     quieter, brighter or darker, heavier or lighter low end, per-track
     level changes, and which alarms were fixed or introduced."""
+    from .core import compare
+
     project = open_project(p.project)
     files = [
         f"renders/{v}/metrics.json"

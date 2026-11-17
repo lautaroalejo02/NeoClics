@@ -12,7 +12,7 @@ los necesita.
 | `SKILL.md` | cuándo usarla, arranque de sesión, ciclo, reglas duras, mapa de archivos | ~4 KB (se carga al activarse; la `description` está siempre en contexto, ~430 caracteres) |
 | `workflow.md` | la sesión paso a paso con tiempos medidos, summary/request, batería sin oír, restore, honestidad | ~9 KB |
 | `song-yaml.md` | referencia práctica de cada construcción, con fragmentos validados | ~11 KB |
-| `recipes/future-funk.md` | receta del primer loop, cuentas de tempo/tono, ejemplo real e iteraciones | ~12.5 KB |
+| `recipes/future-funk.md` | confirmar la grilla con el humano, receta del primer loop, cuentas de tempo/tono, frases, ejemplo real e iteraciones | ~15 KB |
 | `styles.md` | perfiles de 9.1 como movimientos concretos | ~5 KB |
 | `ears.md` | cada alarma, qué cambiar, qué no mide | ~9 KB |
 | `feedback.md` | frases del humano → cambios; cuándo preguntar | ~6 KB |

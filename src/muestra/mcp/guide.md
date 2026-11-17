@@ -7,16 +7,23 @@ feedback. La skill completa (receta future funk, referencia de `song.yaml`, alar
 traducción de comentarios) está en `skills/muestra/SKILL.md` del repo de Muestra.
 
 1. **Arranque, siempre:** `project_open` (ruta absoluta) → `feedback_read(cursor=<último
-   next_cursor>)` → `versions_list` → `versions_get(<última>)` y leé `metrics.summary` →
+   next_cursor>)` → `versions_list` → `versions_get(<última>)` y leé `metrics_summary` →
    `song_get`. Recién ahí cambiás algo. La UI: `muestra serve --project <p> --open`.
 2. **Fuente:** `source_import(path)` → `source_separate` (minutos en CPU: avisale al humano
-   antes; queda en caché) → `source_analyze` (bpm, beats, downbeats, key con confianza).
+   antes; queda en caché) → `source_analyze` (bpm, downbeats, key con confianza, y `grid`:
+   qué leyó el tracker y qué octava se eligió en 70-160 BPM).
+   **Grilla:** si `grid.ask_human`, `source_preview_grid(alternatives=true)` y que el humano
+   escuche si el click agudo cae en el uno; corregí con `source_regrid` (`tempo_factor`
+   0.5/1/2, `downbeat_shift_beats`; absolutos y reversibles). Nunca dupliques `meta.bpm`
+   para compensar una grilla mal leída.
 3. **Chops:** fijá `meta.bpm` primero (los previews usan ese tempo). `source_find_chops`
    (`stem: other`, `length_beats` 8 o 16) → elegí con `chops_choose(mode=auto)` y explicá
    por qué en términos musicales. Una elección manual del humano (`chop_choice`) manda.
 4. **Arreglo:** editá `song.yaml` conservando comentarios. Compases/beats 1-indexados,
    `start_downbeat` 1-based, `range_bars` [inicio, fin), `clip:<track>:<i>` 0-based;
-   unidades por sufijo (`_ms`, `_hz`, `_db`, `_beats`). Instrumentos: `finger-bass`,
+   unidades por sufijo (`_ms`, `_hz`, `_db`, `_beats`). Bajo y teclas como frases que se
+   repiten (`phrases: [{id, length_bars, notes}]` + en el track `phrases: [{phrase: id}]`).
+   Instrumentos: `finger-bass`,
    `slap-bass`, `synth-bass`, `rhodes`, `brass-stab`, `pad`. Batería: `library_kits`
    (`disco-01`...) y `library_search` por descriptores medidos.
 5. **Tono:** con `warp.mode: resample`, semitonos = 12·log2(meta.bpm/local_bpm). Elegí

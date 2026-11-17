@@ -1,0 +1,110 @@
+{
+  "$defs": {
+    "GridPreviewFile": {
+      "additionalProperties": false,
+      "properties": {
+        "applied": {
+          "description": "True = the grid currently in analysis.json.",
+          "title": "Applied",
+          "type": "boolean"
+        },
+        "bars": {
+          "title": "Bars",
+          "type": "integer"
+        },
+        "beat_phase": {
+          "title": "Beat Phase",
+          "type": "integer"
+        },
+        "beats_per_bar": {
+          "title": "Beats Per Bar",
+          "type": "integer"
+        },
+        "bpm": {
+          "title": "Bpm",
+          "type": "number"
+        },
+        "downbeat_shift_beats": {
+          "title": "Downbeat Shift Beats",
+          "type": "integer"
+        },
+        "end_s": {
+          "title": "End S",
+          "type": "number"
+        },
+        "label": {
+          "title": "Label",
+          "type": "string"
+        },
+        "path": {
+          "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
+          "title": "Path",
+          "type": "string"
+        },
+        "start_downbeat": {
+          "title": "Start Downbeat",
+          "type": "integer"
+        },
+        "start_s": {
+          "title": "Start S",
+          "type": "number"
+        },
+        "tempo_factor": {
+          "title": "Tempo Factor",
+          "type": "number"
+        }
+      },
+      "required": [
+        "path",
+        "label",
+        "applied",
+        "tempo_factor",
+        "beat_phase",
+        "downbeat_shift_beats",
+        "beats_per_bar",
+        "bpm",
+        "start_downbeat",
+        "start_s",
+        "end_s",
+        "bars"
+      ],
+      "title": "GridPreviewFile",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "files": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Files",
+      "type": "array"
+    },
+    "listen": {
+      "description": "Spanish instructions to give the human.",
+      "title": "Listen",
+      "type": "string"
+    },
+    "previews": {
+      "items": {
+        "$ref": "#/$defs/GridPreviewFile"
+      },
+      "title": "Previews",
+      "type": "array"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "source_id",
+    "previews",
+    "listen"
+  ],
+  "title": "SourcePreviewGridResult",
+  "type": "object"
+}

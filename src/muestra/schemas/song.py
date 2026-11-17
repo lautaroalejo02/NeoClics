@@ -39,6 +39,14 @@ Semantics pinned down here (see docs/decisions.md):
   ``notes: [{beat, pitch, length_beats, velocity}]`` — ``beat`` is a
   1-indexed float from the start of the song, ``pitch`` a MIDI number
   0-127 or a note name like ``F#2``, ``velocity`` 1-127 (default 100).
+* ``phrases`` (top level, WP12) are named, looping note phrases:
+  ``{id, length_bars, notes: [{beat, pitch, length_beats, velocity}]}`` with
+  ``beat`` 1-indexed INSIDE the phrase. An instrument track places them like
+  clips: ``phrases: [{phrase, at_bar?, repeat?, transpose_semitones?}]``;
+  ``at_bar`` defaults to the track's ``at_bar`` and an omitted ``repeat``
+  loops the phrase until the track's ``until_bar`` (or the song end), the
+  last pass truncated. Inline ``notes`` may be combined with ``phrases``
+  (one-off notes on top); ``midi`` may not.
 * MIDI files: ticks/ppq are PROJECT beats at ``meta.bpm``; tick 0 is bar
   1 beat 1; tempo and time-signature events inside the file are ignored.
 * Automation ``target`` grammar:
@@ -57,6 +65,7 @@ Semantics pinned down here (see docs/decisions.md):
 
 from __future__ import annotations
 
+import math
 import re
 import types
 from typing import Annotated, Literal, Union, get_args, get_origin  # noqa: UP035
@@ -85,6 +94,10 @@ __all__ = [
     "Clip",
     "MidiNote",
     "MidiPitch",
+    "Phrase",
+    "PhraseNote",
+    "PhrasePlacement",
+    "expand_phrases",
     "Pattern",
     "PatternLane",
     "Instrument",
@@ -338,6 +351,41 @@ class MidiNote(ContractModel):
     pitch: MidiPitch
     length_beats: float = Field(gt=0.0, le=4096.0)
     velocity: int = Field(default=100, ge=1, le=127)
+
+
+class PhraseNote(ContractModel):
+    """One note of a phrase; ``beat`` is 1-indexed from the phrase start."""
+
+    beat: float = Field(ge=1.0, description="1-indexed beat inside the phrase (1 = its start).")
+    pitch: MidiPitch
+    length_beats: float = Field(gt=0.0, le=4096.0)
+    velocity: int = Field(default=100, ge=1, le=127)
+
+
+class Phrase(ContractModel):
+    """A named note phrase that instrument tracks loop (``tracks[].phrases``)."""
+
+    id: IdStr
+    length_bars: int = Field(
+        ge=1, le=64, description="Loop length; the notes repeat every this many bars."
+    )
+    notes: list[PhraseNote] = Field(min_length=1)
+
+
+class PhrasePlacement(ContractModel):
+    """Places a phrase on an instrument track, like a clip places a chop."""
+
+    phrase: IdStr = Field(description="id of a phrases[] entry.")
+    at_bar: int | None = Field(
+        default=None, ge=1, description="Bar where the first pass starts (default: track at_bar)."
+    )
+    repeat: int | None = Field(
+        default=None,
+        ge=1,
+        le=4096,
+        description="Number of passes; omitted = loop until the track's until_bar / song end.",
+    )
+    transpose_semitones: int = Field(default=0, ge=-24, le=24)
 
 
 class Instrument(ContractModel):
@@ -645,6 +693,11 @@ class Track(ContractModel):
         default=None,
         description="Inline MIDI notes for an instrument track (alternative to 'midi').",
     )
+    phrases: list[PhrasePlacement] | None = Field(
+        default=None,
+        description="Looping note phrases (ids in the top-level 'phrases'); may be "
+        "combined with 'notes', not with 'midi'.",
+    )
     at_bar: int = Field(
         default=1,
         ge=1,
@@ -663,7 +716,7 @@ class Track(ContractModel):
 
     @model_validator(mode="after")
     def _exactly_one_kind(self) -> Track:
-        has_note_src = self.midi is not None or self.notes is not None
+        has_note_src = self.midi is not None or self.notes is not None or self.phrases is not None
         n = sum(
             [
                 self.clips is not None,
@@ -675,27 +728,29 @@ class Track(ContractModel):
             raise PydanticCustomError(
                 "track_kind",
                 "Track {tid} needs exactly one of 'clips', 'pattern', or "
-                "'instrument' + ('midi' | 'notes').",
+                "'instrument' + ('midi' | 'notes' | 'phrases').",
                 {
                     "tid": self.id,
                     "hint": "Set exactly one content kind on the track.",
                 },
             )
         if self.instrument is not None:
-            if (self.midi is None) == (self.notes is None):
+            inline = self.notes is not None or self.phrases is not None
+            if (self.midi is None) == (not inline):
                 raise PydanticCustomError(
                     "track_kind",
-                    "Track {tid}: an instrument track takes exactly one of 'midi' or 'notes'.",
+                    "Track {tid}: an instrument track takes 'midi' or inline "
+                    "'notes'/'phrases' (exactly one source).",
                     {
                         "tid": self.id,
-                        "hint": "Set 'midi: <path>' or inline 'notes: [...]', "
-                        "not both and not neither.",
+                        "hint": "Set 'midi: <path>', or 'notes: [...]' and/or "
+                        "'phrases: [{phrase: <id>}]', not midi together with them.",
                     },
                 )
         elif has_note_src:
             raise PydanticCustomError(
                 "track_kind",
-                "Track {tid}: 'midi'/'notes' require 'instrument'.",
+                "Track {tid}: 'midi'/'notes'/'phrases' require 'instrument'.",
                 {
                     "tid": self.id,
                     "hint": "Add 'instrument' or remove the note source.",
@@ -727,6 +782,9 @@ class Song(ContractModel):
     meta: SongMeta
     sources: list[Source] = Field(default_factory=list)
     chops: list[Chop] = Field(default_factory=list)
+    phrases: list[Phrase] = Field(
+        default_factory=list, description="Named looping note phrases (WP12)."
+    )
     tracks: list[Track] = Field(default_factory=list)
     automation: list[Automation] = Field(default_factory=list)
     master: Master = Field(default_factory=Master)
@@ -741,6 +799,7 @@ class Song(ContractModel):
         issues: list[Issue] = []
         issues += self._check_unique_ids()
         issues += self._check_chops()
+        issues += self._check_phrases()
         issues += self._check_tracks()
         issues += self._check_automation()
         return issues
@@ -750,6 +809,7 @@ class Song(ContractModel):
         for coll_name, coll in (
             ("sources", self.sources),
             ("chops", self.chops),
+            ("phrases", self.phrases),
             ("tracks", self.tracks),
         ):
             seen: dict[str, int] = {}
@@ -880,6 +940,8 @@ class Song(ContractModel):
                                 value=clip.repeat,
                             )
                         )
+            if track.phrases is not None:
+                issues += self._check_phrase_placements(track, ti)
             if track.pattern is not None:
                 issues += _check_pattern(
                     track.pattern, f"tracks[{ti}].pattern", self.meta.length_bars
@@ -901,6 +963,96 @@ class Song(ContractModel):
                 )
         issues += self._check_sidechain_cycles()
         return issues
+
+    def _check_phrase_placements(self, track: Track, ti: int) -> list[Issue]:
+        issues: list[Issue] = []
+        phrases = {p.id: p for p in self.phrases}
+        until = track.until_bar or self.meta.length_bars + 1
+        for pi, placement in enumerate(track.phrases or []):
+            base = f"tracks[{ti}].phrases[{pi}]"
+            phrase = phrases.get(placement.phrase)
+            if phrase is None:
+                issues.append(
+                    Issue(
+                        path=f"{base}.phrase",
+                        code="ref_not_found",
+                        message=f"Track {track.id!r} places unknown phrase {placement.phrase!r}.",
+                        hint="Define it under top-level 'phrases' "
+                        "({id, length_bars, notes}) or fix the id.",
+                        value=placement.phrase,
+                    )
+                )
+                continue
+            at = placement.at_bar or track.at_bar
+            if not track.at_bar <= at < until:
+                issues.append(
+                    Issue(
+                        path=f"{base}.at_bar",
+                        code="clip_position",
+                        message=f"Phrase {phrase.id!r} starts at bar {at}, outside the "
+                        f"window of track {track.id!r} (bars {track.at_bar} to {until - 1}).",
+                        hint="Move 'at_bar' inside the track's at_bar/until_bar window.",
+                        value=at,
+                    )
+                )
+                continue
+            if placement.repeat is not None:
+                end = at + placement.repeat * phrase.length_bars
+                if end > until:
+                    issues.append(
+                        Issue(
+                            path=f"{base}.repeat",
+                            code="clip_overrun",
+                            message=f"{placement.repeat} passes of the {phrase.length_bars}-bar "
+                            f"phrase {phrase.id!r} from bar {at} end at bar {end}, past bar "
+                            f"{until} (track window / song end).",
+                            hint="Reduce 'repeat', or omit it to loop until the window ends.",
+                            value=placement.repeat,
+                        )
+                    )
+            for ni, note in enumerate(phrase.notes):
+                pitch = note.pitch + placement.transpose_semitones
+                if not 0 <= pitch <= 127:
+                    issues.append(
+                        Issue(
+                            path=f"{base}.transpose_semitones",
+                            code="out_of_range",
+                            message=f"Transposing phrase {phrase.id!r} note {ni} gives MIDI "
+                            f"pitch {pitch} (valid 0-127).",
+                            hint="Use a smaller transpose_semitones.",
+                            value=placement.transpose_semitones,
+                        )
+                    )
+                    break
+        return issues
+
+    def _check_phrases(self) -> list[Issue]:
+        issues: list[Issue] = []
+        for i, phrase in enumerate(self.phrases):
+            span = phrase.length_bars * BEATS_PER_BAR
+            for ni, note in enumerate(phrase.notes):
+                if note.beat >= span + 1 - 1e-9:
+                    issues.append(
+                        Issue(
+                            path=f"phrases[{i}].notes[{ni}].beat",
+                            code="out_of_range",
+                            message=f"Phrase {phrase.id!r} is {phrase.length_bars} bars "
+                            f"({span:g} beats) but note {ni} starts at beat {note.beat:g}.",
+                            hint=f"Phrase beats are 1-indexed inside the phrase: use "
+                            f"1 <= beat < {span + 1:g}, or raise length_bars.",
+                            value=note.beat,
+                        )
+                    )
+        return issues
+
+    def track_notes(self, track: Track) -> list[MidiNote] | None:
+        """Absolute (song-beat) notes of an instrument track: inline ``notes`` plus
+        expanded ``phrases``; None for a ``midi`` track. Sorted by beat."""
+        if track.notes is None and track.phrases is None:
+            return None
+        notes = list(track.notes or [])
+        notes += expand_phrases(self, track)
+        return sorted(notes, key=lambda n: (n.beat, n.pitch))
 
     def _check_sidechain_cycles(self) -> list[Issue]:
         """Reject key-signal cycles: A sidechained to B sidechained to A
@@ -1206,3 +1358,40 @@ def _check_pattern(pattern: Pattern, path: str, length_bars: int) -> list[Issue]
                 )
             )
     return issues
+
+
+def expand_phrases(song: Song, track: Track) -> list[MidiNote]:
+    """Song-beat notes for ``track.phrases`` (unknown phrase ids are skipped:
+    ``Song.check`` reports them). Passes are cut at the track window's end."""
+    phrases = {p.id: p for p in song.phrases}
+    until = track.until_bar or song.meta.length_bars + 1
+    end_beat = (until - 1) * BEATS_PER_BAR + 1  # first song beat after the window
+    out: list[MidiNote] = []
+    for placement in track.phrases or []:
+        phrase = phrases.get(placement.phrase)
+        if phrase is None:
+            continue
+        at = placement.at_bar or track.at_bar
+        span = phrase.length_bars * BEATS_PER_BAR
+        first = (at - 1) * BEATS_PER_BAR + 1
+        passes = placement.repeat
+        if passes is None:
+            passes = max(0, math.ceil((end_beat - first) / span))
+        for k in range(int(passes)):
+            origin = first + k * span
+            for note in phrase.notes:
+                beat = origin + note.beat - 1
+                if beat >= end_beat - 1e-9:
+                    continue
+                pitch = note.pitch + placement.transpose_semitones
+                if not 0 <= pitch <= 127:
+                    continue
+                out.append(
+                    MidiNote(
+                        beat=beat,
+                        pitch=pitch,
+                        length_beats=note.length_beats,
+                        velocity=note.velocity,
+                    )
+                )
+    return out

@@ -111,15 +111,24 @@ class VersionsGetResult(ToolOutput):
         default=None,
         description="renders/<version>/meta.json when it exists (derived data — git-ignored).",
     )
-    song_yaml: str = Field(
-        description="The version's song.yaml text: renders/<version>/song.yaml "
-        "byte copy when present, else 'git show vNNN:song.yaml'."
+    song_yaml: str | None = Field(
+        default=None,
+        description="The version's song.yaml text (detail=true only): renders/<version>/"
+        "song.yaml byte copy when present, else 'git show vNNN:song.yaml'.",
     )
     song_source: Literal["renders", "git"] = Field(
         default="renders", description="Where song_yaml was read from."
     )
     info: VersionInfo | None = None
-    metrics: Metrics | None = None
+    metrics: Metrics | None = Field(
+        default=None, description="Full ears report (detail=true only; see metrics_path)."
+    )
+    metrics_summary: str | None = Field(
+        default=None, description="Compact Spanish ears summary (headline + worst alarms)."
+    )
+    metrics_path: str | None = Field(
+        default=None, description="renders/<version>/metrics.json when it exists."
+    )
     mix: str | None = Field(
         default=None, description="Project-relative path of mix.wav if present."
     )

@@ -1,0 +1,125 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "alternatives": {
+      "default": false,
+      "description": "Also render one file per alternative reading (up to 4).",
+      "title": "Alternatives",
+      "type": "boolean"
+    },
+    "bars": {
+      "default": 8,
+      "maximum": 64,
+      "minimum": 1,
+      "title": "Bars",
+      "type": "integer"
+    },
+    "beat_phase": {
+      "anyOf": [
+        {
+          "enum": [
+            0,
+            1
+          ],
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Beat Phase"
+    },
+    "beats_per_bar": {
+      "anyOf": [
+        {
+          "maximum": 12,
+          "minimum": 2,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Beats Per Bar"
+    },
+    "downbeat_shift_beats": {
+      "anyOf": [
+        {
+          "maximum": 16,
+          "minimum": -16,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Downbeat Shift Beats"
+    },
+    "project": {
+      "description": "Path to the project directory.",
+      "minLength": 1,
+      "title": "Project",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+      "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "start_downbeat": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Downbeat (current grid, 1-based) to start at; default 1.",
+      "title": "Start Downbeat"
+    },
+    "stem": {
+      "default": "mix",
+      "description": "What to play under the clicks.",
+      "enum": [
+        "drums",
+        "bass",
+        "vocals",
+        "other",
+        "mix"
+      ],
+      "title": "Stem",
+      "type": "string"
+    },
+    "tempo_factor": {
+      "anyOf": [
+        {
+          "enum": [
+            0.5,
+            1.0,
+            2.0
+          ],
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Audition this correction WITHOUT applying it (see regrid).",
+      "title": "Tempo Factor"
+    }
+  },
+  "required": [
+    "project",
+    "source_id"
+  ],
+  "title": "SourcePreviewGridParams",
+  "type": "object"
+}

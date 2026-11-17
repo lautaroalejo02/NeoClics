@@ -131,7 +131,15 @@ tracks.bass.fx[1].ratio   (fx w/o id)      master.fx.limiter.ceiling_db
 tracks.drums.fx.hp2       (added fx)       master.fx[0].ratio
 automation.tracks.sample.fx.lp.cutoff_hz.points   (automation keyed by target)
 tracks    /  tracks.<id>.fx   (reorder)
+phrases.riff.length_bars                   phrases.riff.notes[3].pitch      (WP12)
+tracks.bass.phrases[0].transpose_semitones (placements aligned like clips)
 ```
+
+Phrases (WP12) are matched by id; their notes are aligned like inline notes;
+a track's phrase placements are aligned by phrase id or start bar. The Spanish
+description says "El bajo ahora repite la frase riff de 2 compases desde el
+compás 5", and rewriting inline notes as phrases (or back) is ONE sentence that
+ends in "(suena igual)" when the expanded notes are identical.
 
 * Elements are matched by id (sources, chops, tracks, lanes, fx with an id,
   automations by target), so inserting/deleting/reordering never shifts
@@ -157,8 +165,8 @@ tracks    /  tracks.<id>.fx   (reorder)
 Written the way a producer would say it, in rioplatense Spanish, first person
 past: "Subí el chop c1 un semitono", "Bajé el bajo 2 dB", "Cambié el preset
 del bajo de slap-bass-01 a slap-bass-02", "Sidechain más profundo (0.6 a 0.8)
-en el track sample", "Agregué un filtro pasa-bajos automatizado de 800 Hz a
-18 kHz en los compases 1 a 4 del track sample", "El bombo pasa de negras a un
+en el sample", "Agregué un filtro pasa-bajos automatizado de 800 Hz a
+18 kHz en los compases 1 a 4 del sample", "El bombo pasa de negras a un
 patrón con síncopa en el compás 4", "El delay de la batería ahora es de
 corcheas (antes negras)".
 

@@ -34,14 +34,14 @@ from collections.abc import Callable
 from pathlib import Path
 
 import yaml
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 from ruamel.yaml import YAML
 from ruamel.yaml.comments import CommentedMap
 from ruamel.yaml.constructor import DuplicateKeyError
 from ruamel.yaml.error import YAMLError as RuamelError
 
 from ..errors import Issue, MuestraError, issues_from_validation_error
-from ..schemas._base import is_library_uri
+from ..schemas._base import LazyAdapter, is_library_uri
 from ..schemas.analysis import Analysis
 from ..schemas.song import Song
 from .core import SONG_FILE, Project
@@ -65,14 +65,91 @@ __all__ = [
 #: analyzed grid before it's an error.
 BEAT_MATCH_TOLERANCE_S = 0.05
 
-_ANALYSIS_ADAPTER = TypeAdapter(Analysis)
+_ANALYSIS_ADAPTER = LazyAdapter(Analysis)
 
 #: ruamel round-trip parser: preserves comments/ordering, rejects
 #: duplicate keys (DuplicateKeyError).
 _YAML = YAML(typ="rt")
 _YAML.preserve_quotes = True
+# Never re-wrap long flow-style lines (lanes with library:// URIs) on round-trip edits.
+_YAML.width = 4096
 
 _DUP_KEY_RE = re.compile(r'duplicate key "([^"]+)"')
+
+
+def _fast_loader():
+    """libyaml (C) safe loader with YAML 1.2 core-schema scalars, like ruamel.
+
+    Reading song.yaml for validation does not need ruamel's round trip, which is
+    ~10x slower in pure Python (0.2-0.3 s on a long song: most of a CLI call).
+    Only true/false are booleans (YAML 1.1's yes/no/on/off stay strings), ints are
+    decimal/0o/0x, floats include 1e3. Duplicate keys raise; any error falls back
+    to the ruamel path, which produces the user-facing messages. None when PyYAML
+    has no libyaml.
+    """
+    try:
+        import yaml
+    except ImportError:  # pragma: no cover - PyYAML is a dependency
+        return None
+    base = getattr(yaml, "CSafeLoader", None)
+    if base is None:
+        return None
+
+    class _Dup(Exception):
+        pass
+
+    class Loader(base):  # type: ignore[misc, valid-type]
+        pass
+
+    Loader.yaml_implicit_resolvers = {}
+    for tag, regexp, first in (
+        ("tag:yaml.org,2002:bool", r"^(?:true|True|TRUE|false|False|FALSE)$", "tTfF"),
+        ("tag:yaml.org,2002:int", r"^(?:[-+]?[0-9]+|0o[0-7]+|0x[0-9a-fA-F]+)$", "-+0123456789"),
+        (
+            "tag:yaml.org,2002:float",
+            r"^(?:[-+]?(?:\.[0-9]+|[0-9]+(?:\.[0-9]*)?)(?:[eE][-+]?[0-9]+)?"
+            r"|[-+]?\.(?:inf|Inf|INF)|\.(?:nan|NaN|NAN))$",
+            "-+0123456789.",
+        ),
+        ("tag:yaml.org,2002:null", r"^(?:~|null|Null|NULL|)$", ["~", "n", "N", ""]),
+    ):
+        Loader.add_implicit_resolver(tag, re.compile(regexp), list(first))
+
+    def int_12(loader, node):
+        value = loader.construct_scalar(node)
+        return int(value, 0) if value[:2] in ("0o", "0x") else int(value)
+
+    def mapping(loader, node, deep=False):
+        loader.flatten_mapping(node)
+        seen = set()
+        for key_node, _ in node.value:
+            key = loader.construct_object(key_node, deep=deep)
+            if key in seen:
+                raise _Dup(key)
+            seen.add(key)
+        return loader.construct_mapping(node, deep=deep)
+
+    Loader.add_constructor("tag:yaml.org,2002:int", int_12)
+    Loader.add_constructor("tag:yaml.org,2002:map", mapping)
+    return yaml, Loader
+
+
+_FAST = _fast_loader()
+
+
+def _plain_doc(path: Path, label: str):
+    """song.yaml as plain Python data, for validation only (never written back)."""
+    if _FAST is not None:
+        yaml, loader = _FAST
+        try:
+            doc = yaml.load(path.read_text(encoding="utf-8"), Loader=loader)  # noqa: S506
+        except Exception:  # noqa: BLE001 - the ruamel path reports it properly
+            doc = Ellipsis
+        if doc is None:
+            return {}
+        if isinstance(doc, dict):
+            return doc
+    return _yaml_doc(path, label)
 
 
 def _yaml_doc(path: Path, label: str) -> CommentedMap:
@@ -118,7 +195,7 @@ def load_song(project: Project) -> Song:
             path=SONG_FILE,
             hint="Create a song.yaml, or create the project with project.create.",
         )
-    doc = _yaml_doc(path, SONG_FILE)
+    doc = _plain_doc(path, SONG_FILE)
     try:
         return Song.model_validate(doc)
     except ValidationError as e:

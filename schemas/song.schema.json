@@ -856,6 +856,131 @@
       "title": "PhaserFx",
       "type": "object"
     },
+    "Phrase": {
+      "additionalProperties": false,
+      "description": "A named note phrase that instrument tracks loop (``tracks[].phrases``).",
+      "properties": {
+        "id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Id",
+          "type": "string"
+        },
+        "length_bars": {
+          "description": "Loop length; the notes repeat every this many bars.",
+          "maximum": 64,
+          "minimum": 1,
+          "title": "Length Bars",
+          "type": "integer"
+        },
+        "notes": {
+          "items": {
+            "$ref": "#/$defs/PhraseNote"
+          },
+          "minItems": 1,
+          "title": "Notes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "id",
+        "length_bars",
+        "notes"
+      ],
+      "title": "Phrase",
+      "type": "object"
+    },
+    "PhraseNote": {
+      "additionalProperties": false,
+      "description": "One note of a phrase; ``beat`` is 1-indexed from the phrase start.",
+      "properties": {
+        "beat": {
+          "description": "1-indexed beat inside the phrase (1 = its start).",
+          "minimum": 1.0,
+          "title": "Beat",
+          "type": "number"
+        },
+        "length_beats": {
+          "exclusiveMinimum": 0.0,
+          "maximum": 4096.0,
+          "title": "Length Beats",
+          "type": "number"
+        },
+        "pitch": {
+          "ge": 0,
+          "le": 127,
+          "title": "Pitch",
+          "type": "integer"
+        },
+        "velocity": {
+          "default": 100,
+          "maximum": 127,
+          "minimum": 1,
+          "title": "Velocity",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "beat",
+        "pitch",
+        "length_beats"
+      ],
+      "title": "PhraseNote",
+      "type": "object"
+    },
+    "PhrasePlacement": {
+      "additionalProperties": false,
+      "description": "Places a phrase on an instrument track, like a clip places a chop.",
+      "properties": {
+        "at_bar": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bar where the first pass starts (default: track at_bar).",
+          "title": "At Bar"
+        },
+        "phrase": {
+          "description": "id of a phrases[] entry.",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Phrase",
+          "type": "string"
+        },
+        "repeat": {
+          "anyOf": [
+            {
+              "maximum": 4096,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Number of passes; omitted = loop until the track's until_bar / song end.",
+          "title": "Repeat"
+        },
+        "transpose_semitones": {
+          "default": 0,
+          "maximum": 24,
+          "minimum": -24,
+          "title": "Transpose Semitones",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "phrase"
+      ],
+      "title": "PhrasePlacement",
+      "type": "object"
+    },
     "PluginFx": {
       "additionalProperties": false,
       "description": "Generic hosted plugin (VST3/AU). ``params`` maps the plugin's own\nparameter names to values in that parameter's native range.",
@@ -1314,6 +1439,22 @@
           ],
           "default": null
         },
+        "phrases": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/PhrasePlacement"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Looping note phrases (ids in the top-level 'phrases'); may be combined with 'notes', not with 'midi'.",
+          "title": "Phrases"
+        },
         "until_bar": {
           "anyOf": [
             {
@@ -1382,6 +1523,14 @@
     },
     "meta": {
       "$ref": "#/$defs/SongMeta"
+    },
+    "phrases": {
+      "description": "Named looping note phrases (WP12).",
+      "items": {
+        "$ref": "#/$defs/Phrase"
+      },
+      "title": "Phrases",
+      "type": "array"
     },
     "schema_version": {
       "const": 0,

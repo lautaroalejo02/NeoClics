@@ -215,6 +215,19 @@ stated; `tests/ears/test_detection.py` asserts them. Thresholds live in
   4. `swing_mismatch` info: the sample's off-beat 16ths are > 12 ms
      later than the drums' swing; fix: the `pattern.swing` that matches
      (`swing = 3·delay/step`).
+
+  **Honesty gate (WP12).** Before any of the above, the estimator tests
+  itself on the same material: every onset is moved by ±`timing_probe_ms`
+  (20 ms, kept inside the window) and the on-beat median is re-measured.
+  If it misses that known shift by more than `timing_max_window_spread_ms`
+  (5 ms) — which onsets fall in the ±1/8-beat window then depends on the
+  shift itself — nothing is alarmed and an **info** `grid_unverified`
+  says the timing could not be verified (with the onsets per beat and the
+  miss). The same note replaces silence when the cluster is too scattered
+  for `grid_offset` (MAD > 8 ms) and no drift/clip alarm explains it.
+  `TrackAlignment` gains `verified`, `confidence` (count × tightness ×
+  self-test, a heuristic, not a probability), `onsets_per_beat` and
+  `window_spread_ms` (the self-test miss).
 - **Measured.** Flux-peak bias corrected (+0.5 ms, consistent 22-48
   kHz). Late chop: +20 ms reads +20.3, -20 reads -20.0, MAD 0.2-0.5
   ms. **Flagged at |offset| >= 16 ms, quiet at <= 14 ms** (threshold
@@ -379,6 +392,19 @@ already does not scan). A note start that rises at least
 `click_onset_rise_db` (12 dB) above what was sounding is now skipped;
 retriggers over a sustained sound and note ends are still scanned.
 
+**Fixed (WP12): legato retriggers of an FM-slap preset read as clicks.** The
+Yung Bae example with `slap-bass` raised `error click` twice (-27.7 dBFS, ratio
+221) at the first pass of a phrase only. Sample-level inspection: every pass has
+the identical slap transient (sharpest second difference 0.041), starting 2-5
+samples after the nominal note time; it was flagged only where it landed inside
+the ±search window, on a note that starts where the previous one ends (legato:
+the note-end edge was scanned as a cut). Now a note end that coincides with the
+next note start is scanned once, as that start, and a retrigger whose spike is
+within `click_attack_margin_db` (6 dB) of the median attack spike of the same
+track's notes out of silence (first 3 ms) is the preset's attack. A sustained
+note cut dead under the next attack, or anywhere else, is still a click
+(synthetic tests). Demo clean render: 0 clicks; Yung Bae + slap: 2 -> 0.
+
 **Clarified: `loudness_off_target` with a healthy PLR.** The clean loop
 ends at -13.0 LUFS against a -10 target with PLR 12 dB. Instrumented: the
 mix is -10.00 LUFS / +7.97 dBTP *before* the renderer's true-peak safety
@@ -388,7 +414,8 @@ now names the cause (raise the quiet tracks / lower the drums, or lower
 the target to what the master gives) instead of "check master.gain_db",
 which cannot help because the renderer normalises toward the target.
 
-**Not fixed: sample grid alignment on dense live material.** The renderer
+**Sample grid alignment on dense live material (WP11 finding; WP12 made
+the output honest, the estimator is unchanged).** The renderer
 places the chop exactly (cross-correlating the variant stems against the
 clean one: +30.0 / -30.0 ms). Ears does not follow: per-instance offsets
 are tight (clean -21.8 ms, the 8 repeats agree within 2.3 ms) but move
@@ -405,6 +432,17 @@ the reliable signals there are the drum/instrument event timings (exact)
 and the agent's own `start_offset_beats` changes. A fix needs a different
 estimator (e.g. onset-pattern cross-correlation against the dry stem
 mapped through the analysis grid), left for a later WP.
+
+WP12 re-ran the three variants with the self-test (median / MAD /
+self-test miss -> verdict): clean -25.0 / 13.8 / 13.8 ms -> `info
+grid_unverified`; chop 30 ms late +37.8 / 22.2 / 0.0 ms -> `info
+grid_unverified` (scattered); chop 30 ms early -21.5 / 1.0 / 6.1 ms ->
+`info grid_unverified` (it used to be a coincidental `warn grid_offset`).
+The late chop is still not *detected*: ears now says it could not check,
+which is the truth on this material. On the synthetic corpus every timing
+detection is unchanged (self-test miss 0-3 ms), and the corrected-grid
+Tiger Rag example (v030, resample) verifies: -8.5 ms, MAD 5.5, miss
+3.1 ms, confidence 0.41, no timing alarm.
 
 Remaining warn on the clean loop: `spectral_sub_deficit` -9.3 dB vs the
 modelled "dance" reference (the bass enters at bar 5 and the kick is a

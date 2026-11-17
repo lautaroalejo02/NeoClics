@@ -14,9 +14,9 @@ import re
 from dataclasses import dataclass, field
 from pathlib import PurePosixPath
 
-from pydantic import TypeAdapter, ValidationError
+from pydantic import ValidationError
 
-from ..schemas._base import LIBRARY_SCHEME, LibraryURI
+from ..schemas._base import LIBRARY_SCHEME, LazyAdapter, LibraryURI
 from ..schemas.library import AudioFeatures
 from .audio import AudioProbe
 
@@ -655,7 +655,7 @@ class Classification:
     key_confidence: float | None = None
 
 
-_URI = TypeAdapter(LibraryURI)
+_URI = LazyAdapter(LibraryURI)
 
 
 def _uri_ok(rel_path: str) -> bool:

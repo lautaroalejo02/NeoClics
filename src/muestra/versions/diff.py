@@ -10,10 +10,11 @@ ID-based paths per the contract grammar (docs/contracts.md, R10)::
     tracks.sample.clips[2].at_bar              tracks.bass.notes[0].pitch
     tracks.bass.fx[1].ratio   (fx without id)  master.fx.limiter.ceiling_db
     automation.tracks.sample.fx.lp.cutoff_hz.points
+    phrases.riff.notes[3].pitch                tracks.bass.phrases[0].repeat
 
 Matching, not positions:
 
-* sources/chops/tracks/lanes/id'd fx are matched by id, so inserting,
+* sources/chops/phrases/tracks/lanes/id'd fx are matched by id, so inserting,
   deleting or reordering them never shifts anybody's address;
 * clips, inline notes and id-less fx have no id, so they are *aligned*:
   identical items first, then the most similar leftovers (a moved clip or a
@@ -50,6 +51,7 @@ __all__ = [
     "CLIPS",
     "FX",
     "NOTES",
+    "PLACEMENTS",
     "Alignment",
     "FxAlignment",
     "Matcher",
@@ -252,6 +254,19 @@ NOTES = Matcher(
 FX = Matcher(_fx_score, lambda f: [("type", f.get("type"))])
 
 
+def _placement_score(x: dict, y: dict) -> int | None:
+    """Phrase placements pair up when they place the same phrase or start together."""
+    if x.get("phrase") != y.get("phrase") and x.get("at_bar") != y.get("at_bar"):
+        return None
+    return _equal_fields(x, y)
+
+
+PLACEMENTS = Matcher(
+    _placement_score,
+    lambda p: [("phrase", p.get("phrase")), ("at", p.get("at_bar"))],
+)
+
+
 @dataclass
 class FxAlignment:
     """Alignment of one fx chain. Index lists refer to positions in the chain;
@@ -410,7 +425,31 @@ def _diff_track(tid: str, a: dict, b: dict, out: list[DiffEntry]) -> None:
     elif not same(na, nb):
         out.append(_entry(f"{p}.notes", na, nb))
 
+    pa, pb = a.get("phrases"), b.get("phrases")
+    if pa is not None and pb is not None:
+        _diff_aligned_list(f"{p}.phrases", pa, pb, PLACEMENTS, out)
+    elif not same(pa, pb):
+        out.append(_entry(f"{p}.phrases", pa, pb))
+
     _diff_fx_chain(f"{p}.fx", a.get("fx") or [], b.get("fx") or [], out)
+
+
+def _diff_phrases(a_list: list[dict], b_list: list[dict], out: list[DiffEntry]) -> None:
+    """Phrases by id; their notes aligned like inline notes (WP12)."""
+    a_by = {x["id"]: x for x in a_list}
+    b_by = {x["id"]: x for x in b_list}
+    for pid in [*b_by, *(k for k in a_by if k not in b_by)]:
+        xa, xb = a_by.get(pid), b_by.get(pid)
+        p = f"phrases.{pid}"
+        if xa is None:
+            out.append(_entry(p, None, xb))
+        elif xb is None:
+            out.append(_entry(p, xa, None))
+        else:
+            _walk(f"{p}.length_bars", xa.get("length_bars"), xb.get("length_bars"), out)
+            _diff_aligned_list(
+                f"{p}.notes", xa.get("notes") or [], xb.get("notes") or [], NOTES, out
+            )
 
 
 def _diff_automation(a_list: list[dict], b_list: list[dict], out: list[DiffEntry]) -> None:
@@ -437,6 +476,7 @@ def song_diff(a: Song, b: Song) -> list[DiffEntry]:
     _walk("meta", da["meta"], db["meta"], out)
     _diff_keyed("sources", da.get("sources", []), db.get("sources", []), out)
     _diff_keyed("chops", da.get("chops", []), db.get("chops", []), out)
+    _diff_phrases(da.get("phrases", []), db.get("phrases", []), out)
 
     a_tracks = {t["id"]: t for t in da.get("tracks", [])}
     b_tracks = {t["id"]: t for t in db.get("tracks", [])}

@@ -674,3 +674,69 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
     contradicted by a fitting bass/sample pair is `info`. The skill's `ears.md`/`workflow.md`
     were updated to the new behaviour and to `render` returning `metrics_summary`.
     Thresholds unchanged. Details: docs/ears.md.
+
+## 2026-11-17 — WP12: polish pass after the first real usage sessions
+
+All contract changes are additive unless marked **(breaking for readers of
+that field)**; schemas regenerated (`uv run python -m muestra.schemas.export`).
+
+1. **Beat-grid correction lives in the analysis.** `Analysis.grid:
+   GridCorrection` keeps the tracker output (`raw`) and the correction
+   (`tempo_factor` 0.5/1/2, `beat_phase`, `downbeat_shift_beats`,
+   `beats_per_bar`, origin, confidences, `ask_human`, Spanish `reason`,
+   `alternatives`, `history`); `beats_s`/`downbeats_s`/`bpm_global` stay the
+   effective grid, so chop timing, warp, previews, ears and validation did not
+   change. Parameters are absolute w.r.t. the tracker (idempotent, reversible).
+   Rejected: a per-chop `source_beats_per_beat` (skill finding 5) — "the
+   tracker counted eighths" is a property of the source, and per-chop factors
+   would leave find_chops, previews and ears on the wrong grid.
+2. **`source.analyze`** gains `min_bpm`/`max_bpm` (default 70-160) and picks
+   the octave inside the range. Its result's `analysis` is now an
+   `AnalysisSummary` (no `beats_s`/`downbeats_s`, adds `n_beats`/`n_downbeats`)
+   **(breaking for readers of `data.analysis.beats_s`: read the file)**, plus
+   `grid: GridReport` and `hint`. Pre-WP12 caches are upgraded without moving
+   the chops of an existing song (report only).
+3. **New tools** `source.regrid` (rewrites the source's song chops to cut the
+   same audio, reports every move, retires candidate sets to
+   `cache/chops/<src>/stale/`) and `source.preview_grid` (click previews under
+   `cache/previews/<src>/grid/`, `index.json`). `GET /project` gains
+   `grid_previews`; new WsEvent `grid.changed {source_id}`; the UI's Chops tab
+   shows each source's grid and an "Escuchar la grilla" player. The summary no
+   longer reports `csNNN.meta.json` sidecars as invalid candidate sets.
+4. **Phrases.** Top-level `phrases` + `tracks[].phrases` placements
+   (`phrase`, `at_bar?`, `repeat?` = loop to the window end when omitted,
+   `transpose_semitones`); `notes` may be combined with phrases, `midi` not.
+   `Song.track_notes()` is the single expansion used by renderer and ears.
+   Diff paths `phrases.<id>...`, `tracks.<id>.phrases[i]`; Spanish sentences
+   for placements and for "rewrote as phrases (suena igual)". A 12-bar bass in
+   the Tiger Rag example: 53 lines / 3023 bytes -> 15 lines / 483 bytes.
+5. **Compact results.** `plugins.list` default = aliases + plugins + preset
+   counts/categories; presets only when browsing (`query`, `plugin`,
+   `category`, `limit` 30, hard cap 100, `offset`/`next_offset`, `detail`);
+   `PresetEntry.path` optional, `category` added, `PluginEntry.n_parameters`
+   added. `versions.get` / `ears.analyze` take `detail` and return the summary
+   + `metrics_path` by default; `VersionsGetResult.song_yaml` and
+   `EarsAnalyzeResult.metrics` are now optional **(breaking for readers that
+   expected them without `detail=true`; the UI passes it)**. The envelope
+   mirrors a successful result's own `hint`.
+6. **Starter kits** gain named `patterns` (`KitPattern{description, bars,
+   steps}`); `library.kits` takes `pattern=<name>` and lists `patterns`. The
+   fallback steps no longer include crash/percussion, and `steps_per_bar`
+   other than 16 keeps musical time (32 used to double the pattern's speed).
+   The owner's `MuestraLibrary/starter-kits.json` was updated to match the
+   bundled template.
+7. **ears.** Clip-track timing self-tests (±`timing_probe_ms` = 20 ms, max
+   miss `timing_max_window_spread_ms` = 5 ms) and, when it fails or the
+   cluster is too scattered, raises `info grid_unverified` instead of
+   `grid_offset`/`grid_drift`/`clip_offset`; `TrackAlignment` gains `verified`,
+   `confidence`, `onsets_per_beat`, `window_spread_ms`. Legato note starts are
+   scanned once and compared with the track's own attacks
+   (`click_attack_margin_db` = 6): slap-bass retriggers are no longer clicks.
+8. **Wording.** Lane nouns no longer repeat their track's noun ("Bajé el bombo
+   2 dB"); track `sample` reads "el sample".
+9. **Startup.** Tool modules import heavy dependencies lazily; contract models
+   use `defer_build`; module TypeAdapters are lazy (`LazyAdapter`); the CLI sets
+   `PYDANTIC_DISABLE_PLUGINS` unless already set; `load_song` parses with
+   libyaml (YAML 1.2 core scalars, duplicate keys rejected, any error falls
+   back to ruamel for the message); ruamel round-trip edits keep long flow
+   lines (`width` 4096); `git rev-parse` answers are cached per `.git` identity.

@@ -1,37 +1,19 @@
 {
   "$defs": {
-    "Analysis": {
+    "AnalysisSummary": {
       "additionalProperties": false,
+      "description": "analysis.json minus the beat lists (``beats_s``, ``downbeats_s``, raw grid):\na 4-minute record has ~1000 beats, which do not belong in an LLM context.",
       "properties": {
-        "beats_s": {
-          "items": {
-            "type": "number"
-          },
-          "minItems": 1,
-          "title": "Beats S",
-          "type": "array"
-        },
         "bpm_global": {
-          "exclusiveMaximum": 400.0,
-          "exclusiveMinimum": 0.0,
           "title": "Bpm Global",
           "type": "number"
         },
-        "downbeats_s": {
-          "items": {
-            "type": "number"
-          },
-          "minItems": 1,
-          "title": "Downbeats S",
-          "type": "array"
-        },
         "duration_s": {
-          "exclusiveMinimum": 0.0,
           "title": "Duration S",
           "type": "number"
         },
         "file": {
-          "description": "Project-relative path of the source audio.",
+          "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
           "title": "File",
           "type": "string"
         },
@@ -58,15 +40,16 @@
           "default": null,
           "title": "Loudness Lufs"
         },
-        "sample_rate": {
-          "exclusiveMinimum": 0,
-          "title": "Sample Rate",
+        "n_beats": {
+          "title": "N Beats",
           "type": "integer"
         },
-        "schema_version": {
-          "const": 0,
-          "default": 0,
-          "title": "Schema Version",
+        "n_downbeats": {
+          "title": "N Downbeats",
+          "type": "integer"
+        },
+        "sample_rate": {
+          "title": "Sample Rate",
           "type": "integer"
         },
         "sections": {
@@ -106,7 +89,6 @@
           "default": null
         },
         "tempo_variable": {
-          "default": false,
           "title": "Tempo Variable",
           "type": "boolean"
         }
@@ -117,10 +99,183 @@
         "duration_s",
         "sample_rate",
         "bpm_global",
-        "beats_s",
-        "downbeats_s"
+        "tempo_variable",
+        "n_beats",
+        "n_downbeats"
       ],
-      "title": "Analysis",
+      "title": "AnalysisSummary",
+      "type": "object"
+    },
+    "GridAlternative": {
+      "additionalProperties": false,
+      "description": "Another plausible reading of the grid, as ready-to-pass source.regrid params.",
+      "properties": {
+        "beat_phase": {
+          "default": 0,
+          "enum": [
+            0,
+            1
+          ],
+          "title": "Beat Phase",
+          "type": "integer"
+        },
+        "bpm": {
+          "description": "Global tempo of this reading.",
+          "exclusiveMinimum": 0.0,
+          "title": "Bpm",
+          "type": "number"
+        },
+        "downbeat_shift_beats": {
+          "default": 0,
+          "title": "Downbeat Shift Beats",
+          "type": "integer"
+        },
+        "label": {
+          "description": "Short Spanish description for the human.",
+          "title": "Label",
+          "type": "string"
+        },
+        "tempo_factor": {
+          "enum": [
+            0.5,
+            1.0,
+            2.0
+          ],
+          "title": "Tempo Factor",
+          "type": "number"
+        }
+      },
+      "required": [
+        "tempo_factor",
+        "bpm",
+        "label"
+      ],
+      "title": "GridAlternative",
+      "type": "object"
+    },
+    "GridReport": {
+      "additionalProperties": false,
+      "description": "Compact view of a source's beat grid and how it was corrected (no beat lists).",
+      "properties": {
+        "alternatives": {
+          "items": {
+            "$ref": "#/$defs/GridAlternative"
+          },
+          "title": "Alternatives",
+          "type": "array"
+        },
+        "ask_human": {
+          "title": "Ask Human",
+          "type": "boolean"
+        },
+        "bar_phase_confidence": {
+          "title": "Bar Phase Confidence",
+          "type": "number"
+        },
+        "beat_phase": {
+          "title": "Beat Phase",
+          "type": "integer"
+        },
+        "beats_per_bar": {
+          "title": "Beats Per Bar",
+          "type": "integer"
+        },
+        "bpm": {
+          "description": "Effective global tempo (what chops and the song use).",
+          "title": "Bpm",
+          "type": "number"
+        },
+        "corrected": {
+          "description": "True when the effective grid differs from the raw one.",
+          "title": "Corrected",
+          "type": "boolean"
+        },
+        "downbeat_shift_beats": {
+          "title": "Downbeat Shift Beats",
+          "type": "integer"
+        },
+        "first_downbeats_s": {
+          "description": "First 4 downbeats (seconds), to locate the 'one'.",
+          "items": {
+            "type": "number"
+          },
+          "title": "First Downbeats S",
+          "type": "array"
+        },
+        "n_beats": {
+          "title": "N Beats",
+          "type": "integer"
+        },
+        "n_downbeats": {
+          "title": "N Downbeats",
+          "type": "integer"
+        },
+        "origin": {
+          "enum": [
+            "tracker",
+            "auto",
+            "manual"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "raw_bpm": {
+          "description": "Tempo as the beat tracker read it.",
+          "title": "Raw Bpm",
+          "type": "number"
+        },
+        "reason": {
+          "title": "Reason",
+          "type": "string"
+        },
+        "source_id": {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "tempo_confidence": {
+          "title": "Tempo Confidence",
+          "type": "number"
+        },
+        "tempo_factor": {
+          "title": "Tempo Factor",
+          "type": "number"
+        },
+        "tempo_range_bpm": {
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Tempo Range Bpm",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_id",
+        "bpm",
+        "raw_bpm",
+        "corrected",
+        "origin",
+        "tempo_factor",
+        "beat_phase",
+        "downbeat_shift_beats",
+        "beats_per_bar",
+        "tempo_range_bpm",
+        "tempo_confidence",
+        "bar_phase_confidence",
+        "ask_human",
+        "reason",
+        "n_beats",
+        "n_downbeats"
+      ],
+      "title": "GridReport",
       "type": "object"
     },
     "KeyEstimate": {
@@ -246,7 +401,8 @@
   "additionalProperties": false,
   "properties": {
     "analysis": {
-      "$ref": "#/$defs/Analysis"
+      "$ref": "#/$defs/AnalysisSummary",
+      "description": "analysis.json without the beat lists (read the file for those)."
     },
     "analysis_path": {
       "description": "Project-relative POSIX path ('/' separators, no '..', no absolute paths, no ':' / trailing dots/spaces / reserved names).",
@@ -260,6 +416,23 @@
       "title": "Files",
       "type": "array"
     },
+    "grid": {
+      "$ref": "#/$defs/GridReport",
+      "description": "How the beat grid was read and corrected (WP12)."
+    },
+    "hint": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Agent-facing note, e.g. confirm the grid by ear.",
+      "title": "Hint"
+    },
     "source_id": {
       "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
       "pattern": "^[a-z][a-z0-9_-]{0,63}$",
@@ -270,7 +443,8 @@
   "required": [
     "source_id",
     "analysis_path",
-    "analysis"
+    "analysis",
+    "grid"
   ],
   "title": "SourceAnalyzeResult",
   "type": "object"

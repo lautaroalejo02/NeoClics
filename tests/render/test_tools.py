@@ -9,6 +9,7 @@ import soundfile as sf
 from muestra.ears import core as ears
 from muestra.project import dump_song, save_song
 from muestra.registry import run_tool
+from muestra.render import core as render_core
 from muestra.render import tools
 from muestra.schemas.metrics import Metrics
 from muestra.schemas.song import Song
@@ -60,7 +61,7 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
     raw = project.song_path.read_bytes()
     order = []
     validate = tools.validate_song
-    audio = tools.render_song
+    audio = render_core.render_song
 
     def validated(*args, **kwargs):
         order.append("validate")
@@ -98,7 +99,7 @@ def test_render_orchestration_snapshot_meta_metrics(project, version_fakes, monk
     monkeypatch.setattr(tools, "validate_song", validated)
     monkeypatch.setattr(versions, "next_version_id", allocate)
     monkeypatch.setattr(versions, "record_version", record)
-    monkeypatch.setattr(tools, "render_song", rendered)
+    monkeypatch.setattr(render_core, "render_song", rendered)  # tools imports it lazily
     monkeypatch.setattr(ears, "analyze", analyze)
     result = tools.render(
         tools.RenderParams(
@@ -123,7 +124,7 @@ def test_ears_stub_returns_success_hint_and_removes_stale_metrics(
     def unavailable(*_args, **_kwargs):
         raise NotImplementedError
 
-    monkeypatch.setattr(tools.ears, "analyze", unavailable)
+    monkeypatch.setattr(ears, "analyze", unavailable)
     save_song(project, small_song())
     result = run_tool("render", {"project": str(project.root)})
     assert result.ok

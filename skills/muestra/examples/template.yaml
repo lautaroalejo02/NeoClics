@@ -1,7 +1,8 @@
 schema_version: 0
-# PLANTILLA future funk, grilla normal: un disco que el tracker mide entre ~95 y ~140 BPM.
-# Cambia: source y chop (source.find_chops + chops.choose), meta.bpm (calculo de
-# resample en recipes/future-funk.md), meta.key, la tonica del bajo (A) y los gain_db.
+# PLANTILLA future funk. Cambia: source y chop (source.find_chops + chops.choose),
+# meta.bpm (calculo de resample en recipes/future-funk.md), meta.key, la tonica
+# de la frase del bajo (A) y los gain_db. La grilla de la fuente ya esta en un
+# tempo plausible (source.analyze / source.regrid) y el humano la confirmo de oido.
 meta:
   title: borrador-01
   bpm: 124.0  # = tempo local del chop x 2^(semitonos/12)
@@ -15,10 +16,18 @@ chops:
 - id: c1
   source: src1
   stem: other
-  start_downbeat: 17
+  start_downbeat: 9
   length_beats: 8  # 2 compases
   warp: {mode: resample, pitch_semitones: 0}
   fade_ms: 8
+phrases:
+- id: bajo  # contratiempos: tonica, tonica, octava, tonica
+  length_bars: 1
+  notes:
+  - {beat: 1.5, pitch: A1, length_beats: 0.4, velocity: 100}
+  - {beat: 2.5, pitch: A1, length_beats: 0.4, velocity: 92}
+  - {beat: 3.5, pitch: A2, length_beats: 0.4, velocity: 100}
+  - {beat: 4.5, pitch: A1, length_beats: 0.4, velocity: 92}
 tracks:
 - id: sample
   clips:
@@ -44,55 +53,8 @@ tracks:
 - id: bass
   at_bar: 5
   instrument: {plugin: finger-bass}
-  notes:  # contratiempos: tonica, tonica, octava, tonica
-  - {beat: 17.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 18.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 19.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 20.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 21.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 22.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 23.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 24.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 25.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 26.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 27.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 28.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 29.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 30.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 31.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 32.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 33.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 34.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 35.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 36.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 37.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 38.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 39.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 40.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 41.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 42.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 43.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 44.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 45.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 46.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 47.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 48.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 49.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 50.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 51.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 52.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 53.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 54.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 55.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 56.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 57.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 58.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 59.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 60.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 61.5, pitch: A1, length_beats: 0.4, velocity: 100}
-  - {beat: 62.5, pitch: A1, length_beats: 0.4, velocity: 92}
-  - {beat: 63.5, pitch: A2, length_beats: 0.4, velocity: 100}
-  - {beat: 64.5, pitch: A1, length_beats: 0.4, velocity: 92}
+  phrases:
+  - {phrase: bajo}
   gain_db: 6
 automation:
 - {target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, 500], [5, 18000]]}

@@ -249,10 +249,22 @@ library.search query="snare" clean_only=true detail="full" limit=5
 ## Starter kits
 
 `library.kits` lists named drum kits (lane → sample); with `name=<kit>` it adds
-the measured description of every sample and a `pattern:` that drops straight
-under a `drums` track in `song.yaml` (four-on-the-floor step strings: kick
-`x...x...x...x...`, clap/snare `....x.......x...`, chat `x.x.x.x.x.x.x.x.`,
-ohat `..x...x...x...x.`). Warnings call out a sample missing from disk, typed
+the measured description of every sample, the kit's named patterns
+(`patterns: {name: what it does}`) and one `pattern:` that drops straight under
+a drum track in `song.yaml` — `pattern=<name>` picks it, default `basic`.
+Every curated kit has (WP12):
+
+| pattern | what |
+|---|---|
+| `basic` | kick `x...x...x...x...`, clap/snare `....x.......x...`, ohat `..x...x...x...x.`, soft closed hat on the beats `o...o...o...o...`; no crash, toms or percussion |
+| `busy` | `basic` + closed hats in 16ths with ghosts (`xo.oxo.oxo.oxo.o`, never on an open-hat step) + light percussion of the kit (cowbell, conga, shaker, tambourine) |
+| `fill` | the bar before a new part: kick/clap push at the end, hats stop on beat 4 (toms on city-pop-80s) |
+| `phrase` | (kits with a crash) 4 bars of `basic` with ONE crash on the first downbeat |
+
+The old single pattern put a crash and a cowbell on every bar. A kit without
+named patterns falls back to `basic`-style steps for kick/clap/snare/rim/hats
+only. Patterns are written at 16 steps per bar; `steps_per_bar` 32/48/64
+spaces them out and 8 keeps every other step (musical time is preserved). Warnings call out a sample missing from disk, typed
 wrongly for its lane, or flagged; `restrictions` carries the licence limits of
 the packs the samples come from.
 
@@ -261,8 +273,13 @@ The manifest is `starter-kits.json` in the library root (schema
 
 ```json
 {"schema_version": 0, "kits": {"my-kit": {
-  "description": "...", "lanes": {"kick": "kits/pack/kick-01.wav", "clap": "..."}}}}
+  "description": "...", "lanes": {"kick": "kits/pack/kick-01.wav", "clap": "..."},
+  "patterns": {"basic": {"description": "...", "bars": 1,
+    "steps": {"kick": "x...x...x...x...", "clap": "....x.......x..."}}}}}}
 ```
+
+`patterns` is optional (WP12); each lane in a pattern must be one of the kit's
+lanes and have 16 × `bars` steps.
 
 If a root has none, the template bundled with the package is used
 (`src/muestra/library/data/starter-kits.json`, URIs only — no audio); kits

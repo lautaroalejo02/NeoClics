@@ -189,13 +189,58 @@ def active_stems(project: Project, source_id: str, content_hash: str) -> dict:
     return {}
 
 
+def _song_chops_on(project: Project, source_id: str) -> bool:
+    if not project.song_path.exists():
+        return False
+    try:
+        from ..project import load_song
+
+        return any(c.source == source_id for c in load_song(project).chops)
+    except MuestraError:
+        return True  # unreadable song: be conservative, never move its chops
+
+
+def _grid_on_cache_hit(
+    project: Project, source_id: str, analysis: Analysis, tempo_range: tuple[float, float] | None
+) -> Analysis:
+    """Keep manual corrections; upgrade pre-WP12 analyses without moving song chops."""
+    from . import grid as g
+
+    current = analysis.grid
+    if current is None:
+        # Written before WP12: the effective grid IS the tracker grid. Apply the
+        # automatic octave only when no song chop depends on this grid.
+        apply = not _song_chops_on(project, source_id)
+        return g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE, apply=apply)
+    if (
+        current.origin == "auto"
+        and tempo_range is not None
+        and tuple(tempo_range) != tuple(current.tempo_range_bpm)
+    ):
+        return g.auto_correct(analysis, tempo_range)
+    return analysis
+
+
 def analyze(
     project: Project,
     source_id: str,
     *,
     tracker: BeatTracker | None = None,
     progress: Progress | None = None,
+    tempo_range: tuple[float, float] | None = None,
 ) -> Analysis:
+    """Analyze a source; the beat grid's tempo octave is chosen inside
+    ``tempo_range`` (default 70-160 BPM) and the raw tracker output is kept
+    in ``analysis.grid.raw`` (see muestra.ingest.grid)."""
+    from . import grid as g
+
+    if tempo_range is not None and not 0 < tempo_range[0] < tempo_range[1] < 400:
+        raise MuestraError.one(
+            "invalid_value",
+            f"Invalid tempo range {tempo_range}.",
+            path="min_bpm",
+            hint="Use 0 < min_bpm < max_bpm < 400, e.g. 70 and 160.",
+        )
     rel, path = source_file(project, source_id)
     content_hash = digest(path)
     try:
@@ -211,6 +256,7 @@ def analyze(
             analysis = load_analysis(project, source_id)
             analysis.stems = Stems(**separated["stems"]) if separated else None
             analysis.separation_model = separated.get("model")
+            analysis = _grid_on_cache_hit(project, source_id, analysis, tempo_range)
             write_json(cache, analysis.model_dump(mode="json"))
             report(progress, 1, "Analysis ready (cache)")
             return analysis
@@ -251,10 +297,15 @@ def analyze(
             beats_s=beats.tolist(),
             downbeats_s=downbeats.tolist(),
             key=estimate_key(chroma),
-            sections=detect_sections(times, spectrum, chroma, downbeats, duration),
             loudness_lufs=integrated_loudness(audio, sr),
             stems=Stems(**separated["stems"]) if separated else None,
             separation_model=separated.get("model"),
+        )
+        # Tempo octave inside the plausible range (the tracker often counts eighths
+        # on old records); sections are snapped to the CORRECTED downbeats.
+        analysis = g.auto_correct(analysis, tempo_range or g.DEFAULT_TEMPO_RANGE)
+        analysis.sections = detect_sections(
+            times, spectrum, chroma, np.asarray(analysis.downbeats_s), duration
         )
         write_json(cache, analysis.model_dump(mode="json"))
         write_json(

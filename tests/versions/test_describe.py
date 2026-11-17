@@ -50,7 +50,7 @@ def test_semitone_up():
 def test_automated_lowpass_added_is_one_sentence():
     assert say(lp_removed, None) == [
         "Agregué un filtro pasa-bajos automatizado de 800 Hz a 18 kHz "
-        "en los compases 1 a 4 del track sample"
+        "en los compases 1 a 4 del sample"
     ]
 
 
@@ -122,19 +122,17 @@ def test_removed_track_absorbs_its_automation():
         d["tracks"].remove(track(d, "sample"))
         d["automation"].clear()
 
-    assert say(None, gone) == ["Saqué el track sample"]
+    assert say(None, gone) == ["Saqué el sample"]
 
 
 def test_removed_fx_mentions_its_automation():
-    assert say(None, lp_removed) == [
-        "Saqué el filtro pasa-bajos del track sample (y su automatización)"
-    ]
+    assert say(None, lp_removed) == ["Saqué el filtro pasa-bajos del sample (y su automatización)"]
 
 
 def test_automation_edit_only():
     (s,) = say(None, lambda d: d["automation"][0].update(points=[[1, 800], [9, 18000]]))
     assert s == (
-        "Rehice la automatización del corte del filtro pasa-bajos del track sample: "
+        "Rehice la automatización del corte del filtro pasa-bajos del sample: "
         "ahora va de 800 Hz a 18 kHz en los compases 1 a 8"
     )
 
@@ -164,8 +162,8 @@ def test_clip_sentences():
     def moved(d):
         track(d, "sample")["clips"] = [{"chop": "c1", "at_bar": 5, "repeat": 2}]
 
-    assert say(base, added) == ["Agregué un clip del chop c1 en el compás 9 (×2) del track sample"]
-    assert say(base, moved) == ["Moví el clip del chop c1 del compás 1 al 5 del track sample"]
+    assert say(base, added) == ["Agregué un clip del chop c1 en el compás 9 (×2) del sample"]
+    assert say(base, moved) == ["Moví el clip del chop c1 del compás 1 al 5 del sample"]
 
 
 def test_notes_transposed_added_removed():
@@ -211,9 +209,9 @@ def test_delay_time_is_in_note_values():
 
 def test_filters_open_and_close():
     (s,) = say(None, lambda d: track(d, "sample")["fx"][1].update(cutoff_hz=4000))
-    assert s == "Cerré el filtro pasa-bajos del track sample de 18 kHz a 4 kHz"
+    assert s == "Cerré el filtro pasa-bajos del sample de 18 kHz a 4 kHz"
     (s,) = say(None, lambda d: track(d, "sample")["fx"][0].update(cutoff_hz=300))
-    assert s == "Subí el corte del filtro pasa-altos del track sample de 150 Hz a 300 Hz"
+    assert s == "Subí el corte del filtro pasa-altos del sample de 150 Hz a 300 Hz"
 
 
 def test_mixer_and_master_sentences():
@@ -460,3 +458,28 @@ def test_sentences_are_deduplicated_and_do_not_end_with_a_period():
     got = say(None, lambda d: (track(d, "bass").update(gain_db=-2), d["master"].update(gain_db=-1)))
     assert got == ["Bajé el bajo 2 dB", "Bajé el master 1 dB"]
     assert not any(s.endswith(".") for s in got)
+
+
+def test_lane_named_like_its_track_is_not_repeated():
+    """WP12 (skill finding 4): 'Bajé el bombo del bombo 2 dB' -> 'Bajé el bombo 2 dB'."""
+
+    def kick_track(d, gain):
+        d["tracks"].append(
+            {
+                "id": "kick",
+                "pattern": {
+                    "steps_per_bar": 16,
+                    "lanes": {
+                        "kick": {
+                            "sample": "kits/k.wav",
+                            "steps": "x...x...x...x...",
+                            "gain_db": gain,
+                        }
+                    },
+                },
+            }
+        )
+
+    out = say(lambda d: kick_track(d, -4), lambda d: kick_track(d, -6))
+    assert out == ["Bajé el bombo 2 dB"]
+    assert not any("del bombo" in s for s in out)

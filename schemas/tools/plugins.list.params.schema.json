@@ -1,11 +1,71 @@
 {
   "additionalProperties": false,
   "properties": {
+    "category": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only this preset category (Surge folder), e.g. 'Basses'.",
+      "title": "Category"
+    },
+    "detail": {
+      "default": false,
+      "description": "Include plugins' parameter names and every preset's file path.",
+      "title": "Detail",
+      "type": "boolean"
+    },
+    "limit": {
+      "default": 30,
+      "description": "Presets per page.",
+      "maximum": 100,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "offset": {
+      "default": 0,
+      "description": "Skip this many matching presets.",
+      "minimum": 0,
+      "title": "Offset",
+      "type": "integer"
+    },
+    "plugin": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Only presets of this plugin: 'surge-xt', 'sfz' or a VST name.",
+      "title": "Plugin"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,
       "title": "Project",
       "type": "string"
+    },
+    "query": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Words that must all appear in the preset name/category, e.g. 'slap bass'.",
+      "title": "Query"
     }
   },
   "required": [

@@ -12,6 +12,7 @@ import type {
   DraftInfo,
   ChopCandidateSet,
   FeedbackEvent,
+  GridPreviewIndex,
   Job,
   Metrics,
   RenderMeta,
@@ -121,6 +122,8 @@ export interface AppState {
   /** versions.diff(parent, v) musical description, fetched when a row opens. */
   diffs: Record<VersionId, { changes: string[]; metrics: string[] } | "loading" | "error">;
   analyses: Record<string, Analysis>;
+  /** source.preview_grid click previews per source (Chops → Escuchar la grilla). */
+  gridPreviews: Record<string, GridPreviewIndex>;
   jobs: Record<string, Job>;
   ws: "connecting" | "open" | "closed";
   /** The A/B pair. `active` is the one you hear. */
@@ -226,6 +229,7 @@ export class Store {
       drafts: [],
       diffs: {},
       analyses: {},
+      gridPreviews: {},
       jobs: {},
       ws: "connecting",
       a: null,
@@ -373,7 +377,7 @@ export class Store {
     const noAudio = versions.filter((v) => !metas[v.version] || noRender.has(v.version)).map(enrich);
     versions = versions.filter((v) => metas[v.version] && !noRender.has(v.version)).map(enrich);
     for (const v of versions) this.engine.register(specOf(metas[v.version]));
-    this.set({ title: title ?? this.state.title, versions, noAudio, metas, metrics, ...(summary?.drafts ? { drafts: summary.drafts } : {}) });
+    this.set({ title: title ?? this.state.title, versions, noAudio, metas, metrics, gridPreviews: summary?.gridPreviews ?? this.state.gridPreviews, ...(summary?.drafts ? { drafts: summary.drafts } : {}) });
     await Promise.all([this.loadFeedback(), this.loadChops(summary?.analyses)]);
     if (!this.state.active && versions.length) {
       const latest = versions[versions.length - 1].version;
@@ -531,6 +535,11 @@ export class Store {
           .then((s) => s && this.set({ drafts: s.drafts ?? [] }))
           .catch(() => undefined);
         break;
+      case "grid.changed":
+        // source.regrid rewrote an analysis (stale candidate sets were retired)
+        // or source.preview_grid wrote new click previews.
+        void this.refreshGrid();
+        break;
       case "song.changed":
         void this.client
           .getSong()
@@ -538,6 +547,13 @@ export class Store {
           .catch(() => undefined);
         break;
     }
+  }
+
+  /** Re-read analyses + grid previews (GET /project) and the candidate sets. */
+  async refreshGrid(): Promise<void> {
+    const summary = await this.client.getSummary().catch(() => null);
+    if (summary) this.set({ analyses: { ...this.state.analyses, ...(summary.analyses ?? {}) }, gridPreviews: summary.gridPreviews ?? {} });
+    await this.loadChops(summary?.analyses);
   }
 
   /** The musical diff of a version vs its parent (Spanish sentences). */

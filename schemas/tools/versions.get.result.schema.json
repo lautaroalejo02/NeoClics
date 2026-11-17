@@ -1934,6 +1934,21 @@
           "title": "Clips",
           "type": "array"
         },
+        "confidence": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Heuristic trust in the clip-track offset (stability x count x tightness); not a probability.",
+          "title": "Confidence"
+        },
         "drift_ms": {
           "default": 0.0,
           "description": "Fitted offset change across one clip instance (or the render), ms.",
@@ -1994,6 +2009,20 @@
           "description": "Median offset of onsets near the off-beat 16ths (swing), ms.",
           "title": "Offbeat Offset Ms"
         },
+        "onsets_per_beat": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Detected onsets per quarter note inside the clips.",
+          "title": "Onsets Per Beat"
+        },
         "p90_abs_offset_ms": {
           "default": 0.0,
           "minimum": 0.0,
@@ -2014,6 +2043,33 @@
           "default": null,
           "description": "Fraction of quarter notes that carry an onset (clip tracks). Low = no clear pulse: offsets are not trusted.",
           "title": "Pulse Share"
+        },
+        "verified": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Clip tracks: True when the offset estimate is stable enough to alarm on; False = the material is too dense/ambiguous (only an info note is raised).",
+          "title": "Verified"
+        },
+        "window_spread_ms": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Self-test error: every onset is moved by \u00b1timing_probe_ms (as a chop that late/early would be) and re-measured; this is how far the estimate misses that known shift, ms. Large = which onsets count depends on the shift itself.",
+          "title": "Window Spread Ms"
         }
       },
       "required": [
@@ -2390,7 +2446,34 @@
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "description": "Full ears report (detail=true only; see metrics_path)."
+    },
+    "metrics_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "renders/<version>/metrics.json when it exists.",
+      "title": "Metrics Path"
+    },
+    "metrics_summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Compact Spanish ears summary (headline + worst alarms).",
+      "title": "Metrics Summary"
     },
     "mix": {
       "anyOf": [
@@ -2416,9 +2499,17 @@
       "type": "string"
     },
     "song_yaml": {
-      "description": "The version's song.yaml text: renders/<version>/song.yaml byte copy when present, else 'git show vNNN:song.yaml'.",
-      "title": "Song Yaml",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The version's song.yaml text (detail=true only): renders/<version>/song.yaml byte copy when present, else 'git show vNNN:song.yaml'.",
+      "title": "Song Yaml"
     },
     "stems": {
       "description": "Project-relative paths of the stems present on disk.",
@@ -2436,8 +2527,7 @@
     }
   },
   "required": [
-    "version",
-    "song_yaml"
+    "version"
   ],
   "title": "VersionsGetResult",
   "type": "object"

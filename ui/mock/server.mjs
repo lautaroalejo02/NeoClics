@@ -366,13 +366,21 @@ function projectView() {
   if (fs.existsSync(adir))
     for (const f of fs.readdirSync(adir))
       if (f.endsWith(".json") && !f.endsWith(".meta.json")) analyses[f.slice(0, -5)] = JSON.parse(fs.readFileSync(path.join(adir, f), "utf8"));
+  // source.preview_grid click previews (cache/previews/<src>/grid/index.json, WP12)
+  const grid_previews = {};
+  const pdir = path.join(PROJECT, "cache", "previews");
+  if (fs.existsSync(pdir))
+    for (const src of fs.readdirSync(pdir)) {
+      const idx = path.join(pdir, src, "grid", "index.json");
+      if (fs.existsSync(idx)) grid_previews[src] = JSON.parse(fs.readFileSync(idx, "utf8"));
+    }
   let song = null;
   try {
     song = YAML.parse(fs.readFileSync(path.join(PROJECT, "song.yaml"), "utf8"));
   } catch {
     /* no song */
   }
-  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [], ...(drafts.length ? { drafts } : {}) };
+  return { project_path: PROJECT, config: {}, song, versions, candidate_sets: [], analyses, grid_previews, feedback: {}, feedback_cursor: 0, feedback_skipped: [], issues: [], ...(drafts.length ? { drafts } : {}) };
 }
 
 const peaksCache = new Map();
