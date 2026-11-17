@@ -660,3 +660,39 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+.dialog.source-view {
+  width: min(1400px, 96vw);
+}
+
+.sv-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.sv-head h2 {
+  margin: 0;
+}
+
+.sv-canvas {
+  position: relative;
+  border-radius: var(--r-1);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  touch-action: none;
+}
+
+.sv-canvas canvas {
+  display: block;
+  cursor: crosshair;
+}
+
+.sv-loading {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+}

@@ -28,6 +28,7 @@ import hashlib
 import json
 import time
 import uuid
+from typing import Literal
 
 import numpy as np
 import soundfile as sf
@@ -80,6 +81,12 @@ class SongPiecesParams(ProjectScoped):
         description="Extra one-shots to prepare (library:// or project paths), e.g. to "
         "audition a sound before using it.",
     )
+    source: IdStr | None = Field(
+        default=None,
+        description="Also export this source (its `stem`) as a playable piece for the "
+        "editor's source view (16-bit, project rate).",
+    )
+    stem: Literal["drums", "bass", "vocals", "other", "mix"] = "mix"
 
 
 class Piece(ContractModel):
@@ -127,6 +134,7 @@ class SongPiecesResult(ToolOutput):
     pieces: list[Piece] = Field(default_factory=list)
     materials: list[Material] = Field(default_factory=list)
     oneshots: dict[str, str] = Field(default_factory=dict)
+    source_piece: str | None = Field(default=None, description="Piece id of the exported source.")
     tracks: list[TrackPieces] = Field(default_factory=list)
     render_s: float = 0.0
     approximations: list[str] = Field(default_factory=lambda: list(APPROXIMATIONS))
@@ -361,6 +369,42 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
                     audio = fade(decode(project, path, sr)[0], sr, 1, start=False)
                     oneshots[ref] = add(_write_piece(project, "shot", audio, sr))
 
+    source_piece = None
+    if p.source:
+        from ..project import load_analysis
+        from ..render.audio import file_hash
+
+        analysis = load_analysis(project, p.source)
+        ref = analysis.file if p.stem == "mix" else getattr(analysis.stems, p.stem, None)
+        if ref is None:
+            raise MuestraError.one(
+                "ref_not_found",
+                f"La fuente {p.source} no tiene el stem {p.stem}.",
+                path="stem",
+                value=p.stem,
+                hint="Use stem: mix, or separate the source first (source.separate).",
+            )
+        path = project.resolve(ref)
+        key = hashlib.sha256(f"{file_hash(path)}|{sr}".encode()).hexdigest()[:20]
+        piece = _existing(project, "src", key, sr)
+        if piece is None:
+            audio = decode(project, path, sr)[0]
+            rel = f"{PIECES_DIR}/src-{key}.wav"
+            target = project.path(rel)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            from ..render.audio import replace_content_addressed
+
+            tmp = target.with_name(f".{target.stem}.{uuid.uuid4().hex}.wav")
+            try:
+                sf.write(tmp, np.clip(audio, -1, 1), sr, subtype="PCM_16")
+                replace_content_addressed(tmp, target)
+            finally:
+                tmp.unlink(missing_ok=True)
+            piece = Piece(
+                id=f"src-{key}", path=rel, kind="src", frames=len(audio), duration_s=len(audio) / sr
+            )
+        source_piece = add(piece)
+
     for ref in p.samples:
         if ref in oneshots:
             continue
@@ -430,6 +474,7 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
         pieces=list(pieces.values()),
         materials=materials,
         oneshots=oneshots,
+        source_piece=source_piece,
         tracks=out_tracks,
         render_s=round(time.perf_counter() - started, 3),
         files=[pc.path for pc in pieces.values()],

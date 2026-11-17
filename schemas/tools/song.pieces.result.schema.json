@@ -256,6 +256,19 @@
       "title": "Sample Rate",
       "type": "integer"
     },
+    "source_piece": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Piece id of the exported source.",
+      "title": "Source Piece"
+    },
     "tracks": {
       "items": {
         "$ref": "#/$defs/TrackPieces"

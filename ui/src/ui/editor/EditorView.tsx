@@ -25,6 +25,7 @@ import { SNAP_BEATS, SNAP_LABEL, fmtBarBeat, layoutRows, zoomAt, type Snap } fro
 import * as I from "../icons";
 import { Inspector } from "./Inspector";
 import { Timeline } from "./Timeline";
+import { SourceView } from "./SourceView";
 import { EDITOR_SHORTCUTS } from "../../editor/shortcuts";
 
 
@@ -36,6 +37,7 @@ export function EditorView({ onListen }: { onListen: () => void }) {
   const song = useEditor((s) => s.song);
   const layout = useLayout();
   const inspector = useEditor((s) => s.inspector);
+  const source = useEditor((s) => s.source);
   const [help, setHelp] = useState(false);
   const askRef = useRef<HTMLTextAreaElement>(null);
 
@@ -78,6 +80,7 @@ export function EditorView({ onListen }: { onListen: () => void }) {
         {inspector && <Inspector askRef={askRef} onAudition={audition} narrow={layout === "narrow"} onClose={() => store.state && editor.setInspector(false)} />}
       </div>
       {help && <EditorHelp onClose={() => setHelp(false)} />}
+      {source && <SourceView sourceId={source.id} onClose={() => editor.openSource(null)} />}
     </section>
   );
 }
@@ -226,6 +229,11 @@ function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () =>
         <button type="button" className="icon-btn hide-narrow" onClick={onHelp} aria-label="Atajos del editor (?)" title="Atajos (?)">
           <I.Keyboard />
         </button>
+        {(song.sources ?? []).length > 0 && (
+          <button type="button" className="btn small ghost" onClick={() => editor.openSource(song.sources![0].id)} title="Ver la fuente con su grilla y sus chops; marcar un chop nuevo" data-testid="ed-source">
+            Fuente
+          </button>
+        )}
         <button type="button" className="btn small ghost hide-narrow" onClick={onListen} title="Comparar versiones renderizadas (A/B), comentar, oídos">
           Versiones
         </button>

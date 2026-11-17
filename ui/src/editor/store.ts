@@ -278,13 +278,14 @@ export class EditorStore {
 
   private async pump(): Promise<void> {
     if (this.sending) return;
-    const next = this.queue.shift();
-    if (!next) return;
+    // everything waiting goes in ONE song.edit call (a burst of edits = one write)
+    const batch = this.queue.splice(0);
+    if (!batch.length) return;
     this.sending = true;
     this.set(this.stacks());
     try {
       const res = await this.app.client.tool<{ revision: string; song: SongJson; changes: string[]; rebased: boolean }>("song_edit", {
-        ops: next.ops,
+        ops: batch.flatMap((b) => b.ops),
         base_revision: this.state.revision,
       });
       this.serverSong = res.song;
@@ -300,7 +301,7 @@ export class EditorStore {
     } catch (e) {
       const fe = friendlyError(e, "No se guardó la edición");
       // roll back to what the file holds; later queued edits were built on top: drop them too
-      const dropped = [next, ...this.queue];
+      const dropped = [...batch, ...this.queue];
       this.queue = [];
       for (const d of dropped) {
         if (!d.entry) continue;

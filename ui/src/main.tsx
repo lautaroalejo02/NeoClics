@@ -13,6 +13,7 @@ import { Store } from "./state/store";
 import { App } from "./ui/App";
 import { EditorStore } from "./editor/store";
 import { EditorProvider } from "./editor/react";
+import { drawTimes } from "./editor/perf";
 
 // Access token (phone on the same Wi-Fi): taken from ?token= on first load,
 // kept for the session, stripped from the visible URL.
@@ -72,7 +73,7 @@ engine.subscribe(() => {
 arm(true);
 
 // Diagnostics hook (used by the e2e test to read scheduling data).
-(window as unknown as { __muestra: unknown }).__muestra = { store, engine, client, editor };
+(window as unknown as { __muestra: unknown }).__muestra = { store, engine, client, editor, perf: { drawTimes } };
 
 document.documentElement.dataset.theme = store.state.theme;
 void store.init();

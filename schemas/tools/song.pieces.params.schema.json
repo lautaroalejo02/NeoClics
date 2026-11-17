@@ -40,6 +40,33 @@
       "title": "Samples",
       "type": "array"
     },
+    "source": {
+      "anyOf": [
+        {
+          "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+          "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Also export this source (its `stem`) as a playable piece for the editor's source view (16-bit, project rate).",
+      "title": "Source"
+    },
+    "stem": {
+      "default": "mix",
+      "enum": [
+        "drums",
+        "bass",
+        "vocals",
+        "other",
+        "mix"
+      ],
+      "title": "Stem",
+      "type": "string"
+    },
     "tracks": {
       "anyOf": [
         {
