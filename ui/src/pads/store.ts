@@ -709,11 +709,18 @@ export class PadsStore {
   }
 
   private lastMirror = 0;
+  private mirrorTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Mirror the take to localStorage at most every 250 ms, always with a trailing write. */
   private mirrorLocal(): void {
+    if (!this.rec) return;
     const now = Date.now();
-    if (now - this.lastMirror < 400 || !this.rec) return;
-    this.lastMirror = now;
-    writeLS(LS_INFLIGHT, { ...this.rec.take, savedAt: now });
+    const write = () => {
+      this.mirrorTimer = null;
+      this.lastMirror = Date.now();
+      if (this.rec) writeLS(LS_INFLIGHT, { ...this.rec.take, savedAt: this.lastMirror });
+    };
+    if (now - this.lastMirror >= 250) write();
+    else if (!this.mirrorTimer) this.mirrorTimer = setTimeout(write, 250 - (now - this.lastMirror));
   }
 
   private periodic(): void {

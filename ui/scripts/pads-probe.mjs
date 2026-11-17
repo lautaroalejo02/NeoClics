@@ -16,6 +16,11 @@ async function open(ctxOpts, theme) {
   const p = await ctx.newPage();
   p.on("pageerror", (e) => console.log("pageerror", e.message));
   p.on("console", (m) => m.type() === "error" && console.log("console", m.text()));
+  await p.addInitScript(() => {
+    // counts every pad-key event BEFORE the pads handler sees it (registered first)
+    window.__padKeys = 0;
+    window.addEventListener("keydown", (e) => { if (!e.repeat && /^(Key|Comma)/.test(e.code)) window.__padKeys++; }, true);
+  });
   await p.addInitScript((t) => {
     localStorage.setItem("muestra.prefs.v1", JSON.stringify({ theme: t }));
     localStorage.setItem("muestra.view", "arreglo");
@@ -59,11 +64,13 @@ if (what === "shots" || what === "all") {
 if (what === "latency" || what === "all" || what === "burst") {
   const { ctx, p } = await open(desk, "dark");
   await loadKit(p);
-  const keys = ["KeyZ", "KeyX", "KeyC", "KeyV"];
+  const assigned = await p.evaluate(() => window.__muestra.pads.bank().pads.map((x) => x.key));
+  const keys = assigned.slice(0, 4);
+
   for (let i = 0; i < 60; i++) {
-    await p.keyboard.down(keys[i % 4].replace("Key", "").toLowerCase());
+    await p.keyboard.down(keys[i % 4]);
     await p.waitForTimeout(20);
-    await p.keyboard.up(keys[i % 4].replace("Key", "").toLowerCase());
+    await p.keyboard.up(keys[i % 4]);
     await p.waitForTimeout(40);
   }
   const lat = await p.evaluate(() => {
@@ -78,20 +85,23 @@ if (what === "latency" || what === "all" || what === "burst") {
   if (what !== "latency") {
     // burst: 16ths at 140 BPM, 3 keys pressed together on every 16th, 4 bars
     const step = 60000 / 140 / 4;
-    const before = await p.evaluate(() => window.__muestra.pads.presses.length);
+    const before = await p.evaluate(() => { window.__padKeys = 0; return window.__muestra.pads.presses.length; });
     const t0 = Date.now();
     for (let i = 0; i < 64; i++) {
       const target = t0 + i * step;
       const wait = target - Date.now();
       if (wait > 0) await p.waitForTimeout(wait);
-      const ks = i % 2 ? ["v", "b", "n"] : ["z", "x", "c"];
+      const six = assigned.slice(0, 6);
+      const ks = i % 2 ? six.slice(3, 6) : six.slice(0, 3);
       for (const k of ks) await p.keyboard.down(k);
       await p.waitForTimeout(25);
       for (const k of ks) await p.keyboard.up(k);
     }
     const res = await p.evaluate((n0) => {
       const pr = window.__muestra.pads.presses.slice(n0);
-      return { presses: pr.length, ok: pr.filter((x) => x.schedMs >= 0).length };
+      const gaps = [];
+      for (let i = 1; i < pr.length; i++) gaps.push(pr[i].eventMs - pr[i - 1].eventMs);
+      return { keyEvents: window.__padKeys, scheduled: pr.length, maxSchedMs: Math.max(...pr.map((x) => x.schedMs)) };
     }, before);
     console.log("burst 16ths@140 x3 keys x64:", JSON.stringify(res), "(expected 192)");
   }
