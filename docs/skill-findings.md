@@ -10,6 +10,15 @@ en 2ee9f61, Windows 11, 2026-11-17). No se tocó código del producto. `P` =
 `metrics_summary` (sección "Entorno"). `muestra doctor` distingue "ffmpeg instalado pero no
 en el PATH de esta terminal". El resto (4, 5, 6, 7, 8, 10) queda para un pase siguiente.
 
+**Estado (WP12, 2026-11-17):** todos resueltos. 4: "Bajé el bombo 2 dB" (y "el sample" en vez
+de "el track sample"). 5: la grilla se corrige en la fuente (`source.analyze` elige la octava en
+70-160 BPM; `source.regrid`, `source.preview_grid`); la "doble grilla" salió de la skill. 6:
+`phrases` (frases que se repiten). 7: `plugins.list` compacto (2.7 KB; filtros y paginado).
+8: patrones `basic`/`busy`/`fill`/`phrase` por kit, sin crash en cada compás. 9: sigue siendo
+correcto por contrato (documentado). 10: eran los ataques del preset en notas ligadas (el
+mismo transitorio en cada pasada, marcado solo cuando caía dentro de la ventana de búsqueda):
+ears ya no los cuenta como click. Detalle: `docs/decisions.md` (WP12).
+
 ## Bugs
 
 ### 1. ears sugiere `master.gain_db` para `loudness_off_target`, pero con `target_lufs` no tiene efecto

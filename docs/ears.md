@@ -392,6 +392,19 @@ already does not scan). A note start that rises at least
 `click_onset_rise_db` (12 dB) above what was sounding is now skipped;
 retriggers over a sustained sound and note ends are still scanned.
 
+**Fixed (WP12): legato retriggers of an FM-slap preset read as clicks.** The
+Yung Bae example with `slap-bass` raised `error click` twice (-27.7 dBFS, ratio
+221) at the first pass of a phrase only. Sample-level inspection: every pass has
+the identical slap transient (sharpest second difference 0.041), starting 2-5
+samples after the nominal note time; it was flagged only where it landed inside
+the ±search window, on a note that starts where the previous one ends (legato:
+the note-end edge was scanned as a cut). Now a note end that coincides with the
+next note start is scanned once, as that start, and a retrigger whose spike is
+within `click_attack_margin_db` (6 dB) of the median attack spike of the same
+track's notes out of silence (first 3 ms) is the preset's attack. A sustained
+note cut dead under the next attack, or anywhere else, is still a click
+(synthetic tests). Demo clean render: 0 clicks; Yung Bae + slap: 2 -> 0.
+
 **Clarified: `loudness_off_target` with a healthy PLR.** The clean loop
 ends at -13.0 LUFS against a -10 target with PLR 12 dB. Instrumented: the
 mix is -10.00 LUFS / +7.97 dBTP *before* the renderer's true-peak safety

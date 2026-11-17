@@ -133,7 +133,7 @@ principal.
 
 | code | qué significa | qué cambiar |
 |---|---|---|
-| `click` | salto en el borde de un clip o nota | chop: `fade_ms` 10-15; nota: otro preset o notas que no se pisen (`slap-bass` da clicks en ataques de notas cortas: medido) |
+| `click` | salto en el borde de un clip o nota | chop: `fade_ms` 10-15; nota: otro preset o notas que no se cortan en seco (el ataque propio del preset, como el "slap" de `slap-bass`, ya no cuenta como click) |
 | `loop_seam_click` | salto en la vuelta del loop | `fade_ms` del chop, o un chop que cierre mejor (otro candidato) |
 
 No busca clicks fuera de bordes conocidos (automatización, ataque de sidechain).

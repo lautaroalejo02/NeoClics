@@ -10,7 +10,7 @@ probar las alternativas gratis de la librería y de los alias. Ejemplos válidos
 
 - "Con los tres bombos de la librería el comentario sigue siendo 'suena plano'; un pack X
   de bombos de disco podría resolverlo".
-- "El slap de Surge (`slap-bass`) da clicks en notas cortas y el finger-bass no tiene slap;
+- "El slap de Surge (`slap-bass`) es un FM, no un bajo grabado, y el finger-bass no tiene slap;
   un bajo modelado (MODO BASS 2, ~USD 300) tiene articulaciones de slap reales".
 
 No: "sería mejor con plugins profesionales".

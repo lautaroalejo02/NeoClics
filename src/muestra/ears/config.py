@@ -97,6 +97,9 @@ class Thresholds:
     # attack (the preset's own transient, like a drum hit), not a click; measured
     # on Surge 'FM Slap' onsets out of a release tail: +17.3..+17.6 dB (WP11).
     click_onset_rise_db: float = 12.0
+    # WP12: a note start over a sounding note is the preset's attack when its jump is
+    # within this many dB of the track's own attacks out of silence (median).
+    click_attack_margin_db: float = 6.0
     # technical
     dc_warn_db: float = -45.0
     low_corr_warn: float = 0.5

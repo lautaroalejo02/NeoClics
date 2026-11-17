@@ -36,8 +36,9 @@ Validados y renderizados en el proyecto de prueba; nadie los escuchó.
 - [examples/tiger-rag-yungbae.yaml](examples/tiger-rag-yungbae.yaml): mismo chop de 2
   compases, swing 0.2, hats en 16avos con fantasmas, cencerro bajito, bajo con octava y
   notas de paso (Sol-Re-Fa), chorus, break filtrado sin bombo ni bajo en los compases 13-14 y
-  vuelta en el 15. Con `slap-bass` ears marcó 7 clicks en ataques de notas cortas (~-40 dBFS);
-  con `finger-bass` desaparecen, por eso el ejemplo usa finger. Si Lautaro quiere slap,
+  vuelta en el 15. Con `slap-bass` ears marcaba clicks en notas ligadas: era el ataque del
+  propio preset (el mismo transitorio que en cada nota, medido muestra a muestra) y ya no
+  se marca; el ejemplo usa finger por sonido, no por clicks. Si Lautaro quiere slap,
   probalo y preguntale si oye clicks.
 - [examples/tiger-rag-nighttempo.yaml](examples/tiger-rag-nighttempo.yaml): frase de 4
   compases del `mix`, `stretch` + `pitch_semitones: 0.45` (la frase larga derivaba: ears
