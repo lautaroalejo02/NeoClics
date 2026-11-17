@@ -738,3 +738,6 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
     FLAC would cut ~25–60 % but the UI decodes and sums stems itself, so the
     format change needs UI work (and drum-lane stems, half of each render, are
     only read by ears: they could move to the cache). Not done here.
+11. **Curated aliases are level-matched** to −24 LUFS on a reference phrase by
+    a per-alias trim (default patch only). Existing songs using them change
+    level once (finger-bass +10.3 dB, rhodes −8.8 dB, …).
