@@ -146,6 +146,11 @@ def score_loop(audio, sr, start, end, beats, stem, vocal=None, reference=None) -
     )
 
 
+def mmss(seconds: float) -> str:
+    """'m:ss.s' (e.g. '0:15.2') for agents and humans."""
+    return f"{int(seconds // 60)}:{seconds % 60:04.1f}"
+
+
 def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandidateSet, Path]:
     analysis = load_analysis(project, source_id)
     original_fingerprint = fingerprint(project, source_id, analysis)
@@ -168,49 +173,81 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
             hint="Use a label from source.analyze.sections.",
         )
     lengths = [query.length_beats] if query.length_beats else [4.0, 8.0, 16.0, 32.0]
+    if any(length > 128 for length in lengths):
+        raise MuestraError.one("too_large", "Chop length must be <=128 beats.")
     proposals = []
     reference = float(np.sqrt(np.mean(np.square(audio), dtype=np.float64)))
     grid = np.asarray(analysis.beats_s)
     downbeat_indices = np.array([np.argmin(abs(grid - beat)) for beat in analysis.downbeats_s])
-    for index in range(1, len(analysis.downbeats_s) + 1):
-        for length in lengths:
-            if length > 128:
-                raise MuestraError.one("too_large", "Chop length must be <=128 beats.")
-            timing = chop_times(analysis, index, length)
-            if timing is None:
-                continue
-            start, end = timing
-            start_index = downbeat_indices[index - 1]
-            required = start_index + np.arange(0, int(length // 4) + 1) * 4
-            if not np.all(np.isin(required, downbeat_indices)):
-                continue
-            inside = downbeat_indices[
-                (downbeat_indices >= start_index) & (downbeat_indices <= start_index + length)
-            ]
-            if np.any(np.diff(inside) != 4):
-                continue
-            if not any(start >= s.start_s and end <= s.end_s for s in sections):
-                continue
-            score = score_loop(audio, sr, start, end, analysis.beats_s, stem, vocal, reference)
-            if score.value > 0:
-                proposals.append((score.value, start, end, index, length, score))
-    proposals.sort(key=lambda p: (-p[0], p[1], p[4]))
-    selected = []
-    for proposal in proposals:
-        _, start, end, *_ = proposal
-        if any(
-            max(0, min(end, p[2]) - max(start, p[1])) / min(end - start, p[2] - p[1]) > 0.5
-            for p in selected
+    window = query.window_s
+    slack = 0.25  # seconds: a loop that ends a hair past the window still counts
+
+    def regular(index, length):
+        start_index = downbeat_indices[index - 1]
+        required = start_index + np.arange(0, int(length // 4) + 1) * 4
+        if not np.all(np.isin(required, downbeat_indices)):
+            return False
+        inside = downbeat_indices[
+            (downbeat_indices >= start_index) & (downbeat_indices <= start_index + length)
+        ]
+        return not np.any(np.diff(inside) != 4)
+
+    def propose(index, length, *, strict=True):
+        timing = chop_times(analysis, index, length)
+        if timing is None:
+            return None
+        start, end = timing
+        if strict and not regular(index, length):
+            return None
+        if window and not (start >= window[0] - slack and end <= window[1] + slack):
+            return None
+        if (strict or query.section) and not any(
+            start >= s.start_s and end <= s.end_s for s in sections
         ):
-            continue
-        selected.append(proposal)
-        if len(selected) == query.n:
-            break
+            return None
+        score = score_loop(audio, sr, start, end, analysis.beats_s, stem, vocal, reference)
+        return score.value, start, end, index, length, score
+
+    if query.at_s is not None:
+        # "el riff del 0:15": the downbeat nearest that time first (best length
+        # there), then the other lengths at that start, then neighbouring bars.
+        times = np.asarray(analysis.downbeats_s)
+        order = list(np.argsort(np.abs(times - query.at_s), kind="stable")[: 2 * query.n + 2] + 1)
+        here = [p for p in (propose(int(order[0]), n, strict=False) for n in lengths) if p]
+        here.sort(key=lambda p: -p[0])
+        selected = here[: query.n]
+        best_length = selected[0][4] if selected else lengths[0]
+        for index in order[1:]:
+            if len(selected) >= query.n:
+                break
+            proposal = propose(int(index), best_length, strict=False)
+            if proposal:
+                selected.append(proposal)
+    else:
+        for index in range(1, len(analysis.downbeats_s) + 1):
+            for length in lengths:
+                proposal = propose(index, length)
+                if proposal and proposal[0] > 0:
+                    proposals.append(proposal)
+        proposals.sort(key=lambda p: (-p[0], p[1], p[4]))
+        selected = []
+        for proposal in proposals:
+            _, start, end, *_ = proposal
+            if any(
+                max(0, min(end, p[2]) - max(start, p[1])) / min(end - start, p[2] - p[1]) > 0.5
+                for p in selected
+            ):
+                continue
+            selected.append(proposal)
+            if len(selected) == query.n:
+                break
     if not selected:
+        where = f" between {mmss(window[0])} and {mmss(window[1])}" if window else ""
         raise MuestraError.one(
             "no_candidates",
-            "No audible loops fit the section and beat grid.",
-            hint="Try a shorter length, another section or stem='mix'.",
+            f"No audible loops fit the section, time window and beat grid{where}.",
+            hint="Try a shorter length_beats, a wider window_s, another section, "
+            "at_s for an exact spot, or stem='mix'.",
         )
     with project_lock(project):
         if (
@@ -268,6 +305,9 @@ def find(project: Project, source_id: str, query: ChopQuery) -> tuple[ChopCandid
                     local_bpm=local_bpm,
                     preview=preview.relative_to(project.root).as_posix(),
                     score=score,
+                    bar=index,
+                    start_mmss=mmss(start),
+                    length_s=round(end - start, 3),
                 )
             )
         best = candidates[0]

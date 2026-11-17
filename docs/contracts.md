@@ -475,7 +475,7 @@ filters `ts >= since` and must itself be timezone-aware.
 ## Chop candidates (`cache/chops/<src>/<set_id>.json`) → `ChopCandidateSet`
 
 `set_id` (`csNNN`, allocated max+1), `source_id`, `created_at` (aware),
-`query{section?,stem?,length_beats?,n}`, `candidates[]`,
+`query{section?,stem?,length_beats?,n,window_s?,at_s?}`, `candidates[]`,
 `pick{candidate_id,justification}?` (the agent's `auto` pick),
 `chosen{candidate_id,mode,adjust,at,chop_id?}?` (`chop_id`, WP13: the
 song.yaml chop actually written).
@@ -491,7 +491,14 @@ clip's span; the arrangement is then untouched).
 `ChopCandidate`: `id` (**global** `csNNN/candN`), `source_id`, `stem`,
 `start_downbeat`, `start_s`, `length_beats`, `end_s`, `local_bpm`,
 `preview` (project-relative path under `cache/previews/<src>/<set_id>/`),
-`score{value,reasons}`. `ChopAdjust` = `{start_beats, length_beats}`
+`score{value,reasons}`, and (WP13, optional) `bar` (= `start_downbeat`),
+`start_mmss` (`"m:ss.s"`), `length_s`. The preview is two repeats
+crossfaded at the seam and the wrap (plays as a seamless loop).
+
+`source.find_chops` params (WP13 additions): `window_s: [start_s, end_s]`
+(only candidates inside it), `at_s: float | "m:ss"` (candidate 1 = the
+downbeat nearest it). Result adds `downbeats_s` (bar i of the record
+starts at `downbeats_s[i-1]`). `ChopAdjust` = `{start_beats, length_beats}`
 deltas in beats.
 
 ## Library index → `LibraryIndex` (R4, extended by WP4)

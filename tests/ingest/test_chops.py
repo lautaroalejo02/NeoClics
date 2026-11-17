@@ -169,3 +169,35 @@ def test_manual_choice_is_recorded_even_when_it_fails(rhythmic_project):
         choose(project, result.pick.candidate_id, "c1", "manual", ChopAdjust(length_beats=-10))
     event = read_events(project).events[-1]
     assert event.type == "chop_choice" and event.adjust.length_beats == -10
+
+
+def test_find_chops_by_time_window_and_exact_spot(rhythmic_project):
+    """WP13 finding 4: 'el riff del 0:08' is one call; novelty sections can be
+    huge, so a time window filters candidates directly."""
+    from muestra.registry import run_tool
+
+    project, source_id, analysis = rhythmic_project
+    base = {"project": str(project.root), "source_id": source_id, "stem": "mix"}
+    windowed = run_tool("source.find_chops", {**base, "window_s": [4, 10], "length_beats": 4})
+    assert windowed.ok, windowed.errors
+    for c in windowed.data["set"]["candidates"]:
+        assert c["start_s"] >= 4 - 0.25 and c["end_s"] <= 10 + 0.25
+        assert c["bar"] == c["start_downbeat"] and c["start_mmss"].startswith("0:0")
+        assert c["length_s"] == pytest.approx(c["end_s"] - c["start_s"], abs=1e-3)
+    assert windowed.data["downbeats_s"] == [round(t, 3) for t in analysis.downbeats_s]
+
+    exact = run_tool("source.find_chops", {**base, "at_s": "0:08.3", "length_beats": 4, "n": 3})
+    assert exact.ok, exact.errors
+    first = exact.data["set"]["candidates"][0]
+    assert first["start_s"] == pytest.approx(8.25) and first["bar"] == 5
+    assert (
+        first["start_mmss"] == "0:08.2" and exact.data["set"]["pick"]["candidate_id"] == first["id"]
+    )
+    assert len(exact.data["set"]["candidates"]) == 3
+    assert exact.data["set"]["query"]["at_s"] == pytest.approx(8.3)
+
+    empty = run_tool("source.find_chops", {**base, "window_s": [4, 5], "length_beats": 16})
+    assert not empty.ok and empty.errors[0].code == "no_candidates"
+    assert "window_s" in empty.hint
+    bad = run_tool("source.find_chops", {**base, "at_s": "quince"})
+    assert not bad.ok

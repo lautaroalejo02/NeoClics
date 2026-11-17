@@ -68,6 +68,20 @@
       "additionalProperties": false,
       "description": "One proposed loop, aligned to a real downbeat of the source.",
       "properties": {
+        "bar": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Bar of the record (= start_downbeat, 1-based).",
+          "title": "Bar"
+        },
         "end_s": {
           "description": "Resolved end time in the source audio.",
           "exclusiveMinimum": 0.0,
@@ -84,6 +98,20 @@
           "exclusiveMinimum": 0.0,
           "title": "Length Beats",
           "type": "number"
+        },
+        "length_s": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "end_s - start_s.",
+          "title": "Length S"
         },
         "local_bpm": {
           "anyOf": [
@@ -135,6 +163,19 @@
           "minimum": 1,
           "title": "Start Downbeat",
           "type": "integer"
+        },
+        "start_mmss": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "start_s as 'm:ss.s'.",
+          "title": "Start Mmss"
         },
         "start_s": {
           "description": "Resolved start time in the source audio.",
@@ -238,6 +279,20 @@
       "additionalProperties": false,
       "description": "Echo of the ``source.find_chops`` request that produced the set.",
       "properties": {
+        "at_s": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Exact spot: the downbeat nearest this time first.",
+          "title": "At S"
+        },
         "length_beats": {
           "anyOf": [
             {
@@ -287,6 +342,29 @@
           ],
           "default": null,
           "title": "Stem"
+        },
+        "window_s": {
+          "anyOf": [
+            {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "number"
+                },
+                {
+                  "type": "number"
+                }
+              ],
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Only loops inside [start_s, end_s] of the source (WP13).",
+          "title": "Window S"
         }
       },
       "title": "ChopQuery",
@@ -345,6 +423,14 @@
   },
   "additionalProperties": false,
   "properties": {
+    "downbeats_s": {
+      "description": "Bar map of the record: downbeat/bar i (1-based, = start_downbeat) starts at downbeats_s[i-1] seconds.",
+      "items": {
+        "type": "number"
+      },
+      "title": "Downbeats S",
+      "type": "array"
+    },
     "files": {
       "items": {
         "type": "string"

@@ -281,6 +281,21 @@ activates the fallback: a native-speed raw stereo excerpt with 5 ms edge
 fades, repeated twice and exported at 24-bit PCM. The fallback is recorded
 in score reasons; real renderer errors are not hidden.
 
+**Finding by time (WP13).** Section labels are novelty-based and can span
+minutes (an "intro" of 0–108 s on a real 4-minute record), so
+`source.find_chops` also takes `window_s: [a, b]` (every candidate lies
+inside it, 0.25 s slack; combines with `section`) and `at_s` (seconds or
+`"m:ss"`): candidate 1 starts on the downbeat nearest that time (best
+scoring of the requested/default lengths there; the grid-regularity and
+section filters are skipped for this exact request), then the other
+lengths at that start, then neighbouring bars. Every candidate carries
+`bar` (= `start_downbeat`, bar of the record), `start_s`, `start_mmss`
+(`"0:15.2"`) and `length_s`; the result adds `downbeats_s`, the record's
+bar map (bar i starts at `downbeats_s[i-1]`). Measured on demo-e2e
+(4-minute record, 16 beats): `section: intro` → 1:10.0, 1:02.3, 0:15.3;
+`window_s: [0, 30]` → 0:15.3, 0:18.2, 0:06.7; `at_s: "0:15"` → 0:15.3,
+0:14.3, 0:16.3 (1.7–3.5 s per call).
+
 find_chops records a recommended pick but does not implicitly edit the
 arrangement. chops.choose writes the requested chop ID using the shared
 round-trip helper, preserving comments and existing warp/fade settings.

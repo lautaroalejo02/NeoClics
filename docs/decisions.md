@@ -708,3 +708,7 @@ Contract-visible changes (all additive or bug fixes; schemas regenerated):
    effects warmed 100 ms past the end. Why: the old per-repeat fade to zero
    measured −30 to −88 dB dips at every repeat (an audible hiccup every 1–2
    bars) and the UI loops renders. `CACHE_ABI` bumped (`render-4`).
+5. **Chops by time.** `source.find_chops` gains `window_s` and `at_s`
+   ("m:ss" accepted); candidates carry `bar`, `start_mmss`, `length_s`;
+   the result carries the record's `downbeats_s` bar map. `at_s` skips the
+   grid-regularity and section filters: the human asked for that spot.
