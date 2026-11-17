@@ -181,6 +181,10 @@ tracks:
     - {beat: 63.75, lane: kick, sample: "library://kits/essential-kits-musicradar/tr-909-kit/clap-tr-909-clap.wav"}
 ```
 
+Lanes que suenan un pedazo de chop (`slice`), afinación de sampler (`pitch_semitones`),
+`reverse`, grupos de corte (`choke`) y golpes con duración (`length_beats`): lo que escriben
+los pads, ver [pads.md](pads.md).
+
 "Sacá el bombo del tercer tiempo del compás 7" es exactamente el override de arriba (o
 `song.edit` con `{op: hit, track: drums, lane: kick, bar: 7, step: 8, velocity: null}`,
 paso 0-based dentro del compás). El diff lo describe así: "Saqué el bombo de la batería

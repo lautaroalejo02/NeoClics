@@ -19,6 +19,8 @@ traducción de comentarios) está en `skills/muestra/SKILL.md` del repo de Muest
    browser: son suyos, no los pises). Recién ahí cambiás algo. La UI: `muestra serve
    --project <p> --open`. Para cambios puntuales podés usar `song_edit` (ops por ruta:
    `{op: hit, track, lane, bar, step, velocity: null}`, `{op: set, path, value}`, ...).
+   Lo que el humano toca con el teclado (pads) queda en tomas: `pads_get`, `pads_take_get`;
+   "usá lo que grabé" = `pads_commit(take_id, at_bar, repeat|until_bar)`.
 2. **Fuente:** `source_import(path)` → primero `source_analyze` sobre el mix (~20–30 s,
    sin separar): bpm, key y `reliability.regions` fiables/dudosas; no falla por compás
    irregular. Sin pulso, BPM y grid son null y los beats quedan vacíos.

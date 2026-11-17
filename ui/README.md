@@ -229,3 +229,48 @@ WORKING song (`song.yaml`), not a render:
   `engine.playOneShot(buffer, {when?, gain?, pan?, offset?, duration?})`.
 - **Measure** (`scripts/editor-measure.mjs <url> perf|fidelity|latency`) and
   look (`scripts/editor-shots.mjs <url> <dir>`) on a real server.
+
+## Pads (WP17)
+
+`Pads` in the Arreglo toolbar (or `K`) opens a panel under the timeline: a 3×8 pad grid
+on the computer keyboard, by PHYSICAL key (`KeyboardEvent.code`: Z…`,` / A…K / Q…I, the
+same shape on QWERTY, AZERTY, QWERTZ; key caps show the user's layout when Chromium tells
+us), with mouse and multi-touch (pointer events). While the pads are ON they capture those
+keys (window capture phase); `Esc` turns them off and gives the keyboard back to the
+editor. `1`–`4` banks, `Espacio` play, `Enter` record/stop, `⌫` undo the last pass, `0`
+metronome, `⇧` = accent (computer keys have no velocity: each pad has a normal and an
+accent level).
+
+- **Code**: `src/pads/keymap.ts` (layout, key classification), `model.ts` (types, quantise
+  mirror of `muestra.pads.process` with shared vectors, latency math, choke rule, overdub
+  merge), `player.ts` (voices, choke/gate fades, metronome), `store.ts` (banks, takes,
+  recording, persistence), `src/ui/pads/PadsView.tsx` + `pads.css`.
+- **Audio path**: keydown → `classifyKey` → `PadsStore.press` → `PadsPlayer.press` →
+  `src.start(now)`: synchronous, no awaits, no React (pads light by toggling a class on the
+  DOM node); auto-repeat ignored. Buffers are prepared when the bank loads: files as
+  one-shots, slices/tuned/reversed sounds as `song.pieces` voices (rendered by the
+  renderer's `lane_sound`), note pads as rendered single notes. The pads bypass the stem
+  bus (its 5 ms look-ahead) through a zero-latency soft clipper to the master.
+- **Recording** against the editor transport: over a loop (each pass adds, like a looper;
+  a pass is saved when it ends) or from stopped with a 1-2 bar count-in. A press is placed
+  at the ctx time that was audible at the event's `timeStamp` (`getOutputTimestamp`), minus
+  the base's stem-bus delay and the calibrated offset of this output (tap-along helper,
+  `localStorage` per output device). Takes are saved to `pads/takes/` while recording
+  (every pass, every 3 s) and mirrored to `localStorage` on every press (≤ 250 ms, trailing
+  write): a reload mid-take recovers it on the next load.
+- **Takes**: rename, quantise (non-destructive), audition over the base (a virtual track
+  built exactly like the committed one), "Poner en la canción" (new pads track or layered
+  into a drum track, at a bar, N times or looped until a bar; `pads.commit` dry-run ops
+  applied through the editor's undoable edit queue), delete (moved aside, not destroyed),
+  "Pedile al agente" anchored to the take.
+- **Assigning**: library one-shot (the editor's sound browser), a starter kit laid out
+  like a drum machine (kick Z, snare/clap X, hats V/B; hats share choke group 1), "Cortar
+  en pads" from the source view's region or from a chop (per beat, half beat or at the
+  transients; slices share choke group 2), "Desde un track" (a drum track's lanes), "Notas
+  de un instrumento" (the song key's scale on the middle row, gate mode).
+- **Measure**: `node scripts/pads-probe.mjs <url> <dir> shots|latency|burst`.
+  Headless Chromium on this laptop (no audio device, so `outputLatency` is synthetic):
+  key event → `src.start()` p50 0.4 ms, p95 0.9 ms, max 1.6 ms; burst of 16th notes at 140
+  BPM, three keys at once for 4 bars: 192/192 key events scheduled, worst 2.5 ms.
+- **Not measurable here**: real keyboard scan/ghosting (the UI warns that many laptop
+  keyboards drop some 3-key combinations), real device output latency, Bluetooth.

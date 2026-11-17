@@ -54,6 +54,8 @@ cambió y qué escuchar → leer su feedback → cambiar pocas cosas → repetir
   leé `song.state` (revisión y "cambios sin guardar" en castellano). Esos cambios son suyos:
   no los pises; si renderizás entran en tu versión, nombralos en el `summary`. Sus pedidos
   sobre una selección ("sacá esto") traen exactamente qué señaló ([feedback.md](feedback.md)).
+- También toca sonidos con el teclado (pads) y graba tomas (`pads/takes/`): no están en la
+  canción hasta `pads.commit`; nunca las borres ([pads.md](pads.md)).
 - Con `warp.mode: resample` el tempo cambia el tono: calculá `meta.bpm` antes de elegir el
   bajo ([recipes/future-funk.md](recipes/future-funk.md#tempo-y-tono)).
 - Una grilla mal leída (doble/mitad de tempo, el uno corrido) se arregla en la fuente con
@@ -85,5 +87,6 @@ cambió y qué escuchar → leer su feedback → cambiar pocas cosas → repetir
 | "Más Macross", "más Yung Bae", "que se reconozca el original" | [styles.md](styles.md) |
 | Qué significa cada alarma y qué cambiar | [ears.md](ears.md) |
 | Traducir comentarios del humano a cambios | [feedback.md](feedback.md) |
+| "Usá lo que grabé", "limpiame el ritmo que toqué", pads, tomas, slices | [pads.md](pads.md) |
 | Algo falla o suena raro según las métricas | [troubleshooting.md](troubleshooting.md) |
 | Ejemplos completos validados y renderizados | [examples/](examples/) |
