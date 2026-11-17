@@ -335,9 +335,13 @@ class RenderContext:
         return self.stems[key]
 
     def wpower(self, key: str) -> np.ndarray:
-        """Cached per-sample K-weighted power of 'mix'/'<track>'/'<track>.<lane>'."""
+        """Cached per-sample K-weighted power of 'mix'/'<track>'/'<track>.<lane>'.
+
+        float32 on purpose: the balance check filters every stem and the
+        dB rounding swallows the precision loss.
+        """
         if key not in self._wpower:
-            self._wpower[key] = dsp.weighted_power(self.audio(key).astype(np.float64), self.sr)
+            self._wpower[key] = dsp.weighted_power(self.audio(key), self.sr)
         return self._wpower[key]
 
     def spec(self, key: str, *, fine: bool = False) -> dsp.Spectrogram:

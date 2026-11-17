@@ -352,6 +352,81 @@ Out of scope for v1: `style_similarity` stays `null`. Hook:
 the project's `references/` folder. A failing scorer is reported in
 `skipped`, never raised.
 
+### 9. Mix balance (`balance`, WP18)
+
+**Why.** The master normalises loudness toward `target_lufs`, so absolute
+loudness hides the classic agent failure: one track so hot the rest is
+inaudible (found by ear in `session-devin`: the sample sat ~30 dB above
+the drums and every metric stayed green). Ears now reports the relative
+level of the mix roles — kick, rest of drums, bass, sample, other
+sustained tracks — and alarms on imbalance.
+
+**Roles** come from the song, not from stem names: pattern lanes named
+like a kick (`kick/bombo/bd/kik/bassdrum`, else the lane with the most
+40-150 Hz energy), the remaining pattern lanes as the rest of the kit,
+instrument tracks in the bass register (median note < 55) or named like
+a bass, clip tracks (minus bass-named ones) as the sample, everything
+else as `other`. `other` can bury but is never accused of being buried
+(aux layers are legitimately quiet).
+
+**Fairness — every role is measured while it sounds.** Whole-file RMS is
+unfair twice over: it charges a sparse kick for its silence and rewards
+a continuous pad for filling every frame.
+
+- Drum lanes: mean K-weighted power inside `[hit, hit+W]` at the
+  pattern's own hit times (`W = min(0.3 s, 0.8 × median gap)`), on the
+  per-lane stem, rescaled to the post-fx track bus by the ratio of bus
+  power to lane power over the union of the track's hits (a track
+  compressor makes that ratio approximate — documented, not exact).
+- Sustained tracks (bass, sample, other): self-gated active blocks —
+  400 ms blocks every 100 ms, keeping blocks within
+  `balance_active_gate_db` (20 dB) of the track's loudest one.
+
+All levels are K-weighted (BS.1770) mean powers on the pre-master stems,
+expressed as a LUFS-like dB and pooled (power-sum) per role; the readout
+normalises to the loudest role. A 1-hit/bar sparse kick measures the
+same as a 4-hit/bar kick at identical hit level (duty-cycle invariance,
+tested), and a pad made of the kick's own one-shot looped continuously
+lands within ~1 dB of it (same sound, never silent).
+
+**Alarms** (all `thresholds.*` overridable in `ears.toml`):
+
+| code | severity | fires when | fix |
+|---|---|---|---|
+| `balance` | info | always: `balance: bombo 0, bajo -2, sample -5, resto de batería -8 dB` | — |
+| `balance_buried` | error | a core role (kick/drums/bass/sample) ≥ `balance_buried_db` (16) under the loudest role | lower the dominant track's `gain_db` or raise the buried one — never everything |
+| `balance_kick_back` / `balance_drums_back` / `balance_bass_back` | warn | the role ≥ `balance_back_db` (10) under the loudest melodic role (sample or other) | same relative-level fixes |
+| `balance_sample_back` | warn | the sample ≥ `balance_sample_back_db` (12) under the kick | raise the sample or lower the kick |
+| `balance_bass_front` | warn | the bass ≥ `balance_front_db` (10) over the kick | lower the bass or raise the kick |
+| `balance_drums_front` | warn | the rest of the kit ≥ `balance_drums_front_db` (14) over the sample | lower the drums |
+| `balance_dominant` | warn | the loudest role ≥ `balance_dominant_db` (14) over the runner-up | "subir `gain_db` ya no lo hace sonar más": the master nivela and the limiter works for that track |
+
+Fixes always change **relative** levels (`tracks.<id>.gain_db` or
+`tracks.<id>.pattern.lanes.<lane>.gain_db`), never master gain, and say
+so: the normaliser cancels "raise everything".
+
+**Reference points.** The thresholds are starting points calibrated by
+measurement on the four real projects (`demo-check-12410`,
+`session-codex`, `skill-check`, `session-devin`), *not validated by
+listening*: they encode that a healthy future-funk mix keeps every core
+role within ~10 dB of its neighbours, that 16 dB under anything means
+inaudible (matching `inaudible_margin_db` = 20 on band-resolved
+audibility), and that a ≥14 dB single-role margin means that role alone
+drives the master. `session-codex` (everything within ±7 dB) stays
+quiet; `session-devin` warns from v001 (bass −12 under the sample) and
+errors from v006; `demo-check-12410` and `skill-check` v001/v010/v014
+fire on real extremes (a bass 15–25 dB under the bus, a drum bus 16 dB
+over the loop) — reported, not silenced.
+
+`ears.compare` adds `balance_delta_db` (per-role level change, dB) and
+notes like "el sample bajó 28 dB respecto de la batería".
+
+**Limits.** The readout measures stem loudness, not perception:
+frequency masking, pan and arrangement decide what a listener actually
+hears, so a balanced readout does not prove a balanced mix. The
+lane→bus correction approximates any non-linear track fx on the drum
+bus. A role missing from the stems is simply absent.
+
 ## Configuration: `ears.toml`
 
 ```toml
@@ -364,6 +439,9 @@ profile = "dance"                 # or "pink"
 [thresholds]                      # any field of muestra.ears.config.Thresholds
 timing_warn_ms = 15.0
 detune_warn_cents = 20.0
+# balance (WP18): active_gate 20, back 10, sample_back 12, buried 16,
+# dominant 14, front 10, drums_front 14 — starting points, not tuned by ear
+# balance_buried_db = 16.0
 ```
 
 Unknown keys are errors.
@@ -375,7 +453,9 @@ analysis on the Windows dev laptop (warm, median 1.31 s of 5 runs, other agents
 running); ~0.4 s of it is reading the wavs. Under pytest on a loaded
 CPU it measured up to ~4 s; the test only asserts < 12 s. Costs scale
 linearly with length x tracks. All audio is processed as float32;
-running sums are float64.
+running sums are float64. The WP18 balance check adds ~0.13 s on the
+same render (measured: 132 ms warm, 16 bars @ 48 kHz, K-filtering the
+stems dominates); the test asserts < 0.3 s.
 
 ## Validation on real renderer output (WP11, 2026-11-17)
 
@@ -494,6 +574,68 @@ a problem is exactly what the reference model cannot know (see
    propósito"). Test: the corpus (F#m) with `meta.key: Bm` → two `track_transposed` at -5,
    both info.
 
+## Validation on the four real projects (WP18, 2026-11-18)
+
+Balance check run on every render of the four real projects (copies;
+originals untouched). Readout = each role vs the loudest, dB; alarms:
+`W:` warn, `E:` error, `balance_` prefix elided. `session-codex` is the
+balanced reference (quiet everywhere); `session-devin` v001-v009 is the
+bug that motivated this check; v010 is the same song with the sample
+lowered 12 dB.
+
+| version | balance readout (dB) | alarms |
+|---|---|---|
+| **demo-check-12410** | | |
+| v001 | resto batería 0, bombo -6.6, sample -15.7, bajo -15.9, otros -18.9 | W:drums_front |
+| v002 | resto batería 0, bombo -6.6, sample -16.6, otros -18.9, bajo -25.3 | E:buried ×2, W:drums_front |
+| v003 | resto batería 0, bombo -6.6, sample -15.7, bajo -15.9, otros -18.9 | W:drums_front |
+| v004 | resto batería 0, bombo -6.6, sample -15.7, bajo -20.7, otros -27.7 | E:buried, W:drums_front |
+| **session-codex** | | |
+| v001 | resto batería 0, sample -0.6, bombo -1.1, bajo -2.6 | — |
+| v002 | bajo 0, resto batería -2.2, sample -2.9, bombo -3.3 | — |
+| v003 | bajo 0, sample -2.1, resto batería -2.2, bombo -5.3 | — |
+| v004 | bajo 0, sample -2.4, resto batería -2.8, bombo -5.8 | — |
+| v005 | bajo 0, sample -2.5, resto batería -2.8, bombo -5.8 | — |
+| v006 | bajo 0, resto batería -2.3, sample -2.9, bombo -5.3 | — |
+| v007 | bajo 0, resto batería -0.8, sample -2.9, bombo -4.5 | — |
+| v008 | bajo 0, resto batería -0.8, sample -2.6, bombo -4.5 | — |
+| **skill-check** | | |
+| v001 | bombo 0, resto batería -0.9, sample -4.5, bajo -18.3 | E:buried |
+| v002 | resto batería 0, sample -0.6, bombo -1.1, bajo -8.1 | — |
+| v003 | resto batería 0, sample -0.6, bombo -1.1, bajo -5.6 | — |
+| v004 | resto batería 0, sample -0.6, bombo -1.1, bajo -2.6 | — |
+| v005 | bajo 0, resto batería -4.3, sample -4.9, bombo -5.4 | — |
+| v006 | bajo 0, sample -4.2, resto batería -4.3, bombo -7.4 | — |
+| v007 | bajo 0, sample -2.1, resto batería -2.2, bombo -5.3 | — |
+| v008 | bajo 0, sample -2.1, resto batería -2.2, bombo -5.2 | — |
+| v009 | resto batería 0, sample -0.6, bombo -1.1, bajo -2.6 | — |
+| v010 | sample 0, resto batería -5.1, bombo -6.4, bajo -15.3 | W:bass_back |
+| v011 | bombo 0, resto batería -1.8, sample -4, bajo -4.7 | — |
+| v012 | sample 0, bombo -7, resto batería -7.7 | — |
+| v013 | resto batería 0, bombo -1.1, bajo -9.3, sample -11.2 | — |
+| v014 | sample 0, resto batería -5.1, bombo -6.4, bajo -15.3 | W:bass_back |
+| v015 | bombo 0, resto batería -1.8, sample -4, bajo -4.9 | — |
+| v016 | sample 0, bombo -3.6, resto batería -7.3 | — |
+| v017 | bombo 0, resto batería -1.8, sample -4, bajo -6.8 | — |
+| **session-devin** | | |
+| v001 | sample 0, resto batería -1.7, bombo -3, bajo -11.9 | W:bass_back |
+| v002 | sample 0, resto batería -1.6, bombo -2.9, bajo -11.8 | W:bass_back |
+| v003 | resto batería 0, sample -0.4, bombo -3.2, bajo -12.2 | W:bass_back |
+| v004 | resto batería 0, sample -0.4, bombo -3.2, bajo -12.2, otros -12.9 | W:bass_back |
+| v005 | resto batería 0, sample -0.3, bombo -3.2, bajo -12.2, otros -13.4 | W:bass_back |
+| v006 | sample 0, bombo -20.7, resto batería -20.8 | E:buried ×2, W:dominant |
+| v007 | sample 0, bombo -17.7, resto batería -20.8, bajo -35.4 | E:buried ×3, W:dominant |
+| v008 | sample 0, bombo -17.7, resto batería -20.8, bajo -31.9 | E:buried ×3, W:dominant |
+| v009 | sample 0, bombo -17.7, resto batería -20.8, bajo -31.9 | E:buried ×3, W:dominant |
+| v010 | bajo 0, resto batería -0.1, bombo -1.3, sample -10.5 | — |
+
+Worth saying out loud: the check fires on some versions of the
+"acceptable" projects — `demo-check-12410` keeps a drum bus 16 dB over
+the loop and a bass 21-25 dB under it in v002/v004; `skill-check` v001
+has a bass 18 dB under the kick and v010/v014 one 15 dB under the
+sample. Those are real measurements, not noise; nobody ever listened to
+those projects, so they are reported rather than assumed wrong.
+
 ## Calibration corpus
 
 `muestra.ears.corpus.generate(CorpusSpec(...), root)` writes a complete
@@ -506,7 +648,9 @@ error), one late clip, tempo drift, un-faded cuts, kick+bass collision,
 sample without highpass, resample detune, off-A440 record, wrong
 `pitch_semitones`, master clipping, missing/weak/absent sidechain,
 swung or triplet sample, dark sample, silent track, DC, low-end phase,
-kick one-shot with leading silence, inaudible pad, squashed master.
+kick one-shot with leading silence, inaudible pad, squashed master,
+per-role level mistakes (`sample/bass/drums_gain_db`) and a sparse kick
+(`sparse_kick`, for the balance fairness test).
 It is a mini-renderer for tests, not the product renderer.
 
 ## Blind spots (what can sound bad while every metric is green)
@@ -528,6 +672,11 @@ Be explicit with the agent: green means "no known defect detected".
   cache) is not verified (reported in `skipped`). Pumping that is
   musically wrong (too slow/fast for the tempo) but present passes
   unless it never recovers.
+- **Perceived vs measured balance**: `balance` compares stem loudness
+  while each role sounds. Masking, pan, note choice and arrangement
+  decide what a listener actually hears — a flat readout does not prove
+  the mix *sounds* balanced, and the reference ranges were never
+  validated by ear.
 - **Timing**: offsets beyond ±1/8 beat alias (wrong sign); material
   without on-beat onsets is not evaluated; micro-timing feel under 15 ms
   is not judged; MIDI with slow-attack presets is only reported.

@@ -10,10 +10,8 @@ not: it charges the kick for its silence).
 from __future__ import annotations
 
 import time
-from pathlib import Path
 
 import numpy as np
-import pytest
 import soundfile as sf
 
 from muestra.ears.balance import measure_balance
@@ -99,9 +97,7 @@ def test_sparse_kick_is_not_penalised(render):
     """
     _, dense = render()
     _, sparse = render(sparse_kick=True)
-    assert abs(
-        sparse.balance.roles["kick"].level_db - dense.balance.roles["kick"].level_db
-    ) <= 1.5
+    assert abs(sparse.balance.roles["kick"].level_db - dense.balance.roles["kick"].level_db) <= 1.5
 
 
 def test_sparse_kick_vs_continuous_pad_equal_level(tmp_path):
@@ -114,9 +110,7 @@ def test_sparse_kick_vs_continuous_pad_equal_level(tmp_path):
     differs by ~9 dB (the kick is silent 85% of the time at 1 hit/bar).
     """
     root = tmp_path / "p"
-    generate(
-        CorpusSpec(sr=24000, bars=8, defects=Defects(sparse_kick=True)), root
-    )
+    generate(CorpusSpec(sr=24000, bars=8, defects=Defects(sparse_kick=True)), root)
     vdir = root / "renders" / "v001" / "stems"
     kick_st, sr = sf.read(vdir / "drums.kick.wav", dtype=np.float64)
     one_shot = kick_st[: int(0.35 * sr)]  # the 0.3 s one-shot + a margin
@@ -126,8 +120,11 @@ def test_sparse_kick_vs_continuous_pad_equal_level(tmp_path):
 
     kick = m.balance.roles["kick"].level_db
     pad_lvl = m.balance.roles["other"].level_db
+
     # whole-file RMS is NOT fair: it differs by the duty cycle
-    rms = lambda x: 10 * np.log10(np.mean(x**2))
+    def rms(x):
+        return 10 * np.log10(np.mean(x**2))
+
     assert abs(rms(kick_st) - rms(pad)) > 6.0
     # the active measure is: same sound while sounding, same level
     assert abs(kick - pad_lvl) <= 2.0
@@ -144,9 +141,7 @@ def test_thresholds_overridable_in_ears_toml(tmp_path):
     assert "balance_buried" not in codes(m)
     assert "balance_dominant" not in codes(m)
     # and absurdly strict thresholds fire on the clean mix
-    (root / "ears.toml").write_text(
-        "[thresholds]\nbalance_back_db = 2\n", encoding="utf-8"
-    )
+    (root / "ears.toml").write_text("[thresholds]\nbalance_back_db = 2\n", encoding="utf-8")
     m = analyze(open_project(root), "v001")
     assert _balance_codes(m)
 
