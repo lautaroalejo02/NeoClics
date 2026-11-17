@@ -7,6 +7,12 @@
       "title": "Dry",
       "type": "boolean"
     },
+    "instruments": {
+      "default": true,
+      "description": "With dry: also render instrument dry stems (plugin renders, slower).",
+      "title": "Instruments",
+      "type": "boolean"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,
@@ -25,6 +31,14 @@
       "default": null,
       "description": "Expected song.state revision; a different current file is 'stale_revision'.",
       "title": "Revision"
+    },
+    "samples": {
+      "description": "Extra one-shots to prepare (library:// or project paths), e.g. to audition a sound before using it.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Samples",
+      "type": "array"
     },
     "tracks": {
       "anyOf": [

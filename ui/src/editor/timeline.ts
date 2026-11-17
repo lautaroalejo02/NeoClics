@@ -137,7 +137,16 @@ export function noteRange(song: SongJson, t: TrackJson): [number, number] {
   return [lo, hi];
 }
 
-export function layoutRows(song: SongJson, v: View): { rows: Row[]; height: number } {
+/** Rows for the song. With `fitH` (px available) and the default vertical
+ *  zoom, short songs grow to fill the space instead of leaving it empty. */
+export function layoutRows(song: SongJson, v: View, fitH = 0): { rows: Row[]; height: number } {
+  const base = layoutRowsAt(song, v, v.zoomY);
+  if (!fitH || v.zoomY !== 1 || base.height >= fitH - 8) return base;
+  const factor = Math.min(2.6, (fitH - 8) / Math.max(1, base.height));
+  return layoutRowsAt(song, v, factor);
+}
+
+function layoutRowsAt(song: SongJson, v: View, zoomY: number): { rows: Row[]; height: number } {
   const rows: Row[] = [];
   let y = 0;
   for (const t of song.tracks ?? []) {
@@ -149,15 +158,15 @@ export function layoutRows(song: SongJson, v: View): { rows: Row[]; height: numb
     let pitchHi = 0;
     if (kind === "pattern") {
       const names = Object.keys(t.pattern?.lanes ?? {});
-      const laneH = Math.round(LANE_H * v.zoomY);
+      const laneH = Math.round(LANE_H * Math.min(zoomY, 1.5));
       if (expanded) {
         lanes = names.map((name, i) => ({ name, y: y + 4 + i * laneH, h: laneH }));
         contentH = names.length * laneH + 8;
-      } else contentH = Math.round(36 * v.zoomY);
+      } else contentH = Math.round(36 * zoomY);
     } else if (kind === "instrument") {
       [pitchLo, pitchHi] = noteRange(song, t);
-      contentH = expanded ? Math.min(420, Math.max(160, (pitchHi - pitchLo + 1) * Math.round(9 * v.zoomY))) : Math.round(52 * v.zoomY);
-    } else contentH = Math.round(70 * v.zoomY);
+      contentH = expanded ? Math.min(420, Math.max(160, (pitchHi - pitchLo + 1) * Math.round(9 * zoomY))) : Math.round(52 * zoomY);
+    } else contentH = Math.round(70 * zoomY);
     const contentY = y;
     let h = contentH;
     const autos: AutoRow[] = [];

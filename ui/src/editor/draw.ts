@@ -67,6 +67,19 @@ export function readTheme(el: HTMLElement): Theme {
 // ------------------------------------------------------------------ peaks
 
 const peakCache = new WeakMap<AudioBuffer, Float32Array>();
+const maxCache = new WeakMap<Float32Array, number>();
+
+/** Loudest peak of a buffer (waveforms are drawn normalised to it, so a quiet
+ *  stem is still readable; relative gain changes still show). */
+export function maxPeak(p: Float32Array): number {
+  let m = maxCache.get(p);
+  if (m == null) {
+    m = 0;
+    for (let i = 0; i < p.length; i++) if (p[i] > m) m = p[i];
+    maxCache.set(p, m || 1);
+  }
+  return m || 1;
+}
 const PEAK_HOP = 128;
 
 /** max |sample| per PEAK_HOP frames (mono), computed once per buffer. */
@@ -310,6 +323,7 @@ function drawClips(g: CanvasRenderingContext2D, d: DrawInput, row: Row): void {
       const xa = Math.max(0, Math.floor(x0));
       const xb = Math.min(width, Math.ceil(x1));
       const gain = 10 ** (p.gainDb / 20);
+      const norm = 0.92 / maxPeak(peaks);
       for (let x = xa; x < xb; x++) {
         const fracA = (x - x0) / (x1 - x0);
         const fracB = (x + 1 - x0) / (x1 - x0);
@@ -319,7 +333,7 @@ function drawClips(g: CanvasRenderingContext2D, d: DrawInput, row: Row): void {
         const fb = Math.ceil(((found.offsetBeats + tb * len) * spb * sr) / PEAK_HOP);
         let m = 0;
         for (let i = Math.max(0, fa); i < Math.min(peaks.length, Math.max(fa + 1, fb)); i++) m = Math.max(m, peaks[i]);
-        const hh = Math.max(0.5, Math.min(1, m * gain) * amp);
+        const hh = Math.max(0.5, Math.min(1, m * norm * gain) * amp);
         g.fillRect(x, mid - hh, 1, hh * 2);
       }
     } else if (!found && !p.mute) {
@@ -519,7 +533,9 @@ function drawNotes(g: CanvasRenderingContext2D, d: DrawInput, row: Row): void {
     const isSel = sel.some((s) => noteKeyOf(s) === key);
     g.fillStyle = n.phrase ? th.b : th.a;
     g.globalAlpha = 0.5 + 0.5 * (n.velocity / 127);
-    roundRect(g, x0 + 0.5, y + 0.5, Math.max(2, x1 - x0 - 1), Math.max(2, rowH - 1), Math.min(3, rowH / 3));
+    const nh = row.expanded ? Math.max(2, rowH - 1) : Math.max(4, Math.min(8, rowH * 1.6));
+    const ny = row.expanded ? y + 0.5 : y + rowH / 2 - nh / 2;
+    roundRect(g, x0 + 0.5, ny, Math.max(2, x1 - x0 - 1), nh, Math.min(3, nh / 3));
     g.fill();
     g.globalAlpha = 1;
     if (isSel) {

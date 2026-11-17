@@ -74,6 +74,8 @@ export interface EditorState {
   scrollY: number;
   /** track that receives pastes / keyboard actions without a selection */
   focusTrack: string | null;
+  /** timeline height available for rows (rows grow to fill it) */
+  fitH: number;
 }
 
 type Listener = () => void;
@@ -136,7 +138,8 @@ export class EditorStore {
       listen: "editor",
       final: null,
       saving: null,
-      inspector: true,
+      // phones: the details sheet would cover the timeline; open it on demand
+      inspector: (globalThis.innerWidth ?? 1400) >= 900,
       source: null,
       lastEditMs: null,
       rev: 0,
@@ -144,6 +147,7 @@ export class EditorStore {
       stretchMode: false,
       scrollY: 0,
       focusTrack: null,
+      fitH: 0,
     };
   }
 
@@ -387,6 +391,10 @@ export class EditorStore {
     if (Math.abs(y - this.state.scrollY) > 0.5) this.set({ scrollY: Math.max(0, y) });
   }
 
+  setFitHeight(h: number): void {
+    if (Math.abs(h - this.state.fitH) > 2) this.set({ fitH: h });
+  }
+
   setFocusTrack(id: string | null): void {
     if (id !== this.state.focusTrack) this.set({ focusTrack: id });
   }
@@ -422,7 +430,7 @@ export class EditorStore {
     this.set({ pieces: "loading" });
     const t0 = performance.now();
     try {
-      const res = await this.app.client.tool<PiecesResult>("song_pieces", { revision, dry: true, wet: false });
+      const res = await this.app.client.tool<PiecesResult>("song_pieces", { revision, dry: true, wet: false, instruments: false });
       if (gen !== this.piecesGen) return;
       await this.ingest(res, song);
       this.timings.pieces.push(performance.now() - t0);

@@ -47,6 +47,24 @@ def cache_read(project: Project, kind: str, key: str) -> np.ndarray | None:
     return None
 
 
+def replace_content_addressed(temporary: Path, target: Path) -> None:
+    """Publish a content-addressed file. On Windows a concurrent reader of the
+    target (another thread rendering the same chop, WP16 editor pieces) makes
+    ``os.replace`` fail with access denied: the target then already holds the
+    same content, so keeping it is correct; otherwise retry briefly."""
+    import time
+
+    for attempt in range(10):
+        try:
+            temporary.replace(target)
+            return
+        except PermissionError:
+            if target.exists():
+                return
+            time.sleep(0.01 * (attempt + 1))
+    temporary.replace(target)
+
+
 def cache_write(project: Project, kind: str, key: str, audio: np.ndarray) -> None:
     directory = project.cache_dir / "render" / kind
     directory.mkdir(parents=True, exist_ok=True)
@@ -54,7 +72,7 @@ def cache_write(project: Project, kind: str, key: str, audio: np.ndarray) -> Non
     try:
         with temporary.open("wb") as handle:
             np.save(handle, np.asarray(audio, dtype=np.float32), allow_pickle=False)
-        temporary.replace(directory / f"{key}.npy")
+        replace_content_addressed(temporary, directory / f"{key}.npy")
     finally:
         temporary.unlink(missing_ok=True)
 

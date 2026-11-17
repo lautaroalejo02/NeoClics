@@ -52,7 +52,8 @@ export function Timeline({ onAudition }: { onAudition: (sample: string, gain?: n
   const lastClick = useRef<{ t: number; x: number; y: number }>({ t: 0, x: 0, y: 0 });
   const themeRef = useRef<Theme | null>(null);
 
-  const { rows, height } = useMemo(() => layoutRows(song, view), [song, view]);
+  const fitH = useEditor((s) => s.fitH);
+  const { rows, height } = useMemo(() => layoutRows(song, view, fitH), [song, view, fitH]);
 
   // pending agent requests pinned on the timeline (newer than the last version)
   const requests = useMemo(() => {
@@ -68,11 +69,15 @@ export function Timeline({ onAudition }: { onAudition: (sample: string, gain?: n
   useLayoutEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setSize({ w: el.clientWidth, h: el.clientHeight }));
+    const measure = () => {
+      setSize({ w: el.clientWidth, h: el.clientHeight });
+      editor.setFitHeight(el.clientHeight - RULER_H);
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setSize({ w: el.clientWidth, h: el.clientHeight });
+    measure();
     return () => ro.disconnect();
-  }, []);
+  }, [editor]);
 
   useEffect(() => {
     if (wrapRef.current) themeRef.current = readTheme(wrapRef.current);

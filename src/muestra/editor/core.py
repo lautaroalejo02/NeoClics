@@ -66,9 +66,14 @@ def _store(project: Project, data: bytes) -> str:
     d.mkdir(parents=True, exist_ok=True)
     path = d / f"{rev}.yaml"
     if not path.is_file():
+        from ..render.audio import replace_content_addressed
+
         tmp = d / f"{rev}.{uuid.uuid4().hex}.tmp"
-        tmp.write_bytes(data)
-        tmp.replace(path)
+        try:
+            tmp.write_bytes(data)
+            replace_content_addressed(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
     return rev
 
 

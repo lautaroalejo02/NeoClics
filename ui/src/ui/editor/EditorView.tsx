@@ -176,10 +176,12 @@ function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () =>
       </div>
       <div className="ed-group">
         <button type="button" className="btn small" disabled={!canUndo} onClick={() => editor.undoEdit()} title={undoLabel ? `Deshacer: ${undoLabel} (Ctrl+Z)` : "Deshacer (Ctrl+Z)"} data-testid="ed-undo">
-          Deshacer
+          <span aria-hidden="true">↶</span>
+          <span className="lbl">Deshacer</span>
         </button>
         <button type="button" className="btn small" disabled={!canRedo} onClick={() => editor.redoEdit()} title={redoLabel ? `Rehacer: ${redoLabel} (Ctrl+Y)` : "Rehacer (Ctrl+Y)"} data-testid="ed-redo">
-          Rehacer
+          <span aria-hidden="true">↷</span>
+          <span className="lbl">Rehacer</span>
         </button>
       </div>
       <div className="ed-group ed-listen">
@@ -198,7 +200,7 @@ function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () =>
               : rendering.length
                 ? `Vista previa · preparando ${rendering[0]}`
                 : "Vista previa del editor"}
-          <kbd>F</kbd>
+          <kbd className="hide-narrow">F</kbd>
         </button>
         {inFlight > 0 && <span className="muted small-text" aria-live="polite">guardando…</span>}
       </div>
@@ -209,7 +211,7 @@ function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () =>
             <span className="dot warn" /> {changes.length || "Cambios"} {changes.length === 1 ? "cambio" : "cambios"} sin guardar{baseVersion ? ` (vs ${baseVersion})` : ""}
           </span>
         ) : (
-          <span className="muted small-text" data-testid="ed-clean">
+          <span className="muted small-text hide-narrow" data-testid="ed-clean">
             {baseVersion ? `Igual a ${baseVersion}` : "Sin versiones todavía"}
           </span>
         )}
@@ -243,10 +245,10 @@ function Toolbar({ onHelp, onAsk, onListen }: { onHelp: () => void; onAsk: () =>
         <button type="button" className="icon-btn" aria-pressed={inspector} onClick={() => editor.setInspector(!inspector)} title="Panel de detalles" aria-label="Panel de detalles">
           <I.Layers />
         </button>
-        <button type="button" className="icon-btn" onClick={onHelp} aria-label="Atajos del editor (?)" title="Atajos (?)">
+        <button type="button" className="icon-btn hide-narrow" onClick={onHelp} aria-label="Atajos del editor (?)" title="Atajos (?)">
           <I.Keyboard />
         </button>
-        <button type="button" className="btn small ghost" onClick={onListen} title="Comparar versiones renderizadas (A/B), comentar, oídos">
+        <button type="button" className="btn small ghost hide-narrow" onClick={onListen} title="Comparar versiones renderizadas (A/B), comentar, oídos">
           Versiones
         </button>
       </div>
@@ -271,7 +273,8 @@ function TrackHeaders() {
   const rendering = useEditor((s) => s.rendering);
   const solo = useEditor((s) => s.solo);
   const sel = useEditor((s) => s.selection);
-  const { rows } = useMemo(() => layoutRows(song, view), [song, view]);
+  const fitH = useEditor((s) => s.fitH);
+  const { rows } = useMemo(() => layoutRows(song, view, fitH), [song, view, fitH]);
   return (
     <div className="ed-heads" aria-label="Tracks">
       <div className="ed-heads-ruler" style={{ height: RULER_H }}>
@@ -285,7 +288,7 @@ function TrackHeaders() {
           const selected = sel.kind === "track" && sel.track === t.id;
           const autos = (song.automation ?? []).filter((a) => a.target.startsWith(`tracks.${t.id}.`)).length;
           return (
-            <div key={t.id} className={`ed-head ${selected ? "sel" : ""}`} style={{ top: r.y, height: r.h }} data-testid={`ed-head-${t.id}`}>
+            <div key={t.id} className={`ed-head ${selected ? "sel" : ""} ${r.lanes.length ? "has-lanes" : ""}`} style={{ top: r.y, height: r.h }} data-testid={`ed-head-${t.id}`}>
               <div className="ed-head-top">
                 <button type="button" className="ed-head-name" onClick={() => editor.select({ kind: "track", track: t.id })} title={`${t.id} · ${KIND_LABEL[trackKind(t)]}`}>
                   <span className={`dot ${dot}`} title={st?.stale ? "Las notas cambiaron: re-renderizando el instrumento" : tip} />

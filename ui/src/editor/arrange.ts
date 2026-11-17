@@ -101,7 +101,10 @@ export function buildArrangement(song: SongJson, pieces: PieceSet, opts: BuildOp
   for (const t of song.tracks ?? []) {
     const kind = trackKind(t);
     const wetEntry = pieces.wet.get(t.id);
-    const wet = wetEntry && wetEntry.fp === wetFingerprint(song, t.id) ? wetEntry.buffer : null;
+    const wetValid = !!wetEntry && wetEntry.fp === wetFingerprint(song, t.id);
+    // an instrument cannot be rebuilt in the browser: until its new render
+    // arrives it keeps playing the previous one (flagged stale), never silence
+    const wet = wetValid ? wetEntry!.buffer : kind === "instrument" && wetEntry ? wetEntry.buffer : null;
     const inst = kind === "instrument" ? pieces.inst.get(t.id) : undefined;
     const lanes: ArrTrack["lanes"] = {};
     for (const [name, lane] of Object.entries(t.pattern?.lanes ?? {})) lanes[name] = { gainDb: lane.gain_db ?? 0, pan: lane.pan ?? 0 };
@@ -206,13 +209,13 @@ export function buildArrangement(song: SongJson, pieces: PieceSet, opts: BuildOp
       }
     } else {
       if (!t.mute) triggers[t.id] = trackNotes(song, t).map((n) => (n.beat - 1) * spb);
-      if (!wet && !inst) missing++;
+      if (!wetEntry && !inst) missing++;
     }
     const fpInst = kind === "instrument" ? instrumentFingerprint(song, t) : "";
     status[t.id] = {
-      state: wet ? "exact" : missing && kind !== "instrument" ? "waiting" : kind === "instrument" && !inst ? "silent" : "preview",
+      state: wetValid ? "exact" : wet ? "waiting" : missing && kind !== "instrument" ? "waiting" : kind === "instrument" && !inst ? "silent" : "preview",
       missing,
-      stale: !!inst && inst.fp !== fpInst && !wet,
+      stale: (!!inst && inst.fp !== fpInst && !wet) || (!!wet && !wetValid),
     };
     // automated gain/pan REPLACE the static value (it lives in the wet stem)
     const targets = new Set((song.automation ?? []).map((a) => a.target));

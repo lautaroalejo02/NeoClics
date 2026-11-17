@@ -70,6 +70,10 @@ class SongPiecesParams(ProjectScoped):
         default=None, description="Only these tracks (default: all)."
     )
     dry: bool = Field(default=True, description="Materials, one-shots and instrument dry stems.")
+    instruments: bool = Field(
+        default=True,
+        description="With dry: also render instrument dry stems (plugin renders, slower).",
+    )
     wet: bool = Field(default=False, description="Per-track renders with fx (seconds).")
     samples: list[str] = Field(
         default_factory=list,
@@ -135,11 +139,16 @@ def _write_piece(project, kind: str, audio: np.ndarray, sr: int, key: str | None
     path = project.path(rel)
     if not path.is_file():
         path.parent.mkdir(parents=True, exist_ok=True)
+        from ..render.audio import replace_content_addressed
+
         tmp = path.with_name(f".{path.stem}.{uuid.uuid4().hex}.wav")
-        sf.write(tmp, audio, sr, subtype="FLOAT")
-        tmp.replace(path)
+        try:
+            sf.write(tmp, audio, sr, subtype="FLOAT")
+            replace_content_addressed(tmp, path)
+        finally:
+            tmp.unlink(missing_ok=True)
     else:
-        path.touch()
+        _touch(path)
     return Piece(
         id=f"{kind}-{digest}", path=rel, kind=kind, frames=len(audio), duration_s=len(audio) / sr
     )
@@ -154,8 +163,15 @@ def _existing(project, kind: str, key: str, sr: int) -> Piece | None:
         frames = sf.info(path).frames
     except RuntimeError:
         return None
-    path.touch()
+    _touch(path)
     return Piece(id=f"{kind}-{key}", path=rel, kind=kind, frames=frames, duration_s=frames / sr)
+
+
+def _touch(path) -> None:
+    try:
+        path.touch()  # pruning keeps recently used pieces
+    except OSError:
+        pass
 
 
 def _prune(project) -> None:
@@ -165,9 +181,12 @@ def _prune(project) -> None:
     files = sorted(d.glob("*.wav"), key=lambda p: p.stat().st_mtime, reverse=True)
     total = 0
     for i, p in enumerate(files):
-        total += p.stat().st_size
-        if i >= KEEP_FILES or total > KEEP_BYTES:
-            p.unlink(missing_ok=True)
+        try:
+            total += p.stat().st_size
+            if i >= KEEP_FILES or total > KEEP_BYTES:
+                p.unlink(missing_ok=True)
+        except OSError:
+            continue  # in use (being served / written): next prune
 
 
 def _kind(track: Track) -> str:
@@ -359,7 +378,7 @@ def song_pieces(p: SongPiecesParams) -> SongPiecesResult:
     for track in wanted:
         entry = TrackPieces(id=track.id, kind=_kind(track))
         try:
-            if p.dry and track.instrument is not None:
+            if p.dry and p.instruments and track.instrument is not None:
                 scoped = song.model_copy(
                     deep=True,
                     update={"tracks": [track.model_copy(update={"mute": False})], "automation": []},

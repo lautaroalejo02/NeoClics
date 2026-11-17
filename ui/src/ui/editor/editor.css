@@ -25,7 +25,7 @@
 }
 
 .editor {
-  --heads-w: 168px;
+  --heads-w: 188px;
   --insp-w: 320px;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -279,10 +279,25 @@
   background: var(--surface-3);
 }
 
+.ed-head.has-lanes .ed-head-top,
+.ed-head.has-lanes .ed-head-sub {
+  margin-right: 50px;
+  flex-wrap: wrap;
+}
+
+.ed-head.has-lanes::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 50px;
+  border-left: 1px solid var(--line);
+}
+
 .ed-lane-label {
   position: absolute;
-  right: 6px;
-  left: 54px;
+  right: 5px;
+  width: 42px;
   display: flex;
   align-items: center;
   justify-content: flex-end;
@@ -293,6 +308,7 @@
 }
 
 .ed-lane-label.auto {
+  width: auto;
   left: 8px;
   justify-content: flex-start;
   align-items: flex-start;
@@ -599,4 +615,48 @@
 
 .editor-page:has(.editor.narrow) {
   padding: 6px 8px 8px;
+}
+
+.insp-empty .dot,
+.ed-toolbar .dot,
+.small-text .dot {
+  display: inline-block;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.editor.narrow .ed-toolbar .lbl,
+.editor.narrow .hide-narrow {
+  display: none;
+}
+
+.editor.narrow .ed-head-top {
+  flex-wrap: wrap;
+}
+
+.editor.narrow .ed-head-name {
+  flex-basis: 100%;
+  font-size: 12px;
+}
+
+.editor.narrow .ed-head.has-lanes .ed-head-top,
+.editor.narrow .ed-head.has-lanes .ed-head-sub {
+  margin-right: 0;
+}
+
+.editor.narrow .ed-head.has-lanes::after,
+.editor.narrow .ed-lane-label:not(.auto) {
+  display: none;
+}
+
+.editor.narrow .ed-play {
+  width: 36px;
+  height: 32px;
+}
+
+.editor.narrow .ed-listen .pill {
+  max-width: 190px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
