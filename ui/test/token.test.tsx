@@ -120,7 +120,7 @@ describe("a server that requires a token (mock with MOCK_TOKEN)", () => {
   async function boot(token: string | null) {
     const engine = new FakeEngine();
     let store: Store | null = null;
-    const client = new MuestraClient({ baseUrl: mock.url, token, onAuthError: (s) => store?.authRefused() });
+    const client = new MuestraClient({ baseUrl: mock.url, token, onAuthError: () => store?.authRefused() });
     store = new Store({ client, engine, WebSocketImpl: null });
     render(
       <StoreProvider store={store}>
