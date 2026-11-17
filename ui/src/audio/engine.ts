@@ -1330,6 +1330,11 @@ export class AudioEngine {
     return d.stemMatch ? 20 * Math.log10(d.stemMatch) : null;
   }
 
+  /** The arrangement the editor is playing (diagnostics/tests). */
+  get editorArrangement(): Arrangement | null {
+    return this.editorArr;
+  }
+
   /** The live player (diagnostics/tests). */
   get editorPlayer(): ArrangementPlayer | null {
     return this.editor;

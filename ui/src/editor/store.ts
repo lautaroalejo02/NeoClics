@@ -20,7 +20,7 @@ import { friendlyError } from "../text/es";
 import { buildArrangement, emptyPieces, materialKey, type MaterialPiece, type PieceSet, type TrackStatus } from "./arrange";
 import { applyOps, ConflictError, PathError, type Op } from "./ops";
 import { BEATS_PER_BAR, instrumentFingerprint, songSeconds, stable, trackKind, wetFingerprint, type SongJson } from "./song";
-import { clampScroll, defaultView, type Snap, type View } from "./timeline";
+import { beatToX, clampScroll, defaultView, layoutRows, type Snap, type View } from "./timeline";
 import { type Selection, emptySelection, selectionPayload } from "./selection";
 
 export interface UndoEntry {
@@ -407,6 +407,28 @@ export class EditorStore {
     return ok;
   }
 
+  /** Canvas coordinates (incl. the ruler) of a beat on a track: a drum lane,
+   *  a pitch of the piano roll, or the middle of the row (tests, diagnostics). */
+  locate(track: string, at: { beat0: number; lane?: string; pitch?: number; auto?: string }): { x: number; y: number } | null {
+    const song = this.state.song;
+    if (!song) return null;
+    const { rows } = layoutRows(song, this.state.view, this.state.fitH);
+    const row = rows.find((r) => r.trackId === track);
+    if (!row) return null;
+    let y = row.contentY + row.contentH / 2;
+    if (at.lane) {
+      const l = row.lanes.find((x) => x.name === at.lane);
+      if (l) y = l.y + l.h / 2;
+    } else if (at.pitch != null) {
+      const rowH = row.contentH / (row.pitchHi - row.pitchLo + 1);
+      y = row.contentY + (row.pitchHi - at.pitch + 0.5) * rowH;
+    } else if (at.auto) {
+      const a = row.autos.find((x) => x.target === at.auto);
+      if (a) y = a.y + a.h / 2;
+    }
+    return { x: beatToX(at.beat0, this.state.view) + 2, y: y - this.state.scrollY + 26 };
+  }
+
   /** Song beat (0-based) currently heard. */
   playheadBeat(): number {
     const song = this.state.song;
@@ -452,27 +474,34 @@ export class EditorStore {
     }
   }
 
+  /** Wet renders, one track at a time, always for the LATEST pieces cycle
+   *  (an edit during a render re-queues; the running request finishes first). */
+  private wetJob: { revision: string; song: SongJson; gen: number } | null = null;
+
   private async pumpWet(revision: string, song: SongJson, gen: number): Promise<void> {
+    this.wetJob = { revision, song, gen };
     if (this.wetBusy) return;
     this.wetBusy = true;
     try {
-      while (this.wetQueue.length && gen === this.piecesGen) {
+      while (this.wetJob && this.wetQueue.length) {
+        const job: { revision: string; song: SongJson; gen: number } = this.wetJob;
+        if (job.gen !== this.piecesGen) break;
         const id = this.wetQueue.shift()!;
         this.set({ rendering: [id, ...this.wetQueue] });
         const t0 = performance.now();
         try {
-          const res = await this.app.client.tool<PiecesResult>("song_pieces", { revision, tracks: [id], dry: false, wet: true });
-          if (gen !== this.piecesGen) break;
-          await this.ingest(res, song);
+          const res = await this.app.client.tool<PiecesResult>("song_pieces", { revision: job.revision, tracks: [id], dry: false, wet: true });
+          // a stale result is still right for the song it was rendered from
+          await this.ingest(res, job.song);
           this.timings.wet.push(performance.now() - t0);
           this.rebuild();
         } catch (e) {
-          if (e instanceof ApiError && e.issues.some((i) => i.code === "stale_revision")) break;
+          if (e instanceof ApiError && e.issues.some((i) => i.code === "stale_revision")) continue;
         }
       }
     } finally {
       this.wetBusy = false;
-      if (gen === this.piecesGen) this.set({ rendering: [] });
+      this.set({ rendering: [] });
     }
   }
 
@@ -673,7 +702,16 @@ export class EditorStore {
   /** "Guardar versión": render with a Spanish summary written from the diff. */
   async saveVersion(): Promise<void> {
     if (this.state.saving) return;
-    const summary = this.state.summary ?? "Edición manual en el editor";
+    this.set({ saving: { jobId: null, summary: this.state.summary ?? "" } });
+    // wait for edits in flight, then describe exactly what is on disk
+    for (let i = 0; i < 100 && (this.sending || this.queue.length); i++) await new Promise((r) => setTimeout(r, 50));
+    let summary = this.state.summary ?? "Edición manual en el editor";
+    try {
+      const st = await this.app.client.tool<{ summary: string | null; changes: string[] }>("song_state");
+      if (st.summary) summary = st.summary;
+    } catch {
+      /* keep the cached summary */
+    }
     this.set({ saving: { jobId: null, summary } });
     try {
       const job = await this.app.client.startJob("render", { summary, request: "Edición manual en el editor de Muestra", agent: "muestra-editor" });

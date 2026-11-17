@@ -3,16 +3,20 @@
 Branch `wp16-editor` (from `muestra/e1`). Updated with every commit.
 
 ## Done
-- Schema: per-bar lane `overrides`, free `pattern.hits`, optional lane `steps`,
-  clip `instances` (per-pass mute/gain/pitch/reverse), clip `trim_start_beats`,
-  `length_beats` on chop clips, `stretch`, `gain_db`, `reverse`, `fade_in_ms`/`fade_out_ms`.
-  Shared expansion: `pattern_hits`, `clip_passes`, `lane_bar_steps` (schemas/song.py).
-- Renderer uses the shared expansion; defaults stay bit-identical
-  (tests/render/test_wp16_events.py).
+- Schema per-event control (lane `overrides`, `pattern.hits`, clip `instances`, trims,
+  stretch, gain, reverse, fades), shared expansion, renderer, ears timeline, diff + Spanish.
+- Backend `song.edit` / `song.state` / `song.pieces` (+ journal, byte-identical undo,
+  conflicts), selection-anchored feedback + digest, skill docs, contracts, decisions.
+- UI: Arreglo view (canvas timeline, step grid, piano roll, automation lanes, inspector,
+  sound browser, ask box, shortcuts), arrangement player in the engine (look-ahead
+  scheduler, dry/wet, one-shot path, offline render), optimistic edits + undo/redo,
+  save version / discard / draft "render final".
+- Real e2e (`e2e-real/editor.spec.ts`) passes: kick removal measured in the browser mix and
+  in a draft render, undo/redo byte-identical, change sound, move clip, trim, add note,
+  ask the agent (feedback.jsonl), save version with Spanish summary.
 
 ## In progress
-- versions diff/describe + ears timeline for the new forms.
+- UI unit tests, mock e2e fallback, perf/memory and fidelity measurements.
 
 ## Next
-- `song.edit` (ops, inverse, journal, revision), `song.pieces`, feedback selection,
-  docs/contracts, UI Arreglo view.
+- Source view (chop regions on the source waveform), docs (ui/README, API-NEEDS).

@@ -276,7 +276,7 @@ function ClipPanel({ song, sel, apply }: { song: SongJson; sel: Extract<Selectio
       <Section title="Clip">
         <Num label="Compás" value={clip.at_bar} min={1} max={song.meta.length_bars} step={1} onCommit={(v) => v != null && setC("at_bar", Math.round(v), "mover el clip")} testid="insp-clip-bar" />
         <Num label="Corrimiento" unit="beats" value={clip.offset_beats ?? 0} step={0.25} onCommit={(v) => setC("offset_beats", v || null, "correr el clip")} />
-        <Num label="Repeticiones" value={clip.repeat ?? 1} min={1} max={4096} step={1} onCommit={(v) => v != null && setC("repeat", Math.round(v), "cambiar las repeticiones")} />
+        <Num label="Repeticiones" value={clip.repeat ?? 1} min={1} max={4096} step={1} onCommit={(v) => v != null && setC("repeat", Math.round(v) === 1 ? null : Math.round(v), "cambiar las repeticiones")} />
         <Num label="Largo de cada una" unit="beats" value={clip.length_beats ?? (chop ? (chop.length_beats - (clip.trim_start_beats ?? 0)) * (clip.stretch ?? 1) : null)} min={0.0625} step={0.25} onCommit={(v) => setC("length_beats", v, "cambiar el largo")} testid="insp-clip-length" />
         <Num label="Arranca dentro del material" unit="beats" value={clip.trim_start_beats ?? 0} step={0.25} onCommit={(v) => setC("trim_start_beats", v || null, "recortar el inicio")} />
         <Num label="Estirar" unit="× (sin cambiar el tono)" value={clip.stretch ?? 1} min={0.25} max={4} step={0.25} onCommit={(v) => setC("stretch", v === 1 ? null : v, "estirar el clip")} />
@@ -379,7 +379,7 @@ function SoundBrowser({ lane, current, onAudition, onPick }: { lane: string; cur
     let alive = true;
     const run = async () => {
       try {
-        const res = await store.client.tool<{ results?: LibHit[]; hits?: LibHit[] }>("library_search", { query: q || laneName(lane), ...(type ? { type } : {}), limit: 30, similar_to: q ? undefined : current });
+        const res = await store.client.tool<{ results?: LibHit[]; hits?: LibHit[] }>("library_search", { query: q || laneName(lane), ...(type && !q ? { type } : {}), limit: 30, similar_to: q ? undefined : current });
         if (alive) setResults(res.results ?? res.hits ?? []);
       } catch (e) {
         try {
