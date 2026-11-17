@@ -57,7 +57,10 @@ Every problem is an `Issue`:
   `pattern_length`, `track_kind`, `clip_position`, `points_order`,
   `file_not_found`, `parse_error`, `too_small`/`too_large`,
   `out_of_range`, `grid_mismatch`, `duplicate_key`, `not_implemented`,
-  `unknown_tool`, `internal_error`).
+  `unknown_tool`, `internal_error`; versioning (WP5): `unknown_version`,
+  `version_exists`, `not_git_repo`, `git_not_installed`, `repo_locked`,
+  `repo_busy`, `detached_head`, `git_unsafe_repo`, `git_error`, see
+  `docs/versions.md`).
 - Validation **collects all issues**; never stops at the first.
 - Duplicate YAML mapping keys in `song.yaml` are a `duplicate_key` issue
   (with the key's path and a hint) — never silently dropped.
@@ -103,11 +106,22 @@ commit only) when none exists.
 
 - `.gitignore`: `renders/`, `cache/`, `.venv/`, `__pycache__/`. Git
   versions `song.yaml`, `midi/`, `muestra.toml`, `feedback.jsonl`,
-  `docs/`; everything under `renders/` and `cache/` is derived data.
+  `docs/` (+ `.gitignore`, `.gitattributes`); everything under `renders/`
+  and `cache/` is derived data, and Muestra never commits `sources/` or
+  `library/`. `.gitattributes` is `* -text` and every Muestra git call
+  pins `core.autocrlf=false`: files are stored byte-for-byte whatever the
+  user's git config (`project.create` writes CRLF on Windows).
 - **One version = one commit + one annotated tag `vNNN`.** Commit
-  message: subject `vNNN: <summary>`, then trailers `Muestra-Request:`,
-  `Muestra-Agent:`, `Muestra-Parent:` so metadata survives deleting
-  `renders/`. `meta.git_commit` records that commit.
+  message: subject `vNNN: <summary>` (bare `vNNN` without a summary), then
+  trailers `Muestra-Version:`, `Muestra-Request:`, `Muestra-Agent:`,
+  `Muestra-Parent:` (+ `Muestra-Summary:` when the one-line subject is not
+  the verbatim summary) so metadata survives deleting `renders/`. Trailer
+  text is one line with `\`, `
+`, `` escapes. A version commit is always
+  created (empty if the song didn't change). `meta.git_commit` records
+  that commit. Restore commits carry `Muestra-Restored-From:`; the parent of
+  the next version is the newest version-or-restore commit in HEAD's
+  history (`versions.core.suggest_parent`), so history is a tree.
 - `renders/vNNN/song.yaml` is a byte-for-byte snapshot of the song at
   that version; it is the source of truth for ears/diff/restore when
   present, `git show vNNN:song.yaml` is the fallback.
@@ -362,7 +376,11 @@ are ID-based**, same grammar as automation targets
 (`chops.c1.warp.pitch_semitones`, `tracks.sample.fx.lp.cutoff_hz`,
 `tracks.drums.pattern.lanes.kick.steps`, `meta.bpm`); clips use
 `tracks.<id>.clips[<i>]` (0-based), an fx without an id is `fx[<i>]`
-(`from` is a JSON alias of `from_`), `render_time_s?`, `duration_s?`,
+(`from` is a JSON alias of `from_`), added/removed elements are one entry
+with `from`/`to` null; notes `tracks.<id>.notes[<i>]`, automations
+`automation.<target>[.curve|.points]`, instrument `tracks.<id>.instrument.<f>`,
+reorders `tracks` / `tracks.<id>.fx` (full grammar: `docs/versions.md`),
+`render_time_s?`, `duration_s?`,
 `sample_rate`, `bpm`, `key`, `length_bars`, `range_bars` ([start, end)),
 `mix` (project-relative path), `tracks[{id, kind, stem, lanes:[{id, stem}]}]`
 (ordered; so the UI never lists directories), `schema_version`.
@@ -442,8 +460,8 @@ searches roots in order and returns `{root, path, entry, abs_path}`;
 ## Tools (spec 8)
 
 Implemented for real: `project.create`, `project.open`, `song.get`,
-`song.validate`, `feedback.read`, `feedback.append`,
-`library.index`-backing `lookup`/`resolve`. All others are typed stubs
+`song.validate`, `feedback.read`, `feedback.append`, `versions.list/get/diff/restore`
+(WP5), `library.index`-backing `lookup`/`resolve`. All others are typed stubs
 (`NotImplementedError` → `not_implemented` via `run_tool`) with their
 params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 `schemas/tools/`.
@@ -458,6 +476,6 @@ params/result models fixed — see `src/muestra/<pkg>/tools.py` and
 | `preview`, `render` | `muestra.render.tools` | WP2; top-level CLI; `preview.target` = `mix\|chop:<id>\|track:<id>\|clip:<track>:<i>` (0-based); `render` gains `request/summary/agent/version` |
 | plugins hosting; `plugins.list/scan` | `muestra.plugins` | WP3; inventory tools requested as an additive extension, models and TOOLS in plugins/tools.py |
 | `library.index/search` | `muestra.library.tools` | WP4 |
-| `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5; restore = byte copy of snapshot |
+| `versions.list/diff/restore/get` | `muestra.versions.tools` | WP5, real (`docs/versions.md`); restore = byte copy of snapshot, saves uncommitted work first; `versions.diff` adds `changes`, `metrics_delta`, `identical`; `versions.list` returns merged git+renders+feedback records and the parent tree |
 | `ears.analyze` | `muestra.ears.tools` | WP6 |
 | API/MCP/CLI | `muestra.api|mcp|cli` | WP7, generated from `REGISTRY` |

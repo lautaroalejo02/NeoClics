@@ -1,8 +1,90 @@
 {
   "$defs": {
+    "VersionFeedback": {
+      "additionalProperties": false,
+      "description": "What the listener said about a version (from feedback.jsonl).",
+      "properties": {
+        "ab_losses": {
+          "default": 0,
+          "description": "A/B comparisons this version lost.",
+          "minimum": 0,
+          "title": "Ab Losses",
+          "type": "integer"
+        },
+        "ab_wins": {
+          "default": 0,
+          "description": "A/B comparisons this version won.",
+          "minimum": 0,
+          "title": "Ab Wins",
+          "type": "integer"
+        },
+        "comments": {
+          "default": 0,
+          "description": "Comments left on this version.",
+          "minimum": 0,
+          "title": "Comments",
+          "type": "integer"
+        },
+        "rated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rated At"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "enum": [
+                "like",
+                "dislike"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest like/dislike for this version.",
+          "title": "Rating"
+        }
+      },
+      "title": "VersionFeedback",
+      "type": "object"
+    },
     "VersionInfo": {
       "additionalProperties": false,
+      "description": "One coherent record per version: git + renders/ + feedback merged.",
       "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent"
+        },
+        "children": {
+          "description": "Versions whose parent is this one (oldest first).",
+          "items": {
+            "description": "Render version id like 'v001'.",
+            "pattern": "^v\\d{3,}$",
+            "type": "string"
+          },
+          "title": "Children",
+          "type": "array"
+        },
         "created_at": {
           "anyOf": [
             {
@@ -14,7 +96,11 @@
             }
           ],
           "default": null,
+          "description": "Render time (meta.json) else the commit time.",
           "title": "Created At"
+        },
+        "feedback": {
+          "$ref": "#/$defs/VersionFeedback"
         },
         "git_commit": {
           "anyOf": [
@@ -26,7 +112,29 @@
             }
           ],
           "default": null,
+          "description": "Version commit sha.",
           "title": "Git Commit"
+        },
+        "has_meta": {
+          "default": false,
+          "title": "Has Meta",
+          "type": "boolean"
+        },
+        "has_metrics": {
+          "default": false,
+          "title": "Has Metrics",
+          "type": "boolean"
+        },
+        "has_stems": {
+          "default": false,
+          "title": "Has Stems",
+          "type": "boolean"
+        },
+        "is_base": {
+          "default": false,
+          "description": "The version the working copy descends from: the next render's parent.",
+          "title": "Is Base",
+          "type": "boolean"
         },
         "liked": {
           "anyOf": [
@@ -53,7 +161,33 @@
             }
           ],
           "default": null,
+          "description": "Version this one descends from (history is a tree).",
           "title": "Parent"
+        },
+        "rendered": {
+          "default": false,
+          "description": "renders/<v>/mix.wav exists (audio can be played).",
+          "title": "Rendered",
+          "type": "boolean"
+        },
+        "request": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The natural-language request.",
+          "title": "Request"
+        },
+        "rerenderable": {
+          "default": false,
+          "description": "No audio on disk (renders/ deleted) but the song is in git: 'render' with version=<v> regenerates it.",
+          "title": "Rerenderable",
+          "type": "boolean"
         },
         "summary": {
           "anyOf": [
@@ -72,6 +206,13 @@
           "pattern": "^v\\d{3,}$",
           "title": "Version",
           "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
         }
       },
       "required": [
@@ -83,6 +224,21 @@
   },
   "additionalProperties": false,
   "properties": {
+    "base": {
+      "anyOf": [
+        {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Parent the next render will record (see VersionInfo.is_base).",
+      "title": "Base"
+    },
     "files": {
       "items": {
         "type": "string"
@@ -90,7 +246,18 @@
       "title": "Files",
       "type": "array"
     },
+    "roots": {
+      "description": "Versions without a (known) parent: the tree's roots, oldest first. Draw the tree from roots + each version's 'children'.",
+      "items": {
+        "description": "Render version id like 'v001'.",
+        "pattern": "^v\\d{3,}$",
+        "type": "string"
+      },
+      "title": "Roots",
+      "type": "array"
+    },
     "versions": {
+      "description": "Newest first (by version number).",
       "items": {
         "$ref": "#/$defs/VersionInfo"
       },

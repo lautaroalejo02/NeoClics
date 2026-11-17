@@ -1,8 +1,154 @@
 {
   "$defs": {
-    "DiffEntry": {
+    "Alarm": {
       "additionalProperties": false,
-      "description": "One changed value in the musical diff between versions.\n\n``path`` uses ID-based song.yaml addressing, matching the automation\ngrammar: ``chops.c1.warp.pitch_semitones``,\n``tracks.sample.fx.lp.cutoff_hz``,\n``tracks.drums.pattern.lanes.kick.steps``, ``meta.bpm``. Elements\nwithout ids use indices: ``tracks.<id>.clips[<i>]``, and an fx\nwithout an ``id`` is addressed as ``fx[<i>]``.\n``from_`` serializes as ``from``.",
+      "description": "A computed heads-up for the agent (\"metrics are alarms\").",
+      "properties": {
+        "at_s": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "At S"
+        },
+        "code": {
+          "description": "Stable machine code, e.g. 'clipping'.",
+          "minLength": 1,
+          "title": "Code",
+          "type": "string"
+        },
+        "message": {
+          "minLength": 1,
+          "title": "Message",
+          "type": "string"
+        },
+        "severity": {
+          "enum": [
+            "info",
+            "warn",
+            "error"
+          ],
+          "title": "Severity",
+          "type": "string"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track"
+        }
+      },
+      "required": [
+        "code",
+        "severity",
+        "message"
+      ],
+      "title": "Alarm",
+      "type": "object"
+    },
+    "AlignmentReport": {
+      "additionalProperties": false,
+      "properties": {
+        "max_abs_offset_ms": {
+          "minimum": 0.0,
+          "title": "Max Abs Offset Ms",
+          "type": "number"
+        },
+        "tracks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/TrackAlignment"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "max_abs_offset_ms"
+      ],
+      "title": "AlignmentReport",
+      "type": "object"
+    },
+    "ClickEvent": {
+      "additionalProperties": false,
+      "description": "A suspected click/discontinuity at a chop or clip edge.",
+      "properties": {
+        "at_s": {
+          "minimum": 0.0,
+          "title": "At S",
+          "type": "number"
+        },
+        "severity": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Severity",
+          "type": "number"
+        },
+        "track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Track"
+        }
+      },
+      "required": [
+        "at_s",
+        "severity"
+      ],
+      "title": "ClickEvent",
+      "type": "object"
+    },
+    "ClickReport": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/ClickEvent"
+          },
+          "title": "Events",
+          "type": "array"
+        }
+      },
+      "required": [
+        "count"
+      ],
+      "title": "ClickReport",
+      "type": "object"
+    },
+    "DiffItem": {
+      "additionalProperties": false,
+      "description": "A :class:`DiffEntry` that serialises its ``from_`` field as ``from``\n(the contract's JSON name) even without ``by_alias=True``, which is how the\ntool envelope dumps results.",
       "properties": {
         "from": {
           "default": null,
@@ -20,11 +166,190 @@
       "required": [
         "path"
       ],
-      "title": "DiffEntry",
+      "title": "DiffItem",
       "type": "object"
     },
-    "RenderMeta": {
+    "KeyEstimate": {
       "additionalProperties": false,
+      "properties": {
+        "confidence": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Confidence",
+          "type": "number"
+        },
+        "mode": {
+          "enum": [
+            "major",
+            "minor"
+          ],
+          "title": "Mode",
+          "type": "string"
+        },
+        "tonic": {
+          "description": "Tonic note, e.g. 'A', 'F#', 'Bb'.",
+          "pattern": "^[A-G](#|b)?$",
+          "title": "Tonic",
+          "type": "string"
+        }
+      },
+      "required": [
+        "tonic",
+        "mode",
+        "confidence"
+      ],
+      "title": "KeyEstimate",
+      "type": "object"
+    },
+    "Loudness": {
+      "additionalProperties": false,
+      "properties": {
+        "clipped_samples": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Clipped Samples",
+          "type": "integer"
+        },
+        "clipping": {
+          "title": "Clipping",
+          "type": "boolean"
+        },
+        "integrated_lufs": {
+          "title": "Integrated Lufs",
+          "type": "number"
+        },
+        "true_peak_dbtp": {
+          "title": "True Peak Dbtp",
+          "type": "number"
+        }
+      },
+      "required": [
+        "integrated_lufs",
+        "true_peak_dbtp",
+        "clipping"
+      ],
+      "title": "Loudness",
+      "type": "object"
+    },
+    "LowEndMasking": {
+      "additionalProperties": false,
+      "description": "Who owns the low end (the \"el bombo se come al sample\" alarm).\n\n``energy_db`` maps each track id to its mean energy (dB) inside\n``band_hz``; ``dominant_track`` is the loudest there. Track roles\n(kick/bass/sample) are identified by track id/name.",
+      "properties": {
+        "band_hz": {
+          "default": [
+            40.0,
+            150.0
+          ],
+          "maxItems": 2,
+          "minItems": 2,
+          "prefixItems": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "number"
+            }
+          ],
+          "title": "Band Hz",
+          "type": "array"
+        },
+        "dominant_track": {
+          "anyOf": [
+            {
+              "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$",
+              "pattern": "^[a-z][a-z0-9_-]{0,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Dominant Track"
+        },
+        "energy_db": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "type": "number"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Energy Db",
+          "type": "object"
+        }
+      },
+      "title": "LowEndMasking",
+      "type": "object"
+    },
+    "Metrics": {
+      "additionalProperties": false,
+      "properties": {
+        "alarms": {
+          "items": {
+            "$ref": "#/$defs/Alarm"
+          },
+          "title": "Alarms",
+          "type": "array"
+        },
+        "alignment": {
+          "$ref": "#/$defs/AlignmentReport"
+        },
+        "clicks": {
+          "$ref": "#/$defs/ClickReport"
+        },
+        "loudness": {
+          "$ref": "#/$defs/Loudness"
+        },
+        "low_end_masking": {
+          "$ref": "#/$defs/LowEndMasking"
+        },
+        "schema_version": {
+          "const": 0,
+          "default": 0,
+          "title": "Schema Version",
+          "type": "integer"
+        },
+        "spectral": {
+          "$ref": "#/$defs/SpectralReport"
+        },
+        "style_similarity": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/StyleSimilarity"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "tonal": {
+          "$ref": "#/$defs/TonalReport"
+        },
+        "version": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "version",
+        "loudness",
+        "spectral",
+        "low_end_masking",
+        "alignment",
+        "tonal",
+        "clicks"
+      ],
+      "title": "Metrics",
+      "type": "object"
+    },
+    "RenderMetaOut": {
+      "additionalProperties": false,
+      "description": "meta.json as returned by versions.get (``diff`` entries use ``from``).",
       "properties": {
         "agent": {
           "description": "Agent/tool that rendered, e.g. 'claude-code'.",
@@ -45,7 +370,7 @@
         },
         "diff": {
           "items": {
-            "$ref": "#/$defs/DiffEntry"
+            "$ref": "#/$defs/DiffItem"
           },
           "title": "Diff",
           "type": "array"
@@ -198,7 +523,7 @@
         "range_bars",
         "mix"
       ],
-      "title": "RenderMeta",
+      "title": "RenderMetaOut",
       "type": "object"
     },
     "RenderTrackMeta": {
@@ -242,6 +567,76 @@
       "title": "RenderTrackMeta",
       "type": "object"
     },
+    "SpectralBalance": {
+      "additionalProperties": false,
+      "description": "Mean band energy in dB for the fixed bands (see BAND_EDGES_HZ).",
+      "properties": {
+        "high_db": {
+          "description": "4000-20000 Hz",
+          "title": "High Db",
+          "type": "number"
+        },
+        "low_db": {
+          "description": "20-250 Hz",
+          "title": "Low Db",
+          "type": "number"
+        },
+        "mid_db": {
+          "description": "250-4000 Hz",
+          "title": "Mid Db",
+          "type": "number"
+        }
+      },
+      "required": [
+        "low_db",
+        "mid_db",
+        "high_db"
+      ],
+      "title": "SpectralBalance",
+      "type": "object"
+    },
+    "SpectralReport": {
+      "additionalProperties": false,
+      "properties": {
+        "bands_hz": {
+          "additionalProperties": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "type": "array"
+          },
+          "title": "Bands Hz",
+          "type": "object"
+        },
+        "mix": {
+          "$ref": "#/$defs/SpectralBalance"
+        },
+        "tracks": {
+          "patternProperties": {
+            "^[a-z][a-z0-9_-]{0,63}$": {
+              "$ref": "#/$defs/SpectralBalance"
+            }
+          },
+          "propertyNames": {
+            "description": "Lowercase slug: ^[a-z][a-z0-9_-]{0,63}$"
+          },
+          "title": "Tracks",
+          "type": "object"
+        }
+      },
+      "required": [
+        "mix"
+      ],
+      "title": "SpectralReport",
+      "type": "object"
+    },
     "StemLaneRef": {
       "additionalProperties": false,
       "description": "One pattern lane's stem file.",
@@ -264,6 +659,383 @@
       ],
       "title": "StemLaneRef",
       "type": "object"
+    },
+    "StyleScore": {
+      "additionalProperties": false,
+      "properties": {
+        "reference": {
+          "description": "Reference identifier, e.g. a path or name.",
+          "title": "Reference",
+          "type": "string"
+        },
+        "score": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Score",
+          "type": "number"
+        }
+      },
+      "required": [
+        "reference",
+        "score"
+      ],
+      "title": "StyleScore",
+      "type": "object"
+    },
+    "StyleSimilarity": {
+      "additionalProperties": false,
+      "description": "Optional (spec 10): CLAP/MERT similarity against reference tracks.",
+      "properties": {
+        "mean_score": {
+          "anyOf": [
+            {
+              "maximum": 1.0,
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mean Score"
+        },
+        "model": {
+          "description": "e.g. 'laion-clap', 'mert'.",
+          "minLength": 1,
+          "title": "Model",
+          "type": "string"
+        },
+        "references": {
+          "items": {
+            "$ref": "#/$defs/StyleScore"
+          },
+          "title": "References",
+          "type": "array"
+        }
+      },
+      "required": [
+        "model"
+      ],
+      "title": "StyleSimilarity",
+      "type": "object"
+    },
+    "TonalReport": {
+      "additionalProperties": false,
+      "properties": {
+        "estimated": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/KeyEstimate"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "in_key": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "True iff estimated tonic and mode both match target_key.",
+          "title": "In Key"
+        },
+        "mode_match": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Mode Match"
+        },
+        "target_key": {
+          "anyOf": [
+            {
+              "description": "Musical key, canonical form 'F#m' (minor) or 'F#' (major). Accepted: 'F#m', 'F#min', 'F# minor', 'F#', 'F#M', 'F#maj', bare lowercase 'a' = A minor.",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "meta.key from song.yaml, normalized.",
+          "title": "Target Key"
+        },
+        "tonic_match": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Tonic Match"
+        }
+      },
+      "title": "TonalReport",
+      "type": "object"
+    },
+    "TrackAlignment": {
+      "additionalProperties": false,
+      "description": "How far this track's transients sit off the project grid.",
+      "properties": {
+        "max_abs_offset_ms": {
+          "minimum": 0.0,
+          "title": "Max Abs Offset Ms",
+          "type": "number"
+        },
+        "mean_offset_ms": {
+          "title": "Mean Offset Ms",
+          "type": "number"
+        },
+        "n_transients": {
+          "minimum": 0,
+          "title": "N Transients",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "mean_offset_ms",
+        "max_abs_offset_ms",
+        "n_transients"
+      ],
+      "title": "TrackAlignment",
+      "type": "object"
+    },
+    "VersionFeedback": {
+      "additionalProperties": false,
+      "description": "What the listener said about a version (from feedback.jsonl).",
+      "properties": {
+        "ab_losses": {
+          "default": 0,
+          "description": "A/B comparisons this version lost.",
+          "minimum": 0,
+          "title": "Ab Losses",
+          "type": "integer"
+        },
+        "ab_wins": {
+          "default": 0,
+          "description": "A/B comparisons this version won.",
+          "minimum": 0,
+          "title": "Ab Wins",
+          "type": "integer"
+        },
+        "comments": {
+          "default": 0,
+          "description": "Comments left on this version.",
+          "minimum": 0,
+          "title": "Comments",
+          "type": "integer"
+        },
+        "rated_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Rated At"
+        },
+        "rating": {
+          "anyOf": [
+            {
+              "enum": [
+                "like",
+                "dislike"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest like/dislike for this version.",
+          "title": "Rating"
+        }
+      },
+      "title": "VersionFeedback",
+      "type": "object"
+    },
+    "VersionInfo": {
+      "additionalProperties": false,
+      "description": "One coherent record per version: git + renders/ + feedback merged.",
+      "properties": {
+        "agent": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Agent"
+        },
+        "children": {
+          "description": "Versions whose parent is this one (oldest first).",
+          "items": {
+            "description": "Render version id like 'v001'.",
+            "pattern": "^v\\d{3,}$",
+            "type": "string"
+          },
+          "title": "Children",
+          "type": "array"
+        },
+        "created_at": {
+          "anyOf": [
+            {
+              "format": "date-time",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Render time (meta.json) else the commit time.",
+          "title": "Created At"
+        },
+        "feedback": {
+          "$ref": "#/$defs/VersionFeedback"
+        },
+        "git_commit": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Version commit sha.",
+          "title": "Git Commit"
+        },
+        "has_meta": {
+          "default": false,
+          "title": "Has Meta",
+          "type": "boolean"
+        },
+        "has_metrics": {
+          "default": false,
+          "title": "Has Metrics",
+          "type": "boolean"
+        },
+        "has_stems": {
+          "default": false,
+          "title": "Has Stems",
+          "type": "boolean"
+        },
+        "is_base": {
+          "default": false,
+          "description": "The version the working copy descends from: the next render's parent.",
+          "title": "Is Base",
+          "type": "boolean"
+        },
+        "liked": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Latest rating for this version, if any.",
+          "title": "Liked"
+        },
+        "parent": {
+          "anyOf": [
+            {
+              "description": "Render version id like 'v001'.",
+              "pattern": "^v\\d{3,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Version this one descends from (history is a tree).",
+          "title": "Parent"
+        },
+        "rendered": {
+          "default": false,
+          "description": "renders/<v>/mix.wav exists (audio can be played).",
+          "title": "Rendered",
+          "type": "boolean"
+        },
+        "request": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The natural-language request.",
+          "title": "Request"
+        },
+        "rerenderable": {
+          "default": false,
+          "description": "No audio on disk (renders/ deleted) but the song is in git: 'render' with version=<v> regenerates it.",
+          "title": "Rerenderable",
+          "type": "boolean"
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Summary"
+        },
+        "version": {
+          "description": "Render version id like 'v001'.",
+          "pattern": "^v\\d{3,}$",
+          "title": "Version",
+          "type": "string"
+        },
+        "warnings": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Warnings",
+          "type": "array"
+        }
+      },
+      "required": [
+        "version"
+      ],
+      "title": "VersionInfo",
+      "type": "object"
     }
   },
   "additionalProperties": false,
@@ -275,10 +1047,21 @@
       "title": "Files",
       "type": "array"
     },
+    "info": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/VersionInfo"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
     "meta": {
       "anyOf": [
         {
-          "$ref": "#/$defs/RenderMeta"
+          "$ref": "#/$defs/RenderMetaOut"
         },
         {
           "type": "null"
@@ -287,10 +1070,52 @@
       "default": null,
       "description": "renders/<version>/meta.json when it exists (derived data \u2014 git-ignored)."
     },
+    "metrics": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/Metrics"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "mix": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Project-relative path of mix.wav if present.",
+      "title": "Mix"
+    },
+    "song_source": {
+      "default": "renders",
+      "description": "Where song_yaml was read from.",
+      "enum": [
+        "renders",
+        "git"
+      ],
+      "title": "Song Source",
+      "type": "string"
+    },
     "song_yaml": {
       "description": "The version's song.yaml text: renders/<version>/song.yaml byte copy when present, else 'git show vNNN:song.yaml'.",
       "title": "Song Yaml",
       "type": "string"
+    },
+    "stems": {
+      "description": "Project-relative paths of the stems present on disk.",
+      "items": {
+        "type": "string"
+      },
+      "title": "Stems",
+      "type": "array"
     },
     "version": {
       "description": "Render version id like 'v001'.",

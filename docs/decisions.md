@@ -369,3 +369,73 @@ Fixture inconsistency flagged for integration: analysis spans 5.7 seconds,
 but shared stem placeholders are 1.2 seconds. Renderer reports chop_overrun;
 tests/benchmarks extend only disposable copies using existing fixture audio.
 Details, quality settings, measurements and limitations are in docs/render.md.
+
+## 2026-11-17 — WP5: versioning + musical diff
+
+Details and behaviour: `docs/versions.md`. Contract-visible decisions:
+
+1. **Version commits are plumbing commits on a private index** and contain
+   only `song.yaml`, `midi/`, `muestra.toml`, `feedback.jsonl`, `docs/`,
+   `.gitignore`, `.gitattributes`. `sources/` audio, `library/`, `renders/`
+   and `cache/` are never committed by Muestra (`project/core.py`'s docstring
+   said `sources/`/`library/` "stay tracked"; they don't — big binaries
+   never belong in version commits). The user's staging area, hooks and
+   `commit.gpgsign` can't interfere.
+2. **Re-render of an unchanged song = an empty commit** (`allow_empty`
+   semantics): the version is the (metadata, tag), not the diff.
+3. **Extra trailers** beyond R1's three: `Muestra-Version: vNNN` (marker that
+   makes a commit a version commit, so a hand-written commit titled "v100 …"
+   is never mistaken for one), `Muestra-Summary:` (only when the one-line
+   subject isn't verbatim), and on restore commits `Muestra-Restored-From:`.
+   Free text uses a reversible one-line escape (`\`, `
+`, `
+`); the
+   subject is `vNNN: <summary>` or bare `vNNN`.
+4. **Parent = history, not a file.** `parent=None` in `record_version` means
+   "derive": the newest version-or-restore commit in HEAD's first-parent
+   history. `versions.restore v001` then `render` yields `Muestra-Parent:
+   v001` (a tree), and a manual `git reset --hard v001` behaves the same.
+   (An earlier draft kept a `.git/muestra-base` marker file; rejected — local,
+   lost on clone, can disagree with history.) The `render` tool should pass
+   `parent=None` and may read the result with `commit_info(...).parent`.
+5. **Line endings.** `project.create` writes via text mode → CRLF on Windows;
+   Git for Windows defaults to `core.autocrlf=true` (LF in the blob). To keep
+   `git show vNNN:song.yaml` byte-identical to the file, every Muestra git call
+   pins `core.autocrlf=false` and new projects get `.gitattributes`
+   (`* -text`). This adds a file to the project layout.
+6. **Restore never loses work**: uncommitted versioned files are committed as
+   an untagged snapshot first; the restore itself is a commit
+   (`Muestra-Restored-From`); the result gives a ready `git restore
+   --source=<sha> -- song.yaml [midi]` undo. `versions.restore` result
+   `version` and `restored_from` are both the restored version (the stub
+   didn't distinguish them); new optional fields `changed`,
+   `snapshot_commit`, `previous_commit`, `restore_commit`, `undo`, `hint`,
+   `warnings`, `snapshot_source`.
+7. **Diff path grammar additions** (R10 left these open): automations are
+   keyed by target (`automation.<target>[.curve|.points]`), notes
+   `tracks.<id>.notes[<i>]`, instrument fields `tracks.<id>.instrument.<f>`;
+   added/removed elements are one entry with `from`/`to` null; indices are
+   0-based in the new version (old version for removed elements); only
+   audible/visible reorders are reported (`tracks`, `tracks.<id>.fx`,
+   `master.fx`). Clips/notes/id-less fx are aligned by similarity, not
+   position.
+8. **Tool result extensions** (additive): `VersionInfo` gains `request`,
+   `agent`, `children`, `feedback{…}`, `rendered`, `rerenderable`, `has_meta`,
+   `has_metrics`, `has_stems`, `is_base`, `warnings`; `versions.list` gains
+   `roots`, `base`; `versions.get` gains `song_source`, `info`, `metrics`,
+   `mix`, `stems`; `versions.diff` gains `changes`, `metrics_delta`,
+   `identical`. `DiffEntry`s inside tool results are serialised as `from`
+   (via `DiffItem`/`RenderMetaOut` in `versions.models`), because the tool
+   envelope dumps without `by_alias`. *Flag:* `DiffEntry` itself should get
+   `serialize_by_alias` upstream; until then other tools that return
+   `RenderMeta` through the envelope will emit `from_`.
+9. **New error codes** (see `docs/contracts.md`): `unknown_version`,
+   `version_exists`, `not_git_repo`, `git_not_installed` (the seam previously
+   used `git_error` for a missing git), `repo_locked`, `repo_busy`,
+   `detached_head`, `git_unsafe_repo`.
+10. **`next_version_id` reads `feedback.jsonl` structurally** (only
+    `version`/`a`/`b`/`winner`) and also counts version commits in history,
+    so a comment containing "v2026" can't bump ids and a deleted tag can't
+    cause reuse.
+11. **Metrics delta**: uses `muestra.ears.core.compare(a, b)` if it exists and
+    returns phrases; otherwise computed locally from the two `metrics.json`.
