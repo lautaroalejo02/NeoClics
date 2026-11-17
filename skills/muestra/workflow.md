@@ -12,7 +12,8 @@ Los tiempos son los medidos en la laptop de Lautaro (Ryzen 5 7530U, CPU, 2026-11
    tu respuesta o en `docs/` del proyecto) y usalo en la próxima lectura.
 3. `versions.list`: cuál es la última, cuál le gustó (`liked`, `feedback.rating`), cuál es la
    base (`is_base`: de esa desciende el próximo render).
-4. `versions.get(<última>)` → `metrics.summary` (y `metrics.alarms` si hace falta detalle).
+4. `versions.get(<última>)` → `metrics_summary` (con `detail=true`, `metrics.alarms` y el
+   `song_yaml` de esa versión, si hace falta detalle).
 5. `song.get`. Recién ahora planificá.
 
 Si hay comentarios nuevos, respondé a eso primero. Si hay una `chop_choice` manual, esa
@@ -75,7 +76,7 @@ librería ([más abajo](#batería-sin-oír)), bajo con alias de instrumento. Esc
 `song.yaml` y corré `song.validate` (con `check_files` por defecto). Arreglá **todos** los
 issues que devuelve (cada uno trae `path`, `code`, `hint`).
 
-Alias de instrumento listos (no hace falta `plugins.list`, que devuelve ~540 KB):
+Alias de instrumento listos (`plugins.list` los da, y presets de Surge por categoría si hace falta):
 `finger-bass` (bajo eléctrico real, E1-G3), `slap-bass` (FM slap), `synth-bass`
 (square, fundamental fuerte), `rhodes`, `brass-stab`, `pad`.
 
@@ -83,8 +84,8 @@ Alias de instrumento listos (no hace falta `plugins.list`, que devuelve ~540 KB)
 
 `render(request=..., summary=..., agent=<tu nombre>)`. 16 compases ≈ 4-10 s. Crea `vNNN`
 (commit + tag), `mix.wav`, stems, `meta.json`, `metrics.json`; la respuesta trae
-`data.metrics_summary` (leé eso primero; el detalle está en `metrics.json`, vía `versions.get`). `range_bars:
-[1, 5]` renderiza solo los compases 1-4. `version: v003` re-renderiza esa versión sin
+`data.metrics_summary` (leé eso primero; el detalle está en `metrics.json`, vía
+`versions.get detail=true`). `range_bars: [1, 5]` renderiza solo los compases 1-4. `version: v003` re-renderiza esa versión sin
 crear otra. `preview(target="track:bass", bars=4)` escucha una parte sin crear versión
 (pero sin métricas).
 

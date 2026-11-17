@@ -210,7 +210,8 @@ export class MuestraClient {
   private getVersion(version: VersionId): Promise<VersionsGetResult | null> {
     let pending = this.versionRequests.get(version);
     if (!pending) {
-      pending = this.tool<VersionsGetResult>("versions_get", { version }).catch(() => null);
+      // detail: the UI wants the full metrics (the agent default is the summary).
+      pending = this.tool<VersionsGetResult>("versions_get", { version, detail: true }).catch(() => null);
       this.versionRequests.set(version, pending);
       void pending.finally(() => this.versionRequests.delete(version));
     }

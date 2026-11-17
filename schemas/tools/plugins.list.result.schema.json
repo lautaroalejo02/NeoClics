@@ -136,6 +136,19 @@
           "default": null,
           "title": "Latency Samples"
         },
+        "n_parameters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Parameter count (names only with detail=true).",
+          "title": "N Parameters"
+        },
         "name": {
           "title": "Name",
           "type": "string"
@@ -172,6 +185,18 @@
     "PresetEntry": {
       "additionalProperties": false,
       "properties": {
+        "category": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Category"
+        },
         "errors": {
           "items": {
             "$ref": "#/$defs/Issue"
@@ -180,12 +205,22 @@
           "type": "array"
         },
         "name": {
+          "description": "What to write in instrument.preset (Surge: 'Category/Name').",
           "title": "Name",
           "type": "string"
         },
         "path": {
-          "title": "Path",
-          "type": "string"
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "File path (detail=true only).",
+          "title": "Path"
         },
         "plugin": {
           "title": "Plugin",
@@ -206,7 +241,6 @@
       },
       "required": [
         "name",
-        "path",
         "plugin"
       ],
       "title": "PresetEntry",
@@ -216,11 +250,23 @@
   "additionalProperties": false,
   "properties": {
     "aliases": {
+      "description": "Curated instruments ready for future funk: use these first.",
       "items": {
         "$ref": "#/$defs/AliasEntry"
       },
       "title": "Aliases",
       "type": "array"
+    },
+    "categories": {
+      "additionalProperties": {
+        "additionalProperties": {
+          "type": "integer"
+        },
+        "type": "object"
+      },
+      "description": "plugin -> category -> preset count.",
+      "title": "Categories",
+      "type": "object"
     },
     "files": {
       "items": {
@@ -234,6 +280,25 @@
       "title": "Hint",
       "type": "string"
     },
+    "matched": {
+      "default": 0,
+      "description": "Presets matching the filters (all pages).",
+      "title": "Matched",
+      "type": "integer"
+    },
+    "next_offset": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "offset of the next page, if any.",
+      "title": "Next Offset"
+    },
     "plugins": {
       "items": {
         "$ref": "#/$defs/PluginEntry"
@@ -241,7 +306,16 @@
       "title": "Plugins",
       "type": "array"
     },
+    "preset_counts": {
+      "additionalProperties": {
+        "type": "integer"
+      },
+      "description": "Presets per plugin (all of them, unfiltered).",
+      "title": "Preset Counts",
+      "type": "object"
+    },
     "presets": {
+      "description": "One page of matching presets; empty unless query/plugin/category is set.",
       "items": {
         "$ref": "#/$defs/PresetEntry"
       },
@@ -257,9 +331,8 @@
     }
   },
   "required": [
-    "plugins",
-    "presets",
     "aliases",
+    "plugins",
     "search_dirs"
   ],
   "title": "PluginsListResult",

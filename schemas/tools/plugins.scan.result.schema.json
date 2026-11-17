@@ -95,6 +95,19 @@
           "default": null,
           "title": "Latency Samples"
         },
+        "n_parameters": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Parameter count (names only with detail=true).",
+          "title": "N Parameters"
+        },
         "name": {
           "title": "Name",
           "type": "string"

@@ -7,7 +7,7 @@ feedback. La skill completa (receta future funk, referencia de `song.yaml`, alar
 traducción de comentarios) está en `skills/muestra/SKILL.md` del repo de Muestra.
 
 1. **Arranque, siempre:** `project_open` (ruta absoluta) → `feedback_read(cursor=<último
-   next_cursor>)` → `versions_list` → `versions_get(<última>)` y leé `metrics.summary` →
+   next_cursor>)` → `versions_list` → `versions_get(<última>)` y leé `metrics_summary` →
    `song_get`. Recién ahí cambiás algo. La UI: `muestra serve --project <p> --open`.
 2. **Fuente:** `source_import(path)` → `source_separate` (minutos en CPU: avisale al humano
    antes; queda en caché) → `source_analyze` (bpm, downbeats, key con confianza, y `grid`:

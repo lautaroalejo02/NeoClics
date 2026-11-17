@@ -199,7 +199,7 @@ tracks:
   se combina con `notes` ni `phrases`.
 - La ventana `at_bar`/`until_bar` silencia notas fuera de ella (no las mueve).
 - Preset de Surge directo: `instrument: {plugin: surge-xt, preset: "Basses/FM Slap", params:
-  {global_volume: -12}}`. `plugins.list` lista todo (es enorme: evitalo si alcanzan los alias).
+  {global_volume: -12}}`. Para buscar presets: `plugins.list plugin=surge-xt category=Basses` o `query="slap bass"` (paginado; sin filtros solo da alias y conteos).
 
 Acordes de Rhodes (notas simultáneas = mismo `beat`):
 

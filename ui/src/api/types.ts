@@ -189,7 +189,10 @@ export interface VersionsGetResult {
   version: VersionId;
   meta: RenderMeta | null;
   metrics?: Metrics | null;
-  song_yaml: string;
+  /** detail=true only (WP12); the default is metrics_summary + metrics_path. */
+  song_yaml?: string | null;
+  metrics_summary?: string | null;
+  metrics_path?: string | null;
 }
 
 export interface VersionsDiffResult {

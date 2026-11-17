@@ -84,7 +84,9 @@ grilla mal leída: la grilla del proyecto tiene que ser la musical.
 
 ## Contexto del agente
 
-- `plugins.list` devuelve ~540 KB (3.000 presets): no lo llames si alcanzan los alias.
-- La respuesta de `render` trae solo `metrics_summary` (~1 KB); el modelo completo de métricas
-  (12-20 KB) está en `versions.get` → `metrics`: pedilo solo si hace falta ver `alarms`.
+- `plugins.list` sin filtros da los alias, los plugins y cuántos presets hay por categoría
+  (~3 KB); para ver presets, `plugin`/`category`/`query` (30 por página, `next_offset`).
+- La respuesta de `render`, `versions.get` y `ears.analyze` trae solo el resumen de ears
+  (~1 KB) y `metrics_path`; el modelo completo (12-20 KB) es `versions.get detail=true`:
+  pedilo solo si hace falta ver `alarms` en detalle.
 - `library.search` es compacto por defecto; `detail="full"` solo para pocos resultados.

@@ -120,9 +120,12 @@ with the project's configured library roots.
 
 Windows defaults include system Common Files/VST3, per-user
 `AppData/Local/Programs/Common/VST3`, and `AppData/Local/VST3`.
-`plugins.list` lists installed binaries, Surge factory patches, SFZ files in
-instrument/library roots, standard VST3 preset directories and curated alias
-availability. SFZ presets report subset compatibility; original full upstream
+`plugins.list` lists curated alias availability, installed binaries and preset
+COUNTS per plugin and category (Surge factory patches, SFZ files in
+instrument/library roots, standard VST3 preset directories). Presets themselves
+are returned only when browsing (`query` words, `plugin`, `category`; `limit`
+default 30, hard cap 100, `offset`/`next_offset`); `detail=true` adds file paths
+and plugin parameter names (WP12: the unfiltered list was ~541 KB). SFZ presets report subset compatibility; original full upstream
 maps can legitimately report unsupported opcodes. Listing never loads native
 code. `plugins.scan` loads each requested plugin in a subprocess with a deadline
 (120 seconds by default), reports native parameter names, kind and latency, and

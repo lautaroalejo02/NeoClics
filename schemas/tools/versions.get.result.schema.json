@@ -2390,7 +2390,34 @@
           "type": "null"
         }
       ],
-      "default": null
+      "default": null,
+      "description": "Full ears report (detail=true only; see metrics_path)."
+    },
+    "metrics_path": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "renders/<version>/metrics.json when it exists.",
+      "title": "Metrics Path"
+    },
+    "metrics_summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Compact Spanish ears summary (headline + worst alarms).",
+      "title": "Metrics Summary"
     },
     "mix": {
       "anyOf": [
@@ -2416,9 +2443,17 @@
       "type": "string"
     },
     "song_yaml": {
-      "description": "The version's song.yaml text: renders/<version>/song.yaml byte copy when present, else 'git show vNNN:song.yaml'.",
-      "title": "Song Yaml",
-      "type": "string"
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The version's song.yaml text (detail=true only): renders/<version>/song.yaml byte copy when present, else 'git show vNNN:song.yaml'.",
+      "title": "Song Yaml"
     },
     "stems": {
       "description": "Project-relative paths of the stems present on disk.",
@@ -2436,8 +2471,7 @@
     }
   },
   "required": [
-    "version",
-    "song_yaml"
+    "version"
   ],
   "title": "VersionsGetResult",
   "type": "object"

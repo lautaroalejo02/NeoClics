@@ -23,11 +23,16 @@ __all__ = [
 
 class EarsAnalyzeParams(ProjectScoped):
     version: VersionStr = Field(description="Render version to analyze, e.g. 'v001'.")
+    detail: bool = Field(
+        default=False,
+        description="Also return the full metrics report (~10 KB); by default only the "
+        "summary (the file is always written to metrics_path).",
+    )
 
 
 class EarsAnalyzeResult(ToolOutput):
     version: VersionStr
-    metrics: Metrics
+    metrics: Metrics | None = Field(default=None, description="Full report (detail=true only).")
     metrics_path: RelPath
     summary: str = Field(
         default="",
@@ -46,7 +51,11 @@ def ears_analyze(p: EarsAnalyzeParams) -> EarsAnalyzeResult:
     m, _path = write_metrics(project, p.version)
     rel = f"renders/{p.version}/metrics.json"
     return EarsAnalyzeResult(
-        version=p.version, metrics=m, metrics_path=rel, summary=m.summary, files=[rel]
+        version=p.version,
+        metrics=m if p.detail else None,
+        metrics_path=rel,
+        summary=m.summary,
+        files=[rel],
     )
 
 

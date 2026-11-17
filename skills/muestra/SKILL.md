@@ -21,7 +21,7 @@ Todas devuelven `{tool, ok, data, files, errors, hint}`; si `ok` es false, leé 
 
 1. `muestra doctor --project <p>` (o `project.open`): proyecto, librería indexada, plugins, ffmpeg.
 2. `feedback.read` con el último `next_cursor` que guardaste (0 si es la primera vez).
-3. `versions.list` y la métrica de la última versión (`versions.get` → `metrics.summary`).
+3. `versions.list` y la métrica de la última versión (`versions.get` → `metrics_summary`).
 4. `song.get`. Recién ahí decidí qué cambiar.
 
 Que el humano tenga la UI abierta: `muestra serve --project <p> --open` en otra terminal.

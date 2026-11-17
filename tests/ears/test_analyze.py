@@ -53,7 +53,12 @@ def test_ears_analyze_tool_writes_metrics(fixture_copy):
     assert r.ok, r.errors
     assert r.files == ["renders/v001/metrics.json"]
     on_disk = json.loads((fixture_copy.root / "renders/v001/metrics.json").read_text("utf-8"))
-    assert on_disk["summary"] == r.data["summary"] == r.data["metrics"]["summary"]
+    assert on_disk["summary"] == r.data["summary"]
+    assert r.data["metrics"] is None  # compact by default (WP12); detail=true for all
+    full = run_tool(
+        "ears.analyze", {"project": str(fixture_copy.root), "version": "v001", "detail": True}
+    )
+    assert full.data["metrics"]["summary"] == on_disk["summary"]
     assert load_metrics(fixture_copy, "v001").version == "v001"
     spec = REGISTRY["ears.analyze"]
     assert spec.long_running and spec.cli == ("ears", "analyze")

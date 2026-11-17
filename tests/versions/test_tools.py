@@ -181,7 +181,11 @@ def test_get_returns_meta_song_metrics_and_stems(three):
     (three.renders_dir / "v002" / "metrics.json").write_text(
         make_metrics().model_copy(update={"version": "v002"}).model_dump_json(), encoding="utf-8"
     )
-    data = ok(three, "versions.get", version="v002")
+    compact = ok(three, "versions.get", version="v002")
+    assert compact["metrics"] is None and compact["song_yaml"] is None
+    assert compact["metrics_path"] == "renders/v002/metrics.json"
+    assert compact["metrics_summary"] == make_metrics().summary
+    data = ok(three, "versions.get", version="v002", detail=True)
     assert data["version"] == "v002" and data["song_source"] == "renders"
     assert data["meta"]["request"] == "bajá el bajo"
     assert "gain_db: -2" in data["song_yaml"]
@@ -194,7 +198,7 @@ def test_get_returns_meta_song_metrics_and_stems(three):
 
 def test_get_falls_back_to_git_when_renders_are_gone(three):
     delete_renders(three)
-    data = ok(three, "versions.get", version="v001")
+    data = ok(three, "versions.get", version="v001", detail=True)
     assert data["song_source"] == "git" and data["meta"] is None
     assert data["mix"] is None and data["stems"] == [] and data["info"]["rerenderable"]
     assert data["song_yaml"].replace("\r\n", "\n") == song_text()

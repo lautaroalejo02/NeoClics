@@ -1,6 +1,12 @@
 {
   "additionalProperties": false,
   "properties": {
+    "detail": {
+      "default": false,
+      "description": "Also return the full metrics report and the song.yaml text (~10-20 KB); by default only metrics_summary and paths.",
+      "title": "Detail",
+      "type": "boolean"
+    },
     "project": {
       "description": "Path to the project directory.",
       "minLength": 1,
