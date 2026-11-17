@@ -189,10 +189,25 @@ def test_checker_rejects_bad_fragments(project):
     bad = [
         {"tracks": [{"id": "sample", "clips": [{"chop": "c1", "at_bar": 1, "repeat": 9}]}]},
         {"automation": [{"target": "tracks.sample.fx.nope.cutoff_hz", "points": [[1, 1], [2, 2]]}]},
-        {"chops": [{"id": "c2", "source": "src1", "start_downbeat": 1, "length_beats": 4,
-                    "warp": {"mode": "vinyl"}}]},
-        {"tracks": [{"id": "drums", "pattern": {"lanes": {"kick": {"sample": KICK,
-                                                                     "steps": "x...x..."}}}}]},
+        {
+            "chops": [
+                {
+                    "id": "c2",
+                    "source": "src1",
+                    "start_downbeat": 1,
+                    "length_beats": 4,
+                    "warp": {"mode": "vinyl"},
+                }
+            ]
+        },
+        {
+            "tracks": [
+                {
+                    "id": "drums",
+                    "pattern": {"lanes": {"kick": {"sample": KICK, "steps": "x...x..."}}},
+                }
+            ]
+        },
     ]
     for fragment in bad:
         with pytest.raises(AssertionError):

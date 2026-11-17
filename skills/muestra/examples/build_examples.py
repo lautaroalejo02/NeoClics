@@ -1,4 +1,8 @@
-"""Build the skill's example songs (Tiger Rag double grid + normal-grid template)."""
+# ruff: noqa: E501  (long lines are YAML text that must match the rendered examples byte for byte)
+"""Build the skill's example songs (Tiger Rag double grid + normal-grid template).
+
+Usage: uv run python skills/muestra/examples/build_examples.py skills/muestra/examples
+"""
 
 import sys
 from pathlib import Path
@@ -36,7 +40,9 @@ HEAD = """schema_version: 0
 
 
 def tiger(meta_bpm, bpm_comment, key, key_comment, title):
-    return HEAD + f"""meta:
+    return (
+        HEAD
+        + f"""meta:
   title: {title}
   bpm: {meta_bpm}  # {bpm_comment}
   key: {key}  # {key_comment}
@@ -46,6 +52,7 @@ sources:
 - id: src1
   file: sources/src1.wav
 """
+    )
 
 
 MASTER = """master:
@@ -57,7 +64,10 @@ MASTER = """master:
 
 # ------------------------------------------------------------------ base (v004)
 base_bass = notes(
-    5, 16, 2, [(1.5, "G1", 0.4, 100), (2.5, "G1", 0.4, 92), (3.5, "G2", 0.4, 100), (4.5, "G1", 0.4, 92)]
+    5,
+    16,
+    2,
+    [(1.5, "G1", 0.4, 100), (2.5, "G1", 0.4, 92), (3.5, "G2", 0.4, 100), (4.5, "G1", 0.4, 92)],
 )
 tiger_v1 = (
     tiger(
@@ -121,7 +131,9 @@ mac_bass = notes(
 clips = []
 for b in (1, 9, 17, 25):
     clips.append(f"  - {{chop: c1, at_bar: {b}, repeat: 3}}")
-    clips.append(f"  - {{chop: c2, at_bar: {b + 6}, repeat: 4}}  # stutter: el primer tiempo 4 veces")
+    clips.append(
+        f"  - {{chop: c2, at_bar: {b + 6}, repeat: 4}}  # stutter: el primer tiempo 4 veces"
+    )
 macross = (
     tiger(
         "266.29",
@@ -197,7 +209,13 @@ yb_pat = [
 ]
 yb_bass = notes(5, 12, 2, yb_pat) + "\n" + notes(15, 16, 2, yb_pat)
 yungbae = (
-    tiger("252.64", "igual que la base: sensacion 126.3, afinado", "G", "igual que la base", "tiger-funk-yungbae")
+    tiger(
+        "252.64",
+        "igual que la base: sensacion 126.3, afinado",
+        "G",
+        "igual que la base",
+        "tiger-funk-yungbae",
+    )
     + f"""chops:
 - id: c1
   source: src1
@@ -258,7 +276,13 @@ automation:
 
 # ------------------------------------------------------------------ Night Tempo
 nighttempo = (
-    tiger("252.64", "igual que la base: sensacion 126.3, afinado", "G", "igual que la base", "tiger-funk-nighttempo")
+    tiger(
+        "252.64",
+        "igual que la base: sensacion 126.3, afinado",
+        "G",
+        "igual que la base",
+        "tiger-funk-nighttempo",
+    )
     + f"""chops:
 - id: c1
   source: src1
@@ -301,9 +325,13 @@ master:
 
 # ------------------------------------------------------------------ normal-grid template
 tmpl_bass = notes(
-    5, 16, 1, [(1.5, "A1", 0.4, 100), (2.5, "A1", 0.4, 92), (3.5, "A2", 0.4, 100), (4.5, "A1", 0.4, 92)]
+    5,
+    16,
+    1,
+    [(1.5, "A1", 0.4, 100), (2.5, "A1", 0.4, 92), (3.5, "A2", 0.4, 100), (4.5, "A1", 0.4, 92)],
 )
-template = f"""schema_version: 0
+template = (
+    f"""schema_version: 0
 # PLANTILLA future funk, grilla normal: un disco que el tracker mide entre ~95 y ~140 BPM.
 # Cambia: source y chop (source.find_chops + chops.choose), meta.bpm (calculo de
 # resample en recipes/future-funk.md), meta.key, la tonica del bajo (A) y los gain_db.
@@ -354,7 +382,9 @@ tracks:
   gain_db: 6
 automation:
 - {{target: tracks.sample.fx.lp.cutoff_hz, curve: exp, points: [[1, 500], [5, 18000]]}}
-""" + MASTER
+"""
+    + MASTER
+)
 
 for name, text in {
     "tiger-rag.yaml": tiger_v1,
