@@ -8,8 +8,9 @@ metrics.json.
 
 from __future__ import annotations
 
-from ..schemas.metrics import Alarm, AlarmRef, Metrics, MetricsDelta
+from ..schemas.metrics import Alarm, AlarmRef, BalanceReport, Metrics, MetricsDelta
 from .alarms import SEVERITY_RANK, sort_alarms
+from .balance import _ROLE
 
 __all__ = ["summarize", "compare_metrics", "MAX_ALARM_LINES"]
 
@@ -48,6 +49,11 @@ def summarize(m: Metrics) -> str:
     if len(shown) < MAX_ALARM_LINES:
         infos = [a for a in sort_alarms(m.alarms) if a.severity == "info"]
         shown += infos[: max(0, min(2, MAX_ALARM_LINES - len(shown)))]
+    # the balance readout is always inlined: it answers "what sits where
+    # in the mix" even when nothing alarms (WP18)
+    bal = next((a for a in m.alarms if a.code == "balance"), None)
+    if bal is not None and bal not in shown:
+        shown.append(bal)
     for a in shown:
         line = f"- {_TAG[a.severity]} {a.code}{_where(a)}: {a.message}"
         if a.fix:
@@ -63,6 +69,45 @@ def summarize(m: Metrics) -> str:
 
 def _key(a: Alarm | AlarmRef) -> tuple[str, str | None]:
     return a.code, a.track
+
+
+def _anchor(role: str, report: BalanceReport) -> tuple[str, float] | None:
+    """The role a given role's balance is read against, and its level.
+
+    kick/drums are read against the loudest melodic role (the sample or
+    other sustained content); everything else against the drums — the
+    genre's anchor. Falls back to each version's loudest role.
+    """
+    lv = {r: rb.level_db for r, rb in report.roles.items()}
+    if role in ("kick", "drums"):
+        ref = max((r for r in ("sample", "other") if r in lv), key=lambda r: lv[r], default=None)
+        ref = ref or report.loudest
+    else:
+        ref = max((r for r in ("kick", "drums") if r in lv), key=lambda r: lv[r], default=None)
+        ref = ref or report.loudest
+    if ref is None or ref == role:
+        return None
+    return ref, lv[ref]
+
+
+def _balance_notes(a: Metrics, b: Metrics, d: MetricsDelta) -> list[str]:
+    """Role balance changes between two versions, in Spanish."""
+    notes: list[str] = []
+    la = a.balance.roles
+    lb = b.balance.roles
+    order = {r: i for i, r in enumerate(("sample", "bass", "kick", "drums", "other"))}
+    for role in sorted(set(la) & set(lb), key=lambda r: order.get(r, 99)):
+        d.balance_delta_db[role] = round(lb[role].level_db - la[role].level_db, 1)
+        pa, pb = _anchor(role, a.balance), _anchor(role, b.balance)
+        if pa is None or pb is None:
+            continue
+        gap = (lb[role].level_db - pb[1]) - (la[role].level_db - pa[1])
+        if abs(gap) < 2.0:
+            continue
+        ref = _ROLE[pa[0]] if pa[0] == pb[0] else "el elemento más fuerte"
+        verb = "subió" if gap > 0 else "bajó"
+        notes.append(f"{_ROLE[role]} {verb} {abs(gap):.0f} dB respecto de {ref}")
+    return notes
 
 
 def _ref(a: Alarm) -> AlarmRef:
@@ -127,6 +172,8 @@ def compare_metrics(a: Metrics, b: Metrics, *, same_db: float = 0.5) -> MetricsD
                 d.track_level_delta_db[tid] = delta
                 if abs(delta) >= 2.0:
                     notes.append(f"`{tid}` {delta:+.1f} dB")
+    if a.balance and b.balance:
+        notes += _balance_notes(a, b, d)
     keys_a = {_key(x): x for x in a.alarms if x.severity != "info"}
     keys_b = {_key(x): x for x in b.alarms if x.severity != "info"}
     d.alarms_fixed = [_ref(x) for k, x in keys_a.items() if k not in keys_b]
