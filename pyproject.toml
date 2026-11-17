@@ -7,19 +7,44 @@ requires-python = ">=3.11"
 dependencies = [
     "pydantic>=2.10,<3",
     "pyyaml>=6.0.2",
+    "ruamel.yaml>=0.18",
     "tomli-w>=1.1.0",
+    # shared audio stack: used by every audio-touching WP, so it lives in
+    # base dependencies (see docs/decisions.md and CONTRIBUTING-AGENTS.md)
+    "numpy>=2.1",
+    "scipy>=1.14",
+    "soundfile>=0.13",
+    "pedalboard>=0.9.14",
 ]
 
 # Optional dependency groups, one per work package. Each WP adds its own
-# heavy deps to ITS OWN group only, so installs stay light and parallel
-# work does not conflict on this file.
+# heavy deps to ITS OWN group only (multi-line array, one dep per line),
+# so parallel work does not conflict on this file.
 [project.optional-dependencies]
-ingest = []
-render = []
-plugins = []
-library = []
-ears = []
-server = []
+
+# WP1 (ingest: separation + analysis)
+ingest = [
+]
+
+# WP2 (renderer)
+render = [
+]
+
+# WP3 (plugin hosting + instruments)
+plugins = [
+]
+
+# WP4 (sample library)
+library = [
+]
+
+# WP6 (ears / metrics)
+ears = [
+]
+
+# WP7 (API + MCP + CLI)
+server = [
+]
 
 [project.scripts]
 muestra = "muestra.cli.main:main"
@@ -28,9 +53,6 @@ muestra = "muestra.cli.main:main"
 dev = [
     "pytest>=8.3",
     "ruff>=0.8",
-    # only needed to regenerate committed fixture audio (fixtures/gen_audio.py)
-    "numpy>=2.1",
-    "soundfile>=0.13",
 ]
 
 [build-system]
